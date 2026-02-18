@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guard Gate Scanner - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qr-code" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Core Scripts -->
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .terminal-glow { text-shadow: 0 0 10px rgba(234, 179, 8, 0.5); }
+    </style>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col text-white overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-16 flex items-center justify-between px-6 bg-gray-800/80 backdrop-blur-md border-b border-gray-700 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20"></div>
+                <div class="relative h-3 w-3 bg-green-500 rounded-full"></div>
+            </div>
+            <span class="font-bold text-lg tracking-wider text-yellow-500 terminal-glow">GATE SCANNER</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="guard-name" class="text-sm text-gray-400 font-mono">Guard</span>
+            <button onclick="logout()" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition border border-gray-600">Logout</button>
+        </div>
+    </header>
+
+    <!-- Hidden USB Scanner Input -->
+    <input type="text" id="usb-scanner-input" class="opacity-0 absolute -z-10" autocomplete="off">
+    
+    <!-- Start Overlay for Audio Unlock -->
+    <div id="start-overlay" class="absolute inset-0 bg-gray-900/90 z-50 flex items-center justify-center backdrop-blur-sm">
+        <button onclick="startScanningProcess()" class="px-8 py-4 bg-yellow-500 text-black font-bold rounded-2xl text-xl hover:bg-yellow-400 transition shadow-[0_0_15px_rgba(234,179,8,0.5)]">
+            Tap to Start Scanner
+        </button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col md:flex-row p-4 gap-4 overflow-hidden">
+        
+        <!-- Left Panel: Scanner -->
+        <div class="w-full md:w-1/2 flex flex-col gap-4">
+            
+            <!-- Camera Scanner Area -->
+            <div class="flex-1 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 relative overflow-hidden shadow-2xl">
+                <div id="reader" class="w-full h-full"></div>
+                
+                <!-- Scanner Frame -->
+                <div class="absolute inset-4 border-2 border-yellow-500/50 rounded-xl pointer-events-none">
+                    <div class="absolute -top-1 -left-1 w-6 h-6 bg-yellow-500"></div>
+                    <div class="absolute -top-1 -right-1 w-6 h-6 bg-yellow-500"></div>
+                    <div class="absolute -bottom-1 -left-1 w-6 h-6 bg-yellow-500"></div>
+                    <div class="absolute -bottom-1 -right-1 w-6 h-6 bg-yellow-500"></div>
+                </div>
+                
+                <!-- Scanner Mode Indicator -->
+                <div class="absolute top-4 right-4 flex items-center gap-2 bg-gray-900/80 px-3 py-2 rounded-lg">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    <span class="text-xs text-gray-300 font-mono">CAMERA READY</span>
+                </div>
+                
+                <p class="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-yellow-500 text-xs bg-gray-900/80 px-3 py-1.5 rounded font-mono">
+                    Point camera at Student ID QR Code
+                </p>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-4 gap-3">
+                <div class="bg-gray-800/80 backdrop-blur rounded-xl border border-gray-700 p-3 text-center">
+                    <p class="text-2xl font-bold text-green-400 font-mono" id="stat-ontime">0</p>
+                    <p class="text-xs text-gray-500 mt-1">On Time</p>
+                </div>
+                <div class="bg-gray-800/80 backdrop-blur rounded-xl border border-gray-700 p-3 text-center">
+                    <p class="text-2xl font-bold text-yellow-400 font-mono" id="stat-late">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Late</p>
+                </div>
+                <div class="bg-gray-800/80 backdrop-blur rounded-xl border border-gray-700 p-3 text-center">
+                    <p class="text-2xl font-bold text-red-400 font-mono" id="stat-exit">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Early Exit</p>
+                </div>
+                <div class="bg-gray-800/80 backdrop-blur rounded-xl border border-gray-700 p-3 text-center">
+                    <p class="text-2xl font-bold text-blue-400 font-mono" id="stat-medical">0</p>
+                    <p class="text-xs text-gray-500 mt-1">Medical</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Result Display -->
+        <div class="w-full md:w-1/2 flex flex-col gap-4 overflow-hidden">
+            
+            <!-- Messages Area -->
+            <div id="error-message" class="hidden bg-red-600 text-white p-4 rounded-xl"></div>
+            <div id="warning-message" class="hidden bg-yellow-500 text-black p-4 rounded-xl"></div>
+            <div id="loading-indicator" class="hidden bg-blue-600 text-white p-4 rounded-xl flex items-center justify-center gap-2">
+                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing scan...
+            </div>
+
+            <!-- Placeholder (Waiting for scan) -->
+            <div id="scan-placeholder" class="flex-1 flex flex-col items-center justify-center bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700">
+                <div class="w-24 h-24 rounded-2xl bg-gray-700/50 flex items-center justify-center mb-4">
+                    <svg class="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 17h.01M9 11h.01M12 11h.01M15 11h.01M15 17h.01"/>
+                    </svg>
+                </div>
+                <p class="text-xl text-gray-400 mb-2 font-medium">Waiting for scan...</p>
+                <p class="text-sm text-gray-600 mb-6">Scan a student QR code or use USB scanner</p>
+                <div class="flex gap-4 text-xs">
+                    <span class="bg-gray-700 px-3 py-1.5 rounded-lg text-gray-300">📷 Mobile: Camera</span>
+                    <span class="bg-gray-700 px-3 py-1.5 rounded-lg text-gray-300">⌨️ PC: USB Scanner</span>
+                </div>
+            </div>
+
+            <!-- Scan Result Card -->
+            <div id="scan-result" class="hidden flex-1 flex flex-col items-center justify-center bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-6">
+                <!-- Profile Image -->
+                <div class="h-36 w-36 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full mx-auto mb-4 overflow-hidden border-4 border-white/10 shadow-2xl">
+                    <img src="" id="student-img" class="h-full w-full object-cover hidden">
+                    <div id="student-img-placeholder" class="h-full w-full flex items-center justify-center text-5xl">👤</div>
+                </div>
+                
+                <!-- Student Name -->
+                <h2 id="student-name" class="text-3xl font-bold mb-2 text-white text-center">Student Name</h2>
+                <p id="student-info" class="text-lg text-gray-400 mb-6 text-center">Grade Level • Section</p>
+                
+                <!-- Status Badge -->
+                <div id="status-badge" class="inline-block px-8 py-4 rounded-2xl text-2xl font-bold text-white shadow-lg transform scale-110 transition-all duration-300">
+                    <span class="block">STATUS</span>
+                    <span class="block text-sm font-normal mt-1 opacity-80">Time • Status</span>
+                </div>
+
+                <!-- Visual Status Indicator -->
+                <div class="mt-6 flex items-center gap-2">
+                    <div class="h-4 w-4 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-sm text-gray-400 font-mono">Scan recorded successfully</span>
+                </div>
+            </div>
+
+            <!-- Recent Scans List -->
+            <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 shrink-0">
+                <h3 class="text-sm font-semibold text-gray-400 mb-3">Recent Scans</h3>
+                <div id="recent-scans-list" class="max-h-48 overflow-y-auto space-y-2">
+                    <!-- Scans will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Guard Core Script -->
+    <script src="guard-core.js"></script>
+
+    <!-- Scan Overlay for Feedback -->
+    <div id="scan-overlay" class="hidden fixed inset-0 bg-green-500 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div id="scan-message" class="text-center text-white">
+            <p class="text-6xl font-bold">ENTRY</p>
+            <p class="text-2xl mt-2">Student Name</p>
+        </div>
+    </div>
+
+    <script>
+        // Session check
+        const user = checkSession('guards');
+        if (user) {
+            document.getElementById('guard-name').innerText = user.full_name;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Portal - Notifications - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+</head>
+<body class="bg-gray-50 font-sans flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200 flex items-center justify-between px-4 z-10">
+        <div class="flex items-center gap-3">
+            <button onclick="navigateTo('dashboard')" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h1 class="font-bold text-lg text-gray-800">Notifications</h1>
+        </div>
+        <button onclick="markAllRead()" class="p-2 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors">
+            <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+        </button>
+    </header>
+
+    <main class="flex-1 overflow-auto p-4 pb-24 max-w-md mx-auto w-full">
+        
+        <!-- Filter Tabs -->
+        <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <button onclick="filterNotifications('all')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-primary-500 text-white whitespace-nowrap transition-all duration-200" id="tab-all">All</button>
+            <button onclick="filterNotifications('attendance')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-attendance">Attendance</button>
+            <button onclick="filterNotifications('clinic')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-clinic">Clinic</button>
+            <button onclick="filterNotifications('early_exit')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-alerts">Alerts</button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-indicator" class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+        </div>
+
+        <!-- Notifications List -->
+        <div id="notifications-list" class="space-y-3 hidden">
+            <!-- Notifications populated by JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden">
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 text-center">
+                <div class="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">No Notifications</h3>
+                <p class="text-sm text-gray-500">You're all caught up!</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="h-16 bg-white/80 backdrop-blur-xl border-t border-gray-200 flex justify-around items-center text-xs fixed bottom-0 w-full max-w-md z-20">
+        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span class="text-xs font-medium">Home</span>
+        </button>
+        <button onclick="navigateTo('attendance')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Attendance</span>
+        </button>
+        <button onclick="navigateTo('excuse')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Excuse</span>
+        </button>
+        <button onclick="navigateTo('children')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span class="text-xs font-medium">Children</span>
+        </button>
+    </nav>
+
+    <!-- Notification Detail Modal -->
+    <div id="notification-modal" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center">
+        <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4 flex items-center gap-3">
+                <span id="modal-icon" class="text-2xl">🔔</span>
+                <div>
+                    <h3 id="modal-title" class="text-white font-bold">Notification</h3>
+                    <p id="modal-time" class="text-white/70 text-xs">--</p>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="modal-message" class="text-gray-600 mb-6">
+                    <!-- Message content -->
+                </div>
+                <button onclick="closeModal()" class="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="parent-core.js"></script>
+    <script src="parent-notifications.js"></script>
+</body>
+</html>

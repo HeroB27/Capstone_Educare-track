@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ID Template Design - Educare Admin</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="admin-core.js" defer></script>
+    <script src="admin-idtemplate.js" defer></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        violet: {
+                            50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd',
+                            400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9',
+                            800: '#5b21b6', 900: '#4c1d95', 950: '#2e1065'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 font-sans antialiased">
+
+    <!-- Floating Sidebar -->
+    <aside class="fixed top-0 left-0 h-full w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-xl z-40 flex flex-col">
+        <!-- Logo -->
+        <div class="p-6 border-b border-gray-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-violet-400 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
+                    <i data-lucide="graduation-cap" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-gray-800 text-lg">EDUCARE</h1>
+                    <p class="text-xs text-gray-500 font-medium">Admin Portal</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="layout-dashboard" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Dashboard</span>
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="users" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">User Management</span>
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="building-2" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Class Management</span>
+            </a>
+            <a href="admin-class-and-subject.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="book-open" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Classes & Subjects</span>
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="bar-chart-2" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Attendance Reports</span>
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="megaphone" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Announcements</span>
+            </a>
+            <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="id-card" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">ID Management</span>
+            </a>
+            <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-50 text-violet-600 shadow-sm border border-violet-100 transition-all duration-200">
+                <i data-lucide="stamp" class="w-5 h-5"></i>
+                <span class="font-bold text-sm">ID Templates</span>
+            </a>
+            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-violet-600 transition-all duration-200 group">
+                <i data-lucide="settings" class="w-5 h-5 group-hover:text-violet-500"></i>
+                <span class="font-medium text-sm">Attendance Settings</span>
+            </a>
+        </nav>
+
+        <!-- Admin Profile -->
+        <div class="p-4 border-t border-gray-100">
+            <div class="bg-gradient-to-br from-violet-50 to-gray-50 rounded-xl p-4 border border-gray-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-violet-400 to-violet-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-violet-200">
+                        A
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p id="admin-name" class="font-bold text-gray-800 text-sm truncate">Admin</p>
+                        <p class="text-xs text-gray-500 truncate">System Administrator</p>
+                    </div>
+                    <button onclick="logout()" class="p-2 hover:bg-white rounded-lg transition text-gray-400 hover:text-red-500">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 min-h-screen">
+        <!-- Top Header -->
+        <header class="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100">
+            <div class="flex items-center justify-between px-8 py-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">ID Template Design</h2>
+                    <p class="text-sm text-gray-500 mt-0.5">Create and customize ID card templates for all users</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="resetTemplate()" class="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-all">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        Reset
+                    </button>
+                    <button onclick="saveTemplate()" class="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-medium shadow-lg shadow-violet-200 transition-all">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Save Template
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="p-8">
+            <!-- Template Tabs -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <div class="border-b border-gray-100 px-4">
+                    <nav class="flex gap-1">
+                        <button onclick="switchTemplateTab('design')" class="flex items-center gap-2 px-6 py-4 border-b-2 border-violet-500 text-violet-600 font-semibold transition-all" id="tab-design">
+                            <i data-lucide="pen-tool" class="w-4 h-4"></i>
+                            Template Designer
+                        </button>
+                        <button onclick="switchTemplateTab('preview')" class="flex items-center gap-2 px-6 py-4 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium transition-all" id="tab-preview">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                            Live Preview
+                        </button>
+                        <button onclick="switchTemplateTab('saved')" class="flex items-center gap-2 px-6 py-4 border-b-2 border-transparent text-gray-500 hover:text-gray-700 font-medium transition-all" id="tab-saved">
+                            <i data-lucide="folder" class="w-4 h-4"></i>
+                            Saved Templates
+                        </button>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Template Designer Tab -->
+            <div id="designTab" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- Left: Design Options -->
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-5 h-5 text-violet-500"></i>
+                            Template Configuration
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        
+                        <!-- Template Selection -->
+                        <!-- UPDATED: Simplified to only show Student template -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Template Type</label>
+                            <div class="grid grid-cols-1 gap-3">
+                                <button onclick="selectTemplate('student')" class="template-btn p-4 border-2 border-violet-500 bg-violet-50 rounded-xl text-center transition-all" data-type="student">
+                                    <span class="text-3xl">🎓</span>
+                                    <p class="text-xs font-medium mt-2 text-gray-700">Student ID Card</p>
+                                    <p class="text-xs text-gray-500 mt-1">Physical card printing only</p>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Colors -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Primary Color</label>
+                                <div class="flex gap-2">
+                                    <input type="color" id="primaryColor" value="#4f46e5" class="h-10 w-14 border-0 rounded-lg cursor-pointer shadow-sm">
+                                    <input type="text" id="primaryColorText" value="#4f46e5" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" onchange="updateColor('primary')">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Secondary Color</label>
+                                <div class="flex gap-2">
+                                    <input type="color" id="secondaryColor" value="#f59e0b" class="h-10 w-14 border-0 rounded-lg cursor-pointer shadow-sm">
+                                    <input type="text" id="secondaryColorText" value="#f59e0b" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" onchange="updateColor('secondary')">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- School Info -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">School Name</label>
+                            <div class="relative">
+                                <i data-lucide="building" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" id="schoolName" value="Educare School" class="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all" onkeyup="updatePreview()">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">School Address</label>
+                            <div class="relative">
+                                <i data-lucide="map-pin" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" id="schoolAddress" value="123 Education Street, Manila" class="w-full border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all" onkeyup="updatePreview()">
+                            </div>
+                        </div>
+                        
+                        <!-- Layout Options -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Layout Style</label>
+                            <select id="layoutStyle" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all cursor-pointer" onchange="updatePreview()">
+                                <option value="horizontal">Horizontal (Standard)</option>
+                                <option value="vertical">Vertical (Card)</option>
+                                <option value="compact">Compact</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Photo Options -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Photo Position</label>
+                            <select id="photoPosition" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all cursor-pointer" onchange="updatePreview()">
+                                <option value="left">Left Side</option>
+                                <option value="right">Right Side</option>
+                                <option value="top">Top Center</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Fields to Display -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Display Fields</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldQR" checked class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">QR Code</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldLRN" checked class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">LRN (Students only)</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldContact" checked class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">Contact Number</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldAddress" class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">Address</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldBloodType" class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">Blood Type</span>
+                                </label>
+                                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all">
+                                    <input type="checkbox" id="fieldEmergency" class="w-4 h-4 text-violet-600 rounded" onchange="updatePreview()">
+                                    <span class="text-sm text-gray-700">Emergency Contact</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Preview -->
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            <i data-lucide="eye" class="w-5 h-5 text-violet-500"></i>
+                            Template Preview
+                        </h3>
+                    </div>
+                    <div class="p-6 flex flex-col items-center justify-center min-h-[500px]">
+                        <div id="templatePreview" class="border-2 border-gray-800 rounded-lg overflow-hidden shadow-xl" style="width: 3.375in; height: 2.125in;">
+                            <!-- Preview content will be generated here -->
+                        </div>
+                        <p class="text-sm text-gray-500 mt-4 flex items-center gap-2">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                            Preview size: Standard ID Card (3.375" × 2.125")
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Preview Tab -->
+            <!-- UPDATED: Simplified to only show Student preview -->
+            <div id="previewTab" class="hidden">
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            <i data-lucide="users" class="w-5 h-5 text-violet-500"></i>
+                            Live Preview with Sample Data
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 justify-center gap-8">
+                            <!-- Student Preview Only -->
+                            <div class="text-center">
+                                <div class="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 rounded-lg mb-4">
+                                    <span class="text-xl">🎓</span>
+                                    <span class="font-semibold text-violet-700">Student ID Preview</span>
+                                </div>
+                                <div id="studentPreview" class="flex justify-center"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Saved Templates Tab -->
+            <div id="savedTab" class="hidden">
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+                            <i data-lucide="folder" class="w-5 h-5 text-violet-500"></i>
+                            Saved Templates
+                        </h3>
+                        <span class="text-sm text-gray-500">Manage your templates</span>
+                    </div>
+                    <div class="p-6">
+                        <div id="savedTemplatesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="text-center py-12 col-span-full">
+                                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i data-lucide="folder-open" class="w-8 h-8 text-gray-400"></i>
+                                </div>
+                                <p class="text-gray-500">No saved templates yet</p>
+                                <p class="text-sm text-gray-400 mt-1">Create and save templates to see them here</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize Lucide icons
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

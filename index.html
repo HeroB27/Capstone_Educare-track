@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="assets/supabase-client.js"></script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+
+    <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-violet-700">EDUCARE</h1>
+            <p class="text-gray-500 text-sm">School Management System</p>
+        </div>
+
+        <div class="space-y-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">I am a...</label>
+            <select id="role" class="w-full border border-gray-300 rounded px-3 py-2">
+                <option value="admins">Admin</option>
+                <option value="teachers">Teacher</option>
+                <option value="clinic_staff">Clinic Staff</option>
+                <option value="guards">Guard</option>
+                <option value="parents">Parent</option>
+            </select>
+
+            <input type="text" id="username" placeholder="Username" class="w-full border border-gray-300 rounded px-3 py-2">
+            <input type="password" id="password" placeholder="Password" class="w-full border border-gray-300 rounded px-3 py-2">
+
+            <button onclick="handleLogin()" class="w-full bg-violet-600 text-white font-bold py-2 rounded hover:bg-violet-700 transition">
+                Login
+            </button>
+            <p id="error-msg" class="text-red-500 text-sm text-center mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-redirect if session exists
+        const existingSession = localStorage.getItem('educare_user');
+        if (existingSession) {
+            const user = JSON.parse(existingSession);
+            if (user.role === 'admins') window.location.href = 'admin/admin-dashboard.html';
+            else if (user.role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
+            else if (user.role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
+            else if (user.role === 'guards') window.location.href = 'guard/guard-dashboard.html';
+            else if (user.role === 'parents') window.location.href = 'parent/parent-dashboard.html';
+        }
+
+        async function handleLogin() {
+            const roleTable = document.getElementById('role').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('error-msg');
+
+            errorMsg.classList.add('hidden');
+
+            try {
+                const { data, error } = await supabase
+                    .from(roleTable)
+                    .select('*')
+                    .eq('username', username)
+                    .eq('password', password)
+                    .single();
+
+                if (error || !data) throw new Error("Invalid credentials");
+
+                // Save Session
+                const userSession = { ...data, role: roleTable };
+                localStorage.setItem('educare_user', JSON.stringify(userSession));
+
+                // REDIRECT LOGIC (Updated to your naming convention)
+                if (roleTable === 'admins') window.location.href = 'admin/admin-dashboard.html';
+                else if (roleTable === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
+                else if (roleTable === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
+                else if (roleTable === 'guards') window.location.href = 'guard/guard-dashboard.html';
+                else if (roleTable === 'parents') window.location.href = 'parent/parent-dashboard.html';
+
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications - Educare Clinic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="clinic-core.js" defer></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        red: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 font-sans h-screen flex overflow-hidden">
+
+    <!-- Floating Sidebar -->
+    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl">
+        <div class="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
+            <div class="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg shadow-red-500/30">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            </div>
+            <span class="font-bold text-gray-800 text-lg tracking-tight">Clinic</span>
+        </div>
+        <nav class="flex-1 py-4 px-3 space-y-1">
+            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                Dashboard
+            </a>
+            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                Patient Check-In
+            </a>
+            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Visit Records
+            </a>
+            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                Daily Logs
+            </a>
+            <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 font-medium transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                Notifications
+            </a>
+            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                Announcements
+            </a>
+            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Settings
+            </a>
+        </nav>
+        <div class="p-3 border-t border-gray-100">
+            <button onclick="logout()" class="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Logout
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- Gradient Header -->
+        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Notifications & Alerts</h2>
+                <p class="text-sm text-gray-500">Stay updated on clinic activity</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="markAllAsRead()" class="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+                    Mark All as Read
+                </button>
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <p id="clinic-name" class="font-semibold text-gray-800 text-sm">Nurse</p>
+                        <p class="text-xs text-gray-500">Clinic Staff</p>
+                    </div>
+                    <div class="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-lg shadow-red-500/30">N</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="px-8 pt-6 pb-2">
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Total Notifications</p>
+                            <p class="text-2xl font-bold text-gray-800 mt-1" id="notif-total">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Unread</p>
+                            <p class="text-2xl font-bold text-red-600 mt-1" id="notif-unread">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Clinic Alerts</p>
+                            <p class="text-2xl font-bold text-gray-800 mt-1" id="notif-clinic">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="px-8 py-4 flex items-center gap-2">
+            <button onclick="filterNotifications('all')" class="px-5 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-xl text-sm font-medium text-gray-600 hover:text-gray-900 transition-all duration-200" id="tab-all">
+                All
+            </button>
+            <button onclick="filterNotifications('unread')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-unread">
+                Unread
+            </button>
+            <button onclick="filterNotifications('clinic_alert')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-clinic_alert">
+                Clinic Alerts
+            </button>
+            <button onclick="filterNotifications('clinic_clearance')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-clinic_clearance">
+                Clearances
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-auto px-8 pb-8">
+            <!-- Notifications List -->
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                <div id="notifications-list" class="divide-y divide-gray-100">
+                    <div class="p-12 text-center text-gray-500">
+                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                        <p>Loading notifications...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Detail Modal -->
+    <div id="notification-modal" class="fixed inset-0 bg-black/20 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-hidden">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 id="modal-title" class="text-xl font-bold text-gray-800">Notification Details</h3>
+                <button onclick="closeNotificationModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-all duration-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6 max-h-[60vh] overflow-y-auto">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allNotifications = [];
+        let currentFilter = 'all';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (currentUser) {
+                await loadNotifications();
+            }
+        });
+
+        async function loadNotifications() {
+            allNotifications = await fetchClinicNotifications();
+            renderNotifications();
+            updateNotificationStats();
+        }
+
+        function renderNotifications() {
+            const container = document.getElementById('notifications-list');
+            
+            let filtered = allNotifications;
+            if (currentFilter === 'unread') {
+                filtered = allNotifications.filter(n => !n.is_read);
+            } else if (currentFilter === 'clinic_alert') {
+                filtered = allNotifications.filter(n => n.type === 'clinic_alert');
+            } else if (currentFilter === 'clinic_clearance') {
+                filtered = allNotifications.filter(n => n.type === 'clinic_clearance');
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-gray-500">
+                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                        <p class="text-lg">No notifications found</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = filtered.map(notification => {
+                const isReadClass = notification.is_read ? '' : 'bg-red-50/50';
+                const iconColor = getNotificationIconColor(notification.type);
+                const icon = getNotificationIcon(notification.type);
+                
+                return `
+                    <div onclick="viewNotification(${notification.id})" class="p-4 ${isReadClass} hover:bg-gray-50 cursor-pointer transition-all duration-200">
+                        <div class="flex gap-4">
+                            <div class="flex-shrink-0">
+                                <div class="h-12 w-12 rounded-xl bg-${iconColor}-50 flex items-center justify-center">
+                                    ${icon}
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm font-semibold text-gray-900 truncate">${notification.title}</p>
+                                    <span class="text-xs text-gray-400 ml-2">${formatTime(notification.created_at)}</span>
+                                </div>
+                                <p class="text-sm text-gray-600 truncate mt-1">${notification.message}</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">${notification.type || 'General'}</span>
+                                    <span class="text-xs text-gray-400">${formatDate(notification.created_at)}</span>
+                                </div>
+                            </div>
+                            ${!notification.is_read ? `
+                            <div class="flex-shrink-0">
+                                <span class="h-2 w-2 rounded-full bg-red-500 block"></span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getNotificationIcon(type) {
+            switch (type) {
+                case 'clinic_alert':
+                    return '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+                case 'clinic_clearance':
+                    return '<svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                default:
+                    return '<svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+            }
+        }
+
+        function getNotificationIconColor(type) {
+            switch (type) {
+                case 'clinic_alert': return 'red';
+                case 'clinic_clearance': return 'green';
+                default: return 'blue';
+            }
+        }
+
+        function filterNotifications(filter) {
+            currentFilter = filter;
+            const tabs = ['all', 'unread', 'clinic_alert', 'clinic_clearance'];
+            tabs.forEach(t => {
+                const tab = document.getElementById(`tab-${t}`);
+                if (t === filter) {
+                    tab.classList.add('bg-white', 'shadow-sm', 'text-red-600', 'border-red-200');
+                    tab.classList.remove('text-gray-500');
+                } else {
+                    tab.classList.remove('bg-white', 'shadow-sm', 'text-red-600', 'border-red-200');
+                    tab.classList.add('text-gray-500');
+                }
+            });
+            renderNotifications();
+        }
+
+        function updateNotificationStats() {
+            const total = allNotifications.length;
+            const unread = allNotifications.filter(n => !n.is_read).length;
+            const clinicAlerts = allNotifications.filter(n => n.type === 'clinic_alert').length;
+            document.getElementById('notif-total').innerText = total;
+            document.getElementById('notif-unread').innerText = unread;
+            document.getElementById('notif-clinic').innerText = clinicAlerts;
+        }
+
+        async function viewNotification(notificationId) {
+            const notification = allNotifications.find(n => n.id === notificationId);
+            if (!notification) return;
+            
+            if (!notification.is_read) {
+                await markNotificationRead(notificationId);
+                notification.is_read = true;
+                renderNotifications();
+                updateNotificationStats();
+            }
+            
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="text-xl font-bold text-gray-800">${notification.title}</h4>
+                        <p class="text-sm text-gray-500 mt-1">
+                            ${formatDate(notification.created_at)} at ${formatTime(notification.created_at)}
+                        </p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-xl">
+                        <p class="text-gray-700 whitespace-pre-wrap">${notification.message}</p>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="px-2 py-1 rounded-full bg-gray-100 text-gray-600">${notification.type || 'General'}</span>
+                        ${notification.is_read ? '<span class="text-green-600">✓ Read</span>' : '<span class="text-blue-600">Unread</span>'}
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button onclick="closeNotificationModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium text-gray-600">Close</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('notification-modal').classList.remove('hidden');
+            document.getElementById('notification-modal').classList.add('flex');
+        }
+
+        function closeNotificationModal() {
+            const modal = document.getElementById('notification-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function markAllAsRead() {
+            const unread = allNotifications.filter(n => !n.is_read);
+            for (const notification of unread) {
+                await markNotificationRead(notification.id);
+                notification.is_read = true;
+            }
+            renderNotifications();
+            updateNotificationStats();
+            showToast('All notifications marked as read', 'success');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Portal - Dashboard - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="parent-core.js" defer></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Pulse animation for live status */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+        .pulse-ring::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 3px solid currentColor;
+            animation: pulse-ring 1.5s ease-out infinite;
+        }
+        
+        /* Hide scrollbar for horizontal scroll */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-green-50 via-white to-green-50 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-40">
+        <div class="flex items-center gap-3">
+            <button onclick="navigateTo('children')" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <h1 class="font-bold text-xl text-gray-800">Dashboard</h1>
+        </div>
+        <button onclick="logout()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors">
+            Logout
+        </button>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+        <div class="max-w-md mx-auto w-full pb-24 px-4 pt-4">
+        
+            <!-- Welcome Section -->
+            <div class="mb-6">
+                <h2 id="parent-name" class="text-xl font-bold text-gray-800 mb-4">Welcome Parent</h2>
+                
+                <!-- Instagram Stories Style Child Switcher -->
+                <div id="child-switcher" class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                    <!-- Child switcher populated by parent-core.js -->
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-indicator" class="flex justify-center py-12">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+            </div>
+
+            <!-- Content (hidden until loaded) -->
+            <div id="dashboard-content" class="hidden space-y-4">
+                
+                <!-- Live Status Card - Centered Pulsing Badge -->
+                <div class="bg-white rounded-3xl shadow-lg p-6 relative overflow-hidden">
+                    <!-- Decorative gradient -->
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-100 to-transparent rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                    
+                    <div class="text-center">
+                        <!-- Child Info -->
+                        <h3 id="child-name" class="text-xl font-bold text-gray-800">--</h3>
+                        <p id="child-class" class="text-sm text-gray-500 mb-6">--</p>
+                        
+                        <!-- Pulsing Status Badge -->
+                        <div class="flex justify-center mb-6">
+                            <div id="status-badge-container" class="relative">
+                                <!-- Pulse effect -->
+                                <div class="absolute inset-0 bg-green-500 rounded-full pulse-ring" style="color: #22c55e;"></div>
+                                <div class="relative w-28 h-28 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex flex-col items-center justify-center shadow-2xl shadow-green-500/30">
+                                    <svg class="w-10 h-10 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span id="status-badge-text" class="text-white text-xs font-bold">INSIDE</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Time Info -->
+                        <div id="time-info" class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider">Time In</p>
+                                <p id="time-in-display" class="text-lg font-bold text-gray-800">--:--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider">Time Out</p>
+                                <p id="time-out-display" class="text-lg font-bold text-gray-800">--:--</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clinic Alert (shown when child is in clinic) -->
+                <div id="clinic-alert" class="hidden bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-2xl p-4">
+                    <div class="flex items-start gap-4">
+                        <div class="relative flex-shrink-0">
+                            <span class="text-3xl">🏥</span>
+                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></span>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="font-bold text-red-800">In Clinic</h4>
+                            <p id="clinic-reason" class="text-sm text-red-700 mt-1">--</p>
+                            <p id="clinic-time" class="text-xs text-red-500 mt-2">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="navigateTo('excuse')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                        <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-gray-700">Submit Excuse</span>
+                    </button>
+                    <button onclick="navigateTo('attendance')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                        <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-gray-700">Attendance</span>
+                    </button>
+                    <button onclick="navigateTo('notifications')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center relative">
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                            </svg>
+                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">3</span>
+                        </div>
+                        <span class="text-sm font-semibold text-gray-700">Alerts</span>
+                    </button>
+                    <button onclick="navigateTo('announcements')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                        <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-gray-700">Updates</span>
+                    </button>
+                </div>
+
+                <!-- Today's Activity Timeline -->
+                <div>
+                    <h3 class="font-bold text-gray-700 mb-3 text-lg">Today's Activity</h3>
+                    <div id="activity-timeline" class="bg-white rounded-2xl shadow-md p-4 space-y-4">
+                        <!-- Activity items populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Recent Notifications -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-gray-700 text-lg">Recent Alerts</h3>
+                        <button onclick="navigateTo('notifications')" class="text-sm text-green-600 font-medium hover:text-green-700">View All →</button>
+                    </div>
+                    <div id="notifications-preview" class="bg-white rounded-2xl shadow-md p-4 space-y-3">
+                        <!-- Notifications populated by JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation with Drop Shadow -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-3 flex justify-between items-center shadow-[0_-8px_30px_rgba(0,0,0,0.12)] z-50">
+        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center gap-1 p-3 text-green-600">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span class="text-xs font-semibold">Home</span>
+        </button>
+        <button onclick="navigateTo('attendance')" class="flex flex-col items-center gap-1 p-3 text-gray-400 hover:text-green-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Attendance</span>
+        </button>
+        <button onclick="navigateTo('excuse')" class="flex flex-col items-center gap-1 p-3 text-gray-400 hover:text-green-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Excuse</span>
+        </button>
+        <button onclick="navigateTo('children')" class="flex flex-col items-center gap-1 p-3 text-gray-400 hover:text-green-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span class="text-xs font-medium">Children</span>
+        </button>
+    </nav>
+
+    <script>
+        // Dashboard-specific functions
+        let currentStatus = null;
+        let todayActivities = [];
+        let clinicStatus = null;
+
+        // Listen for child changes
+        document.addEventListener('childChanged', async (e) => {
+            await refreshDashboard();
+        });
+
+        // Refresh dashboard data
+        async function refreshDashboard() {
+            if (!currentChild) return;
+
+            document.getElementById('loading-indicator').classList.remove('hidden');
+            document.getElementById('dashboard-content').classList.add('hidden');
+
+            // Use loadChildLiveStatus from parent-core.js
+            await loadChildLiveStatus();
+            
+            await Promise.all([
+                loadClinicStatus(),
+                loadTodayActivities(),
+                loadNotificationsPreview()
+            ]);
+
+            updateUI();
+
+            document.getElementById('loading-indicator').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+        }
+
+        async function loadClinicStatus() {
+            try {
+                const { data: visits, error } = await supabase
+                    .from('clinic_visits')
+                    .select('*')
+                    .eq('student_id', currentChild.id)
+                    .is('time_out', null)
+                    .order('time_in', { ascending: false })
+                    .limit(1);
+
+                if (error) {
+                    console.error('Error loading clinic status:', error);
+                    clinicStatus = null;
+                    return;
+                }
+
+                clinicStatus = visits && visits.length > 0 ? visits[0] : null;
+
+            } catch (err) {
+                console.error('Error in loadClinicStatus:', err);
+                clinicStatus = null;
+            }
+        }
+
+        async function loadTodayActivities() {
+            todayActivities = [];
+
+            if (currentChildLiveStatus) {
+                if (currentChildLiveStatus.time_in) {
+                    todayActivities.push({
+                        type: 'entry',
+                        time: currentChildLiveStatus.time_in,
+                        message: 'Entered school',
+                        status: currentChildLiveStatus.status || 'On Time'
+                    });
+                }
+                if (currentChildLiveStatus.time_out) {
+                    todayActivities.push({
+                        type: 'exit',
+                        time: currentChildLiveStatus.time_out,
+                        message: 'Exited school',
+                        status: 'Normal'
+                    });
+                }
+            }
+
+            todayActivities.sort((a, b) => new Date(b.time) - new Date(a.time));
+            todayActivities = todayActivities.slice(0, 5);
+        }
+
+        async function loadNotificationsPreview() {
+            try {
+                const { data: notifications, error } = await supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('recipient_id', currentUser.id)
+                    .eq('recipient_role', 'parent')
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+
+                if (error) {
+                    console.error('Error loading notifications:', error);
+                    return;
+                }
+
+                window.notificationsPreview = notifications || [];
+
+            } catch (err) {
+                console.error('Error in loadNotificationsPreview:', err);
+                window.notificationsPreview = [];
+            }
+        }
+
+        function updateUI() {
+            updateChildInfo();
+            updateStatusCard();
+            updateClinicAlert();
+            updateActivityTimeline();
+            updateNotificationsPreview();
+        }
+
+        function updateChildInfo() {
+            if (!currentChild) return;
+            document.getElementById('child-name').textContent = currentChild.full_name;
+            document.getElementById('child-class').textContent = 
+                `${currentChild.classes?.grade_level || 'N/A'} - ${currentChild.classes?.section_name || 'N/A'}`;
+        }
+
+        function updateStatusCard() {
+            const badgeContainer = document.getElementById('status-badge-container');
+            const badgeText = document.getElementById('status-badge-text');
+            const timeInDisplay = document.getElementById('time-in-display');
+            const timeOutDisplay = document.getElementById('time-out-display');
+            
+            const log = currentChildLiveStatus;
+            
+            // Update live status indicator from core
+            updateStatusUI(log);
+
+            if (!log) {
+                badgeContainer.querySelector('.pulse-ring').style.display = 'none';
+                badgeContainer.querySelector('.relative').classList.remove('from-green-400', 'to-green-600');
+                badgeContainer.querySelector('.relative').classList.add('from-gray-300', 'to-gray-500');
+                badgeText.textContent = 'NOT HERE';
+                timeInDisplay.textContent = '--:--';
+                timeOutDisplay.textContent = '--:--';
+                return;
+            }
+
+            const isInside = !log.time_out;
+            
+            badgeContainer.querySelector('.pulse-ring').style.display = isInside ? 'block' : 'none';
+            
+            if (isInside) {
+                badgeContainer.querySelector('.relative').classList.add('from-green-400', 'to-green-600');
+                badgeContainer.querySelector('.relative').classList.remove('from-gray-300', 'to-gray-500');
+                badgeText.textContent = 'INSIDE';
+                timeInDisplay.textContent = formatTime(log.time_in);
+                timeOutDisplay.textContent = '--:--';
+            } else {
+                badgeContainer.querySelector('.relative').classList.remove('from-green-400', 'to-green-600');
+                badgeContainer.querySelector('.relative').classList.add('from-gray-300', 'to-gray-500');
+                badgeText.textContent = 'OUTSIDE';
+                timeInDisplay.textContent = formatTime(log.time_in);
+                timeOutDisplay.textContent = formatTime(log.time_out);
+            }
+        }
+
+        function updateClinicAlert() {
+            const alertEl = document.getElementById('clinic-alert');
+            
+            if (clinicStatus) {
+                alertEl.classList.remove('hidden');
+                document.getElementById('clinic-reason').textContent = clinicStatus.reason || 'No reason specified';
+                document.getElementById('clinic-time').textContent = `Since ${formatTime(clinicStatus.time_in)}`;
+            } else {
+                alertEl.classList.add('hidden');
+            }
+        }
+
+        function updateActivityTimeline() {
+            const container = document.getElementById('activity-timeline');
+
+            if (todayActivities.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-6 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-sm">No activity recorded today</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = todayActivities.map((activity, index) => {
+                const icon = activity.type === 'entry' 
+                    ? `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>`
+                    : `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>`;
+                const iconBg = activity.type === 'entry' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600';
+                const timeStr = formatTime(activity.time);
+                
+                return `
+                    <div class="flex gap-4">
+                        <div class="flex flex-col items-center">
+                            <div class="w-10 h-10 ${iconBg} rounded-full flex items-center justify-center flex-shrink-0">${icon}</div>
+                            ${index < todayActivities.length - 1 ? '<div class="w-0.5 h-full bg-gray-200 mt-2"></div>' : ''}
+                        </div>
+                        <div class="flex-1 pb-4">
+                            <p class="text-sm font-medium text-gray-800">${activity.message}</p>
+                            <p class="text-xs text-gray-500 mt-1">${timeStr}</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="px-2 py-1 rounded-lg text-xs font-medium ${activity.status === 'On Time' ? 'bg-green-100 text-green-700' : activity.status === 'Late' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}">
+                                ${activity.status}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateNotificationsPreview() {
+            const container = document.getElementById('notifications-preview');
+            const notifications = window.notificationsPreview || [];
+
+            if (notifications.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-6 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                        </svg>
+                        <p class="text-sm">No recent notifications</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = notifications.map(notif => {
+                const icon = notif.type === 'early_exit' ? '⚠️' : 
+                            notif.type === 'clinic' ? '🏥' : 
+                            notif.type === 'attendance' ? '📋' : '📢';
+                const isUnread = !notif.is_read;
+                const iconColor = notif.type === 'clinic' ? 'bg-red-100' : notif.type === 'early_exit' ? 'bg-yellow-100' : 'bg-blue-100';
+                
+                return `
+                    <div class="flex items-start gap-3 ${isUnread ? 'bg-green-50' : ''} p-3 rounded-xl ${isUnread ? 'border border-green-200' : ''}">
+                        <div class="w-10 h-10 ${iconColor} rounded-xl flex items-center justify-center text-lg flex-shrink-0">
+                            ${icon}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium ${isUnread ? 'text-gray-800' : 'text-gray-600'}">${notif.title}</p>
+                            <p class="text-xs text-gray-500 truncate mt-0.5">${notif.message}</p>
+                            <p class="text-xs text-gray-400 mt-1">${getRelativeTime(notif.created_at)}</p>
+                        </div>
+                        ${isUnread ? '<div class="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 mt-2"></div>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Make refreshDashboard available globally
+        window.refreshDashboard = refreshDashboard;
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.admins (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  contact_number text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admins_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.announcements (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  title text,
+  content text,
+  posted_by_admin_id bigint,
+  target_teachers boolean DEFAULT false,
+  target_parents boolean DEFAULT false,
+  target_guards boolean DEFAULT false,
+  target_clinic boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  posted_by_teacher_id bigint,
+  CONSTRAINT announcements_pkey PRIMARY KEY (id),
+  CONSTRAINT announcements_posted_by_admin_id_fkey FOREIGN KEY (posted_by_admin_id) REFERENCES public.admins(id),
+  CONSTRAINT announcements_posted_by_teacher_id_fkey FOREIGN KEY (posted_by_teacher_id) REFERENCES public.teachers(id)
+);
+CREATE TABLE public.attendance_logs (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint,
+  log_date date DEFAULT CURRENT_DATE,
+  time_in timestamp without time zone,
+  time_out timestamp without time zone,
+  status text,
+  remarks text,
+  CONSTRAINT attendance_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+CREATE TABLE public.classes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  grade_level text,
+  section_name text,
+  strand text,
+  adviser_id bigint,
+  room_number text,
+  school_year text DEFAULT '2025-2026'::text,
+  CONSTRAINT classes_pkey PRIMARY KEY (id),
+  CONSTRAINT classes_adviser_id_fkey FOREIGN KEY (adviser_id) REFERENCES public.teachers(id)
+);
+CREATE TABLE public.clinic_staff (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  clinic_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  role_title text,
+  CONSTRAINT clinic_staff_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.clinic_visits (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint,
+  referred_by_teacher_id bigint,
+  reason text,
+  nurse_notes text,
+  action_taken text,
+  time_in timestamp without time zone DEFAULT now(),
+  time_out timestamp without time zone,
+  parent_notified boolean DEFAULT false,
+  status text DEFAULT 'Pending'::text,
+  CONSTRAINT clinic_visits_pkey PRIMARY KEY (id),
+  CONSTRAINT clinic_visits_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT clinic_visits_referred_by_teacher_id_fkey FOREIGN KEY (referred_by_teacher_id) REFERENCES public.teachers(id)
+);
+CREATE TABLE public.excuse_letters (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint,
+  parent_id bigint,
+  reason text,
+  date_absent date,
+  image_proof_url text,
+  status text DEFAULT 'Pending'::text,
+  teacher_remarks text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT excuse_letters_pkey PRIMARY KEY (id),
+  CONSTRAINT excuse_letters_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT excuse_letters_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id)
+);
+CREATE TABLE public.guards (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  guard_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  assigned_gate text,
+  shift_schedule text,
+  CONSTRAINT guards_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.holidays (
+  holiday_date date NOT NULL UNIQUE,
+  description text,
+  is_suspended boolean DEFAULT true
+);
+CREATE TABLE public.id_templates (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  template_type text NOT NULL UNIQUE,
+  settings jsonb NOT NULL,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT id_templates_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.notifications (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  recipient_id bigint,
+  recipient_role text,
+  title text,
+  message text,
+  type text,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.parents (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  parent_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  address text,
+  contact_number text,
+  relationship_type text,
+  is_active boolean DEFAULT true,
+  CONSTRAINT parents_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.settings (
+  setting_key text NOT NULL UNIQUE,
+  setting_value text
+);
+CREATE TABLE public.students (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  lrn text NOT NULL UNIQUE,
+  student_id_text text UNIQUE,
+  full_name text,
+  parent_id bigint,
+  class_id bigint,
+  gender text,
+  address text,
+  emergency_contact text,
+  qr_code_data text,
+  profile_photo_url text,
+  status text DEFAULT 'Enrolled'::text,
+  CONSTRAINT students_pkey PRIMARY KEY (id),
+  CONSTRAINT students_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id),
+  CONSTRAINT students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)
+);
+CREATE TABLE public.subject_loads (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  subject_name text,
+  teacher_id bigint,
+  class_id bigint,
+  schedule_time_start time without time zone,
+  schedule_time_end time without time zone,
+  schedule_days text,
+  CONSTRAINT subject_loads_pkey PRIMARY KEY (id),
+  CONSTRAINT subject_loads_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
+  CONSTRAINT subject_loads_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)
+);
+CREATE TABLE public.teachers (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  teacher_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  department text,
+  contact_number text,
+  email text,
+  is_active boolean DEFAULT true,
+  is_gatekeeper boolean DEFAULT false,
+  CONSTRAINT teachers_pkey PRIMARY KEY (id)
+);

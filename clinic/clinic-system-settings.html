@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Educare Clinic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="clinic-core.js" defer></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        red: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 font-sans h-screen flex overflow-hidden">
+
+    <!-- Floating Sidebar -->
+    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl">
+        <div class="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
+            <div class="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg shadow-red-500/30">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            </div>
+            <span class="font-bold text-gray-800 text-lg tracking-tight">Clinic</span>
+        </div>
+        <nav class="flex-1 py-4 px-3 space-y-1">
+            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                Dashboard
+            </a>
+            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                Patient Check-In
+            </a>
+            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Visit Records
+            </a>
+            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                Daily Logs
+            </a>
+            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                Notifications
+            </a>
+            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                Announcements
+            </a>
+            <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 font-medium transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Settings
+            </a>
+        </nav>
+        <div class="p-3 border-t border-gray-100">
+            <button onclick="logout()" class="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Logout
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- Gradient Header -->
+        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">System Settings</h2>
+                <p class="text-sm text-gray-500">Manage your account and preferences</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-right">
+                    <p id="clinic-name" class="font-semibold text-gray-800 text-sm">Nurse</p>
+                    <p class="text-xs text-gray-500">Clinic Staff</p>
+                </div>
+                <div class="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-lg shadow-red-500/30">N</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto px-8 pb-8">
+            <div class="max-w-4xl mx-auto space-y-6">
+                <!-- Profile Settings -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Profile Settings</h3>
+                                <p class="text-sm text-gray-500">Manage your account information</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5">
+                        <div class="flex items-center gap-6 mb-6">
+                            <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-red-500/30">
+                                ${currentUser?.full_name?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-bold text-gray-800">${currentUser?.full_name || 'Nurse'}</h4>
+                                <p class="text-sm text-gray-500">${currentUser?.role_title || 'Clinic Staff'}</p>
+                                <p class="text-xs text-gray-400 mt-1">ID: ${currentUser?.clinic_id_text || 'N/A'}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                <input type="text" id="profile-name" value="${currentUser?.full_name || ''}" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Role Title</label>
+                                <input type="text" id="profile-role" value="${currentUser?.role_title || ''}" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
+                                <input type="text" value="${currentUser?.clinic_id_text || ''}" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                <input type="text" value="${currentUser?.username || ''}" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Change Password -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Change Password</h3>
+                                <p class="text-sm text-gray-500">Update your account password</p>
+                            </div>
+                        </div>
+                    </div>
+                    <form id="password-form" onsubmit="handlePasswordChange(event)" class="p-5 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                            <input type="password" id="current-password" required class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                            <input type="password" id="new-password" required minlength="6" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                            <input type="password" id="confirm-password" required class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
+                        </div>
+                        <button type="submit" class="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/30 transition-all duration-200 font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Update Password
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Notification Preferences -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Notification Preferences</h3>
+                                <p class="text-sm text-gray-500">Configure how you receive notifications</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5 space-y-3">
+                        <label class="flex items-center justify-between p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-all duration-200">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-new-patient" checked class="w-4 h-4 rounded text-red-500 focus:ring-red-500">
+                                <div>
+                                    <p class="font-medium text-gray-700">New Patient Alerts</p>
+                                    <p class="text-sm text-gray-500">Get notified when a student is referred to clinic</p>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="flex items-center justify-between p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-all duration-200">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-parent-contact" checked class="w-4 h-4 rounded text-red-500 focus:ring-red-500">
+                                <div>
+                                    <p class="font-medium text-gray-700">Parent Contact Alerts</p>
+                                    <p class="text-sm text-gray-500">Get notified when parents inquire about their child</p>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="flex items-center justify-between p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-all duration-200">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-system" checked class="w-4 h-4 rounded text-red-500 focus:ring-red-500">
+                                <div>
+                                    <p class="font-medium text-gray-700">System Announcements</p>
+                                    <p class="text-sm text-gray-500">Receive system-wide announcements</p>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Clinic Information -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Clinic Information</h3>
+                                <p class="text-sm text-gray-500">Basic clinic details</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Clinic Name</label>
+                                <input type="text" value="School Clinic" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Operating Hours</label>
+                                <input type="text" value="7:00 AM - 5:00 PM" disabled class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                                <input type="text" placeholder="Enter contact number" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Emergency Line</label>
+                                <input type="text" placeholder="Emergency contact" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
+                            </div>
+                        </div>
+                        <button onclick="saveClinicInfo()" class="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/30 transition-all duration-200 font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data & Privacy -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Data & Privacy</h3>
+                                <p class="text-sm text-gray-500">Manage your data preferences</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5 space-y-3">
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <div>
+                                <p class="font-medium text-gray-700">Export All Records</p>
+                                <p class="text-sm text-gray-500">Download all clinic visit records as CSV</p>
+                            </div>
+                            <button onclick="exportTodayRecords()" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 text-sm font-medium">Export</button>
+                        </div>
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <div>
+                                <p class="font-medium text-gray-700">Session Timeout</p>
+                                <p class="text-sm text-gray-500">Automatically log out after inactivity</p>
+                            </div>
+                            <select class="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <option value="30">30 minutes</option>
+                                <option value="60" selected>1 hour</option>
+                                <option value="120">2 hours</option>
+                                <option value="240">4 hours</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Actions -->
+                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
+                    <div class="p-5 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Account Actions</h3>
+                                <p class="text-sm text-gray-500">Manage your account</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-5">
+                        <button onclick="confirmLogout()" class="w-full py-3 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 transition-all duration-200 font-medium">
+                            Logout from this device
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function handlePasswordChange(event) {
+            event.preventDefault();
+            
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            
+            if (newPassword !== confirmPassword) {
+                showToast('New passwords do not match', 'error');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showToast('Password must be at least 6 characters', 'warning');
+                return;
+            }
+            
+            if (currentPassword !== currentUser?.password) {
+                showToast('Current password is incorrect', 'error');
+                return;
+            }
+            
+            try {
+                const { error } = await supabase
+                    .from('clinic_staff')
+                    .update({ password: newPassword })
+                    .eq('id', currentUser.id);
+                
+                if (error) {
+                    showToast('Error updating password', 'error');
+                    return;
+                }
+                
+                showToast('Password updated successfully!', 'success');
+                document.getElementById('password-form').reset();
+                currentUser.password = newPassword;
+                localStorage.setItem('educare_user', JSON.stringify(currentUser));
+            } catch (err) {
+                console.error('Error changing password:', err);
+                showToast('Error updating password', 'error');
+            }
+        }
+
+        async function saveClinicInfo() {
+            showToast('Clinic information saved!', 'success');
+        }
+
+        async function exportTodayRecords() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            try {
+                // 1. FETCH the visits first!
+                const { data: visits, error } = await supabase
+                    .from('clinic_visits')
+                    .select(`
+                        *,
+                        students(full_name, student_id_text, classes(grade_level, section_name)),
+                        teachers(full_name)
+                    `)
+                    .gte('time_in', `${today}T00:00:00`)
+                    .lte('time_in', `${today}T23:59:59`);
+
+                if (error) throw error;
+
+                if (!visits || visits.length === 0) {
+                    showToast('No records found for today.', 'warning');
+                    return;
+                }
+                
+                // 2. Format the data for CSV
+                const exportData = visits.map(visit => ({
+                    Date: new Date(visit.time_in).toLocaleDateString(),
+                    Time_In: new Date(visit.time_in).toLocaleTimeString(),
+                    Time_Out: visit.time_out ? new Date(visit.time_out).toLocaleTimeString() : 'Still in clinic',
+                    Student_Name: visit.students?.full_name || 'Unknown',
+                    Student_ID: visit.students?.student_id_text || 'N/A',
+                    Class: `${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.section_name || ''}`,
+                    Reason: visit.reason || '',
+                    Referred_By: visit.teachers?.full_name || 'Walk-in',
+                    Action_Taken: visit.action_taken || '',
+                    Nurse_Notes: visit.nurse_notes || '',
+                    Status: visit.status || 'Completed'
+                }));
+                
+                exportToCSV(exportData, `clinic_records_${today}`);
+                showToast('Records exported successfully!', 'success');
+                
+            } catch (err) {
+                console.error('Error exporting records:', err);
+                showToast('Error exporting records', 'error');
+            }
+        }
+
+        function confirmLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                logout();
+            }
+        }
+    </script>
+</body>
+</html>

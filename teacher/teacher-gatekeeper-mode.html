@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gatekeeper Mode - Educare Teacher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="teacher-core.js" defer></script>
+    <script src="teacher-gatekeeper-mode.js" defer></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        
+        /* Scanner frame animation */
+        @keyframes scan-line {
+            0%, 100% { top: 10%; }
+            50% { top: 90%; }
+        }
+        
+        .scan-line {
+            animation: scan-line 2s ease-in-out infinite;
+        }
+        
+        /* Pulse animation for status */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px currentColor; }
+            50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 1.5s ease-in-out infinite;
+        }
+        
+        /* Quick flash effect */
+        @keyframes flash-success {
+            0%, 100% { background: rgba(34, 197, 94, 0.3); }
+            50% { background: rgba(34, 197, 94, 0.6); }
+        }
+        
+        @keyframes flash-error {
+            0%, 100% { background: rgba(239, 68, 68, 0.3); }
+            50% { background: rgba(239, 68, 68, 0.6); }
+        }
+        
+        @keyframes flash-warning {
+            0%, 100% { background: rgba(234, 179, 8, 0.3); }
+            50% { background: rgba(234, 179, 8, 0.6); }
+        }
+        
+        .flash-success { animation: flash-success 0.5s ease-in-out 3; }
+        .flash-error { animation: flash-error 0.5s ease-in-out 3; }
+        .flash-warning { animation: flash-warning 0.5s ease-in-out 3; }
+        
+        /* Camera viewport */
+        #qr-reader {
+            border: none !important;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+        
+        #qr-reader video {
+            border-radius: 1rem;
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col">
+    
+    <!-- Header -->
+    <header class="bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 p-4">
+        <div class="flex items-center justify-between max-w-2xl mx-auto">
+            <div class="flex items-center gap-3">
+                <button onclick="window.location.href='teacher-dashboard.html'" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <div>
+                    <h1 class="font-bold text-lg">Gatekeeper Mode</h1>
+                    <p class="text-xs text-slate-400">Scan Student ID at Gate</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p id="current-time" class="font-mono text-lg font-bold text-emerald-400">--:--:--</p>
+                <p id="current-date" class="text-xs text-slate-400">Loading...</p>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto w-full">
+        
+        <!-- Scanner Container -->
+        <div class="w-full relative">
+            <div id="qr-reader" class="w-full aspect-square bg-slate-800 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"></div>
+            
+            <!-- Scanner Overlay -->
+            <div class="absolute inset-0 pointer-events-none">
+                <!-- Corner markers -->
+                <div class="absolute top-4 left-4 w-12 h-12 border-l-4 border-t-4 border-emerald-400 rounded-tl-lg"></div>
+                <div class="absolute top-4 right-4 w-12 h-12 border-r-4 border-t-4 border-emerald-400 rounded-tr-lg"></div>
+                <div class="absolute bottom-4 left-4 w-12 h-12 border-l-4 border-b-4 border-emerald-400 rounded-bl-lg"></div>
+                <div class="absolute bottom-4 right-4 w-12 h-12 border-r-4 border-b-4 border-emerald-400 rounded-br-lg"></div>
+                
+                <!-- Scan line -->
+                <div class="scan-line absolute left-8 right-8 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent"></div>
+            </div>
+        </div>
+        
+        <!-- Status Indicator -->
+        <div id="status-indicator" class="w-full text-center py-3 px-4 rounded-xl bg-slate-800/80 border border-slate-700">
+            <p class="text-sm text-slate-300">Ready to scan student ID</p>
+        </div>
+        
+        <!-- Last Scan Result -->
+        <div id="last-scan" class="w-full hidden">
+            <div class="p-6 rounded-2xl bg-slate-800/80 border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm text-slate-400">Last Scan</span>
+                    <span id="scan-action" class="px-3 py-1 rounded-full text-xs font-bold uppercase">ENTRY</span>
+                </div>
+                <h2 id="scan-student-name" class="text-2xl font-bold mb-1">Student Name</h2>
+                <p id="scan-status" class="text-lg font-medium">Status</p>
+                <p id="scan-time" class="text-sm text-slate-400 mt-2">Time: --:--</p>
+            </div>
+        </div>
+        
+        <!-- Manual Entry Button -->
+        <button onclick="showManualEntry()" class="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Manual Student ID Entry
+        </button>
+        
+    </main>
+    
+    <!-- Manual Entry Modal -->
+    <div id="manual-entry-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <h3 class="text-xl font-bold mb-4">Manual Entry</h3>
+            <input type="text" id="manual-student-id" placeholder="Enter Student ID" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-mono text-center text-lg focus:outline-none focus:border-emerald-500 mb-4">
+            <div class="flex gap-3">
+                <button onclick="closeManualEntry()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors">Cancel</button>
+                <button onclick="submitManualEntry()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition-colors">Submit</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Success Toast -->
+    <div id="toast-success" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-24 opacity-0 flex items-center gap-3">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <span id="toast-success-message" class="font-medium">Success!</span>
+    </div>
+    
+    <!-- Error Toast -->
+    <div id="toast-error" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-24 opacity-0 flex items-center gap-3">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        <span id="toast-error-message" class="font-medium">Error!</span>
+    </div>
+    
+    <!-- Audio Elements -->
+    <audio id="audio-success" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQQAKpzkwqhqOTOa2teleQQAKpzkwqhqOTQAAAA=" preload="auto"></audio>
+    <audio id="audio-error" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQQAKpzkwqhqOTMAAAA=" preload="auto"></audio>
+    <audio id="audio-late" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQQAKpzkwqhqOTQAAAA=" preload="auto"></audio>
+
+</body>
+</html>

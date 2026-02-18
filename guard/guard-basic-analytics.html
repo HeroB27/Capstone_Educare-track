@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Guard Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        guard: { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col text-white overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-16 bg-gray-800/80 backdrop-blur-xl border-b border-gray-700 flex items-center justify-between px-8 z-10">
+        <div class="flex items-center gap-4">
+            <a href="guard-dashboard.html" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                <span class="font-bold text-lg tracking-wider text-yellow-500 terminal-glow">GUARD ANALYTICS</span>
+            </a>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="guard-name" class="text-sm text-gray-400 font-mono">Guard</span>
+            <div class="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center text-gray-900 font-bold shadow-lg shadow-yellow-500/30">G</div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-800/50 backdrop-blur-xl border-r border-gray-700 flex flex-col m-3 rounded-2xl">
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="h-12 w-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center text-gray-900 font-bold shadow-lg shadow-yellow-500/30">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p id="guard-name-sidebar" class="font-semibold text-white">Guard</p>
+                        <p class="text-xs text-green-400 font-mono">● ONLINE</p>
+                    </div>
+                </div>
+                <div class="text-center pt-4 border-t border-gray-700">
+                    <p id="current-date" class="text-2xl font-bold text-white font-mono">--</p>
+                    <p id="current-day" class="text-xs text-gray-400 mt-1">Loading...</p>
+                </div>
+            </div>
+            <nav class="flex-1 py-4 px-3 space-y-1">
+                <a href="guard-dashboard.html" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                    </svg>
+                    <span class="text-sm font-medium">Dashboard</span>
+                </a>
+                <a href="scanner.html" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 17h.01M9 11h.01M12 11h.01M15 11h.01M15 17h.01"/>
+                    </svg>
+                    <span class="text-sm font-medium">Scanner</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-yellow-600 text-gray-900 rounded-xl shadow-lg shadow-yellow-500/30">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span class="text-sm font-medium">Analytics</span>
+                </a>
+                <a href="guard-announcements-board.html" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                    </svg>
+                    <span class="text-sm font-medium">Announcements</span>
+                </a>
+                <a href="guard-system-settings.html" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span class="text-sm font-medium">Settings</span>
+                </a>
+            </nav>
+            <button onclick="logout()" class="m-3 p-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all duration-200 flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span class="text-sm font-medium">Logout</span>
+            </button>
+        </aside>
+
+        <!-- Content -->
+        <div class="flex-1 p-6 overflow-auto">
+            <div class="max-w-7xl mx-auto space-y-6">
+                
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-700 hover:border-green-500/50 transition-all duration-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-400 uppercase tracking-wider">Total Students</p>
+                                <p class="text-2xl font-bold text-white font-mono mt-1" id="stat-total-students">--</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-700 hover:border-green-500/50 transition-all duration-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-400 uppercase tracking-wider">Present Today</p>
+                                <p class="text-2xl font-bold text-green-400 font-mono mt-1" id="stat-present">--</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-700 hover:border-yellow-500/50 transition-all duration-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-400 uppercase tracking-wider">Late Today</p>
+                                <p class="text-2xl font-bold text-yellow-400 font-mono mt-1" id="stat-late">--</p>
+                            </div>
+                            <div class="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-700 hover:border-red-500/50 transition-all duration-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-400 uppercase tracking-wider">Absent Today</p>
+                                <p class="text-2xl font-bold text-red-400 font-mono mt-1" id="stat-absent">--</p>
+                            </div>
+                            <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Weekly Trend Chart -->
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-white">Weekly Attendance Trend</h3>
+                                    <p class="text-xs text-gray-400">Last 7 days</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="weekly-trend-container" class="space-y-3">
+                            <p class="text-center text-gray-500 py-4">Loading trends...</p>
+                        </div>
+                    </div>
+
+                    <!-- Today's Breakdown Pie Chart -->
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-white">Today's Breakdown</h3>
+                                    <p class="text-xs text-gray-400">Attendance distribution</p>
+                                </div>
+                            </div>
+                        </div>
+                        <canvas id="breakdownPieChart" class="max-h-[250px]"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Lists -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Top Late Arrivals -->
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-700 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-3">
+                            <div class="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-white">⚠️ Top Late Arrivals (This Week)</h3>
+                        </div>
+                        <div id="top-lates-container" class="p-4 max-h-96 overflow-y-auto">
+                            <p class="text-center text-gray-500 py-8">Loading...</p>
+                        </div>
+                    </div>
+
+                    <!-- Top Absences -->
+                    <div class="bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-700 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-3">
+                            <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-white">🚫 Top Absences (This Week)</h3>
+                        </div>
+                        <div id="top-absentees-container" class="p-4 max-h-96 overflow-y-auto">
+                            <p class="text-center text-gray-500 py-8">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="guard-basic-analytics.js"></script>
+</body>
+</html>

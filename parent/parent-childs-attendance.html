@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Portal - Attendance - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+</head>
+<body class="bg-gray-50 font-sans flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200 flex items-center justify-between px-4 z-10">
+        <div class="flex items-center gap-3">
+            <button onclick="navigateTo('dashboard')" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h1 class="font-bold text-lg text-gray-800">Attendance History</h1>
+        </div>
+        <div id="child-selector" class="text-sm">
+            <!-- Child selector populated by JS -->
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-auto p-4 pb-24 max-w-md mx-auto w-full">
+        
+        <!-- Child Switcher -->
+        <div id="child-switcher" class="mb-4">
+            <!-- Child switcher from parent-core.js -->
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-indicator" class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+        </div>
+
+        <!-- Content -->
+        <div id="attendance-content" class="hidden">
+            
+            <!-- Summary Stats -->
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 mb-4">
+                <h3 class="font-bold text-gray-800 mb-4">This Month Summary</h3>
+                <div class="grid grid-cols-4 gap-2 text-center">
+                    <div class="bg-green-50 rounded-xl p-3">
+                        <p id="stat-present" class="text-xl font-bold text-green-600">--</p>
+                        <p class="text-xs text-green-600">Present</p>
+                    </div>
+                    <div class="bg-yellow-50 rounded-xl p-3">
+                        <p id="stat-late" class="text-xl font-bold text-yellow-600">--</p>
+                        <p class="text-xs text-yellow-600">Late</p>
+                    </div>
+                    <div class="bg-red-50 rounded-xl p-3">
+                        <p id="stat-absent" class="text-xl font-bold text-red-600">--</p>
+                        <p class="text-xs text-red-600">Absent</p>
+                    </div>
+                    <div class="bg-blue-50 rounded-xl p-3">
+                        <p id="stat-percent" class="text-xl font-bold text-blue-600">--%</p>
+                        <p class="text-xs text-blue-600">Rate</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Month Navigation -->
+            <div class="flex items-center justify-between mb-4">
+                <button onclick="changeMonth(-1)" class="p-3 bg-white hover:bg-gray-50 rounded-xl shadow-sm border border-gray-200 transition-colors">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <h3 id="current-month" class="font-bold text-lg text-gray-800">--</h3>
+                <button onclick="changeMonth(1)" class="p-3 bg-white hover:bg-gray-50 rounded-xl shadow-sm border border-gray-200 transition-colors">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Calendar Legend -->
+            <div class="flex flex-wrap gap-3 mb-4 text-xs">
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-green-500 rounded-lg"></div>
+                    <span class="text-gray-600">On Time</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-yellow-500 rounded-lg"></div>
+                    <span class="text-gray-600">Late</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-red-500 rounded-lg"></div>
+                    <span class="text-gray-600">Absent</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-purple-500 rounded-lg"></div>
+                    <span class="text-gray-600">Excused</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-gray-200 rounded-lg"></div>
+                    <span class="text-gray-600">No Class</span>
+                </div>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/50">
+                <!-- Weekday Headers -->
+                <div class="grid grid-cols-7 mb-2 text-center text-xs font-medium text-gray-500">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                </div>
+                
+                <!-- Calendar Days -->
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+                    <!-- Days populated by JS -->
+                </div>
+            </div>
+
+            <!-- Selected Day Details -->
+            <div id="day-details" class="mt-4 bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 hidden">
+                <h4 class="font-bold text-gray-800 mb-3">Details</h4>
+                <div id="day-content" class="text-sm text-gray-600">
+                    <!-- Details populated by JS -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="h-16 bg-white/80 backdrop-blur-xl border-t border-gray-200 flex justify-around items-center text-xs fixed bottom-0 w-full max-w-md z-20">
+        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span class="text-xs font-medium">Home</span>
+        </button>
+        <button onclick="navigateTo('attendance')" class="flex flex-col items-center justify-center py-2 text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Attendance</span>
+        </button>
+        <button onclick="navigateTo('excuse')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="text-xs font-medium">Excuse</span>
+        </button>
+        <button onclick="navigateTo('children')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span class="text-xs font-medium">Children</span>
+        </button>
+    </nav>
+
+    <script src="parent-core.js"></script>
+    <script src="parent-childs-attendance.js"></script>
+</body>
+</html>

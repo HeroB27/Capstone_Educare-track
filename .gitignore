@@ -1,0 +1,24 @@
+# Educare Track - GitIgnore
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+debug logs/
+
+# Environment files (sensitive)
+.env
+.env.local
+
+# Backup files
+*.bak
+*.tmp

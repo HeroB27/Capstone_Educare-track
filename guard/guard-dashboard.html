@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guard Dashboard - Educare</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qr-code" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Core Scripts -->
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .terminal-glow { text-shadow: 0 0 10px rgba(234, 179, 8, 0.5); }
+        .pulse-ring { animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col text-white overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-16 flex items-center justify-between px-6 bg-gray-800/80 backdrop-blur-md border-b border-gray-700">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20"></div>
+                <div class="relative h-3 w-3 bg-green-500 rounded-full"></div>
+            </div>
+            <span class="font-bold text-lg tracking-wider text-yellow-500 terminal-glow">GATE GUARD</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="guard-name" class="text-sm text-gray-400 font-mono">Guard</span>
+            <button onclick="logout()" class="text-sm bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition border border-gray-600">Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col md:flex-row p-4 md:p-6 gap-6 overflow-hidden">
+        
+        <!-- Navigation Sidebar -->
+        <aside class="w-full md:w-64 flex flex-col gap-4">
+            
+            <!-- User Card -->
+            <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="h-12 w-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center text-gray-900 font-bold text-lg shadow-lg shadow-yellow-500/30">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p id="welcome-name" class="font-semibold text-white">Guard</p>
+                        <p class="text-xs text-gray-500 font-mono">ONLINE</p>
+                    </div>
+                </div>
+                <div class="text-center pt-4 border-t border-gray-700">
+                    <p id="current-date" class="text-2xl font-bold text-white font-mono">--</p>
+                    <p id="current-day" class="text-xs text-gray-400 mt-1">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</h3>
+                <a href="scanner.html" class="flex items-center gap-3 p-4 bg-yellow-500 hover:bg-yellow-400 text-gray-900 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg shadow-yellow-500/30 mb-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 17h.01M9 11h.01M12 11h.01M15 11h.01M15 17h.01"/>
+                    </svg>
+                    <span class="font-bold">OPEN SCANNER</span>
+                </a>
+                <a href="guard-basic-analytics.html" class="flex items-center gap-3 p-4 bg-gray-700 hover:bg-gray-600 text-white rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-95">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span>Analytics</span>
+                </a>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 flex-1">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Menu</h3>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="guard-dashboard.html" class="flex items-center gap-3 p-3 bg-gray-700 rounded-xl text-white transition-all duration-200 hover:bg-gray-600">
+                            <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                            </svg>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="guard-announcements-board.html" class="flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                            </svg>
+                            Announcements
+                        </a>
+                    </li>
+                    <li>
+                        <a href="guard-system-settings.html" class="flex items-center gap-3 p-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl transition-all duration-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Settings
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col gap-6 overflow-hidden">
+            
+            <!-- Welcome Banner -->
+            <div class="bg-gradient-to-r from-yellow-600 to-yellow-500 rounded-2xl p-6 shadow-lg shadow-yellow-500/30">
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Gate attendance scanning system</h1>
+                <p class="text-gray-800">Click "Open Scanner" to start scanning students.</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                
+                <!-- Present Today -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 hover:border-green-500/50 transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Present Today</p>
+                            <p id="stat-present" class="text-3xl font-bold text-green-400 font-mono mt-1">0</p>
+                        </div>
+                        <div class="h-12 w-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Late Arrivals -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 hover:border-yellow-500/50 transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Late Arrivals</p>
+                            <p id="stat-late" class="text-3xl font-bold text-yellow-400 font-mono mt-1">0</p>
+                        </div>
+                        <div class="h-12 w-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Early Exits -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 hover:border-red-500/50 transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Early Exits</p>
+                            <p id="stat-early" class="text-3xl font-bold text-red-400 font-mono mt-1">0</p>
+                        </div>
+                        <div class="h-12 w-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Medical Exits -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-4 hover:border-blue-500/50 transition-all duration-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Medical Exits</p>
+                            <p id="stat-medical" class="text-3xl font-bold text-blue-400 font-mono mt-1">0</p>
+                        </div>
+                        <div class="h-12 w-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Scanner & Terminal Log -->
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
+                
+                <!-- Quick Scanner -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-6 flex flex-col">
+                    <h3 class="text-sm font-semibold text-gray-400 mb-4">Quick Scanner</h3>
+                    <div class="flex-1 bg-gray-900/80 rounded-xl border-2 border-yellow-600/50 relative overflow-hidden">
+                        <div id="reader" class="w-full h-full"></div>
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="w-48 h-48 border-2 border-yellow-500/50 rounded-lg">
+                                <div class="absolute -top-1 -left-1 w-3 h-3 bg-yellow-500"></div>
+                                <div class="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500"></div>
+                                <div class="absolute -bottom-1 -left-1 w-3 h-3 bg-yellow-500"></div>
+                                <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-500"></div>
+                            </div>
+                        </div>
+                        <p class="absolute bottom-3 left-1/2 transform -translate-x-1/2 text-yellow-500 text-xs bg-gray-900/80 px-3 py-1 rounded font-mono">
+                            Point camera at QR Code
+                        </p>
+                    </div>
+                    <a href="scanner.html" class="mt-4 text-center bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold py-3 px-6 rounded-xl transition-all duration-200 hover:shadow-lg shadow-yellow-500/30">
+                        Open Full Scanner
+                    </a>
+                </div>
+
+                <!-- Terminal Log (Recent Activity) -->
+                <div class="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 p-6 flex flex-col overflow-hidden">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <h3 class="text-sm font-semibold text-gray-400">Today's Activity Log</h3>
+                    </div>
+                    
+                    <!-- Terminal Window -->
+                    <div class="flex-1 bg-gray-900/80 rounded-xl border border-gray-700 font-mono text-sm overflow-hidden">
+                        <!-- Terminal Header -->
+                        <div class="flex items-center gap-2 px-4 py-2 bg-gray-800 border-b border-gray-700">
+                            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span class="text-xs text-gray-500 ml-2">recent_scans.log</span>
+                        </div>
+                        
+                        <!-- Terminal Content -->
+                        <div id="recent-activity" class="p-4 space-y-2 overflow-y-auto max-h-[300px]">
+                            <p class="text-gray-500 text-center py-8">No scans yet today</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Guard Core Script -->
+    <script src="guard-core.js"></script>
+
+    <script>
+        // Session check and initialization
+        const user = checkSession('guards');
+        if (user) {
+            document.getElementById('guard-name').innerText = user.full_name;
+            document.getElementById('welcome-name').innerText = user.full_name;
+        }
+
+        // Set current date
+        const now = new Date();
+        document.getElementById('current-date').innerText = now.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+        document.getElementById('current-day').innerText = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        // Load today's statistics
+        async function loadTodayStats() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            try {
+                const { data: logs, error } = await supabase
+                    .from('attendance_logs')
+                    .select('status')
+                    .eq('log_date', today);
+                
+                if (error) {
+                    console.error('Error loading stats:', error);
+                    return;
+                }
+                
+                // Count by status
+                let present = 0, late = 0, earlyExit = 0, medical = 0;
+                
+                logs.forEach(log => {
+                    if (log.status === 'On Time') present++;
+                    else if (log.status === 'Late') late++;
+                    else if (log.status === 'Early Exit') earlyExit++;
+                    else if (log.status === 'Medical Exit') medical++;
+                });
+                
+                document.getElementById('stat-present').innerText = present;
+                document.getElementById('stat-late').innerText = late;
+                document.getElementById('stat-early').innerText = earlyExit;
+                document.getElementById('stat-medical').innerText = medical;
+                
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Load recent activity with terminal styling
+        async function loadRecentActivity() {
+            const today = new Date().toISOString().split('T')[0];
+            const activityContainer = document.getElementById('recent-activity');
+            
+            try {
+                const { data: logs, error } = await supabase
+                    .from('attendance_logs')
+                    .select(`
+                        id,
+                        status,
+                        time_in,
+                        time_out,
+                        students (
+                            full_name,
+                            classes (
+                                grade_level,
+                                section_name
+                            )
+                        )
+                    `)
+                    .eq('log_date', today)
+                    .order('id', { ascending: false })
+                    .limit(15);
+                
+                if (error) {
+                    console.error('Error loading activity:', error);
+                    return;
+                }
+                
+                if (!logs || logs.length === 0) {
+                    activityContainer.innerHTML = '<p class="text-gray-500 text-center py-8"><span class="text-yellow-500">></span> No scans yet today</p>';
+                    return;
+                }
+                
+                activityContainer.innerHTML = logs.map(log => {
+                    const student = log.students;
+                    const name = student ? student.full_name : 'Unknown';
+                    const grade = student && student.classes ? student.classes.grade_level : 'N/A';
+                    const section = student && student.classes ? student.classes.section_name : '';
+                    
+                    let statusColor = 'text-green-400';
+                    let actionIcon = '→';
+                    let actionText = 'IN';
+                    
+                    if (log.status === 'Late') {
+                        statusColor = 'text-yellow-400';
+                    } else if (log.status === 'Early Exit' || log.status === 'Late Exit') {
+                        statusColor = 'text-red-400';
+                        actionIcon = '←';
+                        actionText = 'OUT';
+                    } else if (log.status === 'Medical Exit') {
+                        statusColor = 'text-blue-400';
+                        actionIcon = '←';
+                        actionText = 'MED';
+                    }
+                    
+                    const time = log.time_in ? new Date(log.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--:--';
+                    
+                    return `
+                        <div class="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
+                            <div class="flex items-center gap-3">
+                                <span class="text-yellow-500 font-mono">[${time}]</span>
+                                <span class="text-gray-300">${name}</span>
+                                <span class="text-gray-600 text-xs">${grade} ${section}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="${statusColor} font-mono font-bold">${actionIcon} ${actionText}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Initialize
+        loadTodayStats();
+        loadRecentActivity();
+
+        // Refresh stats every 30 seconds
+        setInterval(() => {
+            loadTodayStats();
+            loadRecentActivity();
+        }, 30000);
+    </script>
+</body>
+</html>
