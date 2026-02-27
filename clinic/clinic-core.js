@@ -636,11 +636,10 @@ async function fetchStudentVisitHistory(studentId) {
 }
 
 /**
- * Fetch visits by date range
- * @param {string} startDate - Start date in YYYY-MM-DD format
- * @param {string} endDate - End date in YYYY-MM-DD format
+ * Fetch all visits without any date filter
  */
-async function fetchVisitsByDateRange(startDate, endDate) {
+async function fetchAllVisits() {
+    console.log('[DEBUG] fetchAllVisits called');
     try {
         const { data, error } = await supabase
             .from('clinic_visits')
@@ -653,16 +652,60 @@ async function fetchVisitsByDateRange(startDate, endDate) {
                 ),
                 teachers (full_name)
             `)
-            .gte('time_in', `${startDate}T00:00:00`)
-            .lte('time_in', `${endDate}T23:59:59`)
             .order('time_in', { ascending: false });
         
+        console.log('[DEBUG] fetchAllVisits returned:', data?.length || 0, 'records', error);
+        
         if (error) {
-            console.error('Error fetching visits by date:', error);
+            console.error('Error fetching all visits:', error);
             return [];
         }
         
         return data || [];
+    } catch (err) {
+        console.error('Error in fetchAllVisits:', err);
+        return [];
+    }
+}
+
+/**
+ * Fetch all visits for a date range
+ * @param {string} startDate - Start date YYYY-MM-DD
+ * @param {string} endDate - End date YYYY-MM-DD
+ */
+async function fetchVisitsByDateRange(startDate, endDate) {
+    try {
+        // Fetch all visits and filter locally (to avoid timezone issues)
+        const { data: allData, error: allError } = await supabase
+            .from('clinic_visits')
+            .select(`
+                *,
+                students (
+                    full_name,
+                    student_id_text,
+                    classes (grade_level, section_name)
+                ),
+                teachers (full_name)
+            `)
+            .order('time_in', { ascending: false });
+        
+        if (allError) {
+            console.error('Error fetching all visits:', allError);
+            return [];
+        }
+        
+        // Filter by date locally
+        const startDateTime = new Date(startDate);
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        
+        const filtered = (allData || []).filter(visit => {
+            const visitDate = new Date(visit.time_in);
+            return visitDate >= startDateTime && visitDate <= endDateTime;
+        });
+        
+        return filtered;
+        
     } catch (err) {
         console.error('Error in fetchVisitsByDateRange:', err);
         return [];
@@ -1190,36 +1233,6 @@ async function fetchVisitReasons(date = null) {
     }
 }
 
-/**
- * Fetch all visits for a date range
- * @param {string} startDate - Start date YYYY-MM-DD
- * @param {string} endDate - End date YYYY-MM-DD
- */
-async function fetchVisitsByDateRange(startDate, endDate) {
-    try {
-        const { data, error } = await supabase
-            .from('clinic_visits')
-            .select(`
-                *,
-                students (full_name, student_id_text),
-                teachers (full_name)
-            `)
-            .gte('time_in', `${startDate}T00:00:00`)
-            .lte('time_in', `${endDate}T23:59:59`)
-            .order('time_in', { ascending: false });
-        
-        if (error) {
-            console.error('Error fetching visits by date range:', error);
-            return [];
-        }
-        
-        return data || [];
-    } catch (err) {
-        console.error('Error in fetchVisitsByDateRange:', err);
-        return [];
-    }
-}
-
 // ============================================================================
 // TEACHERS
 // ============================================================================
@@ -1250,6 +1263,20 @@ async function fetchTeachers() {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
+
+/**
+ * Get initials from full name
+ * @param {string} fullName - Full name
+ * @returns {string} - Initials (max 2 characters)
+ */
+function getInitials(fullName) {
+    if (!fullName) return '?';
+    const parts = fullName.trim().split(' ');
+    if (parts.length === 1) {
+        return parts[0].charAt(0).toUpperCase();
+    }
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
 
 /**
  * Format date for display
@@ -1347,3 +1374,13 @@ function exportToCSV(data, filename) {
     link.download = `${filename}.csv`;
     link.click();
 }
+
+// ============================================================================
+// WINDOW EXPORTS - Make functions globally accessible
+// ============================================================================
+window.fetchVisitsByDateRange = fetchVisitsByDateRange;
+window.formatDate = formatDate;
+window.formatTime = formatTime;
+window.calculateDuration = calculateDuration;
+window.showToast = showToast;
+window.exportToCSV = exportToCSV;

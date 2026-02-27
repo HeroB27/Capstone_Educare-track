@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (currentUser) {
         document.getElementById('filter-date').value = new Date().toISOString().split('T')[0];
         const activeVisitId = sessionStorage.getItem('activeVisitId');
+        
         if (activeVisitId) {
             sessionStorage.removeItem('activeVisitId');
             await loadAndOpenVisit(parseInt(activeVisitId));
@@ -82,8 +83,13 @@ async function selectStudentForHistory(studentId, studentName) {
 }
 
 async function loadAllVisits() {
+    console.log('[DEBUG] loadAllVisits called - showing today\'s visits');
+    // Set the date filter to today
     const today = new Date().toISOString().split('T')[0];
+    document.getElementById('filter-date').value = today;
+    
     currentVisitHistory = await fetchVisitsByDateRange(today, today);
+    console.log('[DEBUG] fetchVisitsByDateRange returned:', currentVisitHistory.length, 'visits for today');
     renderVisitHistory(currentVisitHistory);
 }
 
@@ -94,13 +100,21 @@ async function loadStudentVisitHistory(studentId) {
 
 async function filterByDate() {
     const date = document.getElementById('filter-date').value;
-    if (!date) return;
+    console.log('[DEBUG] filterByDate called with:', date);
+    
+    if (!date) {
+        // If no date is selected, show all visits
+        await loadAllVisits();
+        return;
+    }
     
     if (selectedStudentId) {
         const visits = await fetchStudentVisitHistory(selectedStudentId);
         currentVisitHistory = visits.filter(v => v.time_in.startsWith(date));
     } else {
+        console.log('[DEBUG] Fetching visits for date range:', date, 'to', date);
         currentVisitHistory = await fetchVisitsByDateRange(date, date);
+        console.log('[DEBUG] fetchVisitsByDateRange returned:', currentVisitHistory.length, 'visits');
     }
     renderVisitHistory(currentVisitHistory);
 }
@@ -109,7 +123,10 @@ async function resetSearch() {
     selectedStudentId = null;
     document.getElementById('student-search').value = '';
     document.getElementById('history-title').innerText = 'All Visit Records';
-    await loadAllVisits();
+    // Clear the date filter to show all records
+    document.getElementById('filter-date').value = '';
+    currentVisitHistory = await fetchAllVisits();
+    renderVisitHistory(currentVisitHistory);
 }
 
 function renderVisitHistory(visits) {

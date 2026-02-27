@@ -3,11 +3,15 @@
 // ============================================================================
 // CLINIC SYSTEM SETTINGS - JavaScript Logic
 // ============================================================================
-// Features: Profile management, password change, notification preferences, clinic info
+// Features: Profile management, password change, notification preferences
+// NOTE: Uses localStorage for preferences, clinic_staff table for profile
 // ============================================================================
 
 // Session Check
 // currentUser is now global in clinic-core.js
+
+// Local storage key for clinic preferences
+const CLINIC_SETTINGS_KEY = 'educare_clinic_settings';
 
 // ============================================================================
 // INITIALIZATION
@@ -27,43 +31,152 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// SETTINGS LOADING
+// SETTINGS LOADING (localStorage for preferences, clinic_staff table for profile)
 // ============================================================================
 
 /**
- * Load current settings from database
+ * Load current settings from localStorage and database
  */
 async function loadSettings() {
     try {
-        // Load notification preferences
-        const { data: prefs, error: prefsError } = await supabase
-            .from('clinic_notification_preferences')
-            .select('*')
-            .eq('clinic_staff_id', currentUser.id)
-            .single();
+        // Load notification preferences from localStorage
+        loadNotificationPreferences();
         
-        if (!prefsError && prefs) {
-            document.getElementById('notify-new-patient').checked = prefs.new_patient_alerts ?? true;
-            document.getElementById('notify-parent-contact').checked = prefs.parent_contact_alerts ?? true;
-            document.getElementById('notify-system').checked = prefs.system_announcements ?? true;
-        }
+        // Load clinic info from localStorage
+        loadClinicInfoToForm();
         
-        // Load clinic info if available
-        const { data: clinicInfo, error: clinicError } = await supabase
-            .from('clinic_info')
-            .select('*')
-            .single();
-        
-        if (!clinicError && clinicInfo) {
-            const contactInput = document.querySelector('input[placeholder="Enter contact number"]');
-            const emergencyInput = document.querySelector('input[placeholder="Emergency contact"]');
-            if (contactInput) contactInput.value = clinicInfo.contact_number || '';
-            if (emergencyInput) emergencyInput.value = clinicInfo.emergency_line || '';
-        }
+        // Load clinic staff profile from database
+        await loadClinicProfile();
         
     } catch (error) {
         console.error('Error loading settings:', error);
     }
+}
+
+/**
+ * Load clinic info to form from localStorage
+ */
+function loadClinicInfoToForm() {
+    const clinicInfo = loadClinicInfo();
+    if (!clinicInfo) return;
+    
+    const contactInput = document.querySelector('input[placeholder="Enter contact number"]');
+    const emergencyInput = document.querySelector('input[placeholder="Emergency contact"]');
+    
+    if (contactInput) contactInput.value = clinicInfo.contact_number || '';
+    if (emergencyInput) emergencyInput.value = clinicInfo.emergency_line || '';
+}
+
+/**
+ * Load notification preferences from localStorage
+ */
+function loadNotificationPreferences() {
+    const prefs = getNotificationPreferences();
+    
+    const newPatientCheck = document.getElementById('notify-new-patient');
+    const parentContactCheck = document.getElementById('notify-parent-contact');
+    const systemCheck = document.getElementById('notify-system');
+    
+    if (newPatientCheck) newPatientCheck.checked = prefs.newPatientAlerts ?? true;
+    if (parentContactCheck) parentContactCheck.checked = prefs.parentContactAlerts ?? true;
+    if (systemCheck) systemCheck.checked = prefs.systemAnnouncements ?? true;
+}
+
+/**
+ * Get notification preferences from localStorage
+ */
+function getNotificationPreferences() {
+    const stored = localStorage.getItem(CLINIC_SETTINGS_KEY);
+    return stored ? JSON.parse(stored) : {
+        newPatientAlerts: true,
+        parentContactAlerts: true,
+        systemAnnouncements: true
+    };
+}
+
+/**
+ * Save notification preferences to localStorage
+ */
+function saveNotificationPreferencesToStorage(prefs) {
+    localStorage.setItem(CLINIC_SETTINGS_KEY, JSON.stringify(prefs));
+}
+
+/**
+ * Load clinic staff profile from database
+ */
+async function loadClinicProfile() {
+    if (!currentUser || !currentUser.id) return;
+    
+    try {
+        // First populate from currentUser (stored in localStorage from login)
+        populateProfileDisplay();
+        
+        // Then fetch fresh data from database
+        const { data: clinicStaff, error } = await supabase
+            .from('clinic_staff')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+        
+        if (error) {
+            console.error('Error loading clinic profile:', error);
+            return;
+        }
+        
+        // Update currentUser with fresh data if needed
+        if (clinicStaff) {
+            currentUser = { ...currentUser, ...clinicStaff };
+            populateProfileDisplay();
+        }
+        
+        // Populate form fields
+        const fullnameInput = document.getElementById('profile-name');
+        const roleInput = document.getElementById('profile-role');
+        const staffIdInput = document.getElementById('profile-staff-id');
+        const usernameInput = document.getElementById('profile-username');
+        const emailInput = document.querySelector('input[type="email"]');
+        const contactInput = document.querySelector('input[placeholder*="contact"]');
+        
+        if (fullnameInput) fullnameInput.value = clinicStaff?.full_name || '';
+        if (roleInput) roleInput.value = clinicStaff?.role_title || 'Nurse';
+        if (staffIdInput) staffIdInput.value = clinicStaff?.clinic_id_text || '';
+        if (usernameInput) usernameInput.value = clinicStaff?.username || '';
+        if (emailInput) emailInput.value = clinicStaff?.email || '';
+        if (contactInput) contactInput.value = clinicStaff?.contact_number || '';
+        
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+/**
+ * Populate profile display elements from currentUser
+ */
+function populateProfileDisplay() {
+    const avatarEl = document.getElementById('profile-avatar');
+    const nameEl = document.getElementById('profile-display-name');
+    const roleEl = document.getElementById('profile-display-role');
+    const idEl = document.getElementById('profile-display-id');
+    
+    if (avatarEl && currentUser?.full_name) {
+        avatarEl.textContent = currentUser.full_name.charAt(0).toUpperCase();
+    }
+    if (nameEl) {
+        nameEl.textContent = currentUser?.full_name || 'Nurse';
+    }
+    if (roleEl) {
+        roleEl.textContent = currentUser?.role_title || 'Clinic Staff';
+    }
+    if (idEl) {
+        idEl.textContent = 'ID: ' + (currentUser?.clinic_id_text || 'N/A');
+    }
+    
+    // Also update sidebar
+    const sidebarName = document.getElementById('clinic-name-sidebar');
+    if (sidebarName) sidebarName.textContent = currentUser?.full_name || 'Nurse';
+    
+    const headerName = document.getElementById('clinic-name');
+    if (headerName) headerName.textContent = currentUser?.full_name || 'Nurse';
 }
 
 // ============================================================================
@@ -93,15 +206,19 @@ async function handlePasswordChange(event) {
     }
     
     try {
-        // Verify current password by attempting to sign in
-        const { data: authData, error: authError } = await supabase
+        // Verify current password by fetching from clinic_staff
+        const { data: clinicStaff, error: fetchError } = await supabase
             .from('clinic_staff')
-            .select('*')
-            .eq('username', currentUser.username)
-            .eq('password', currentPassword)
+            .select('password')
+            .eq('id', currentUser.id)
             .single();
         
-        if (authError || !authData) {
+        if (fetchError || !clinicStaff) {
+            showToast('Error verifying password', 'error');
+            return;
+        }
+        
+        if (clinicStaff.password !== currentPassword) {
             showToast('Current password is incorrect', 'error');
             return;
         }
@@ -129,131 +246,65 @@ async function handlePasswordChange(event) {
 }
 
 // ============================================================================
-// CLINIC INFORMATION
+// CLINIC INFORMATION (localStorage-based)
 // ============================================================================
 
 /**
- * Save clinic information
+ * Save clinic contact information to localStorage
  */
 async function saveClinicInfo() {
     const contactNumber = document.querySelector('input[placeholder="Enter contact number"]')?.value;
     const emergencyLine = document.querySelector('input[placeholder="Emergency contact"]')?.value;
     
-    try {
-        // Check if clinic info exists
-        const { data: existingInfo, error: fetchError } = await supabase
-            .from('clinic_info')
-            .select('id')
-            .single();
-        
-        if (fetchError && fetchError.code !== 'PGRST116') {
-            showToast('Error fetching clinic info', 'error');
-            return;
-        }
-        
-        let error;
-        
-        if (existingInfo) {
-            // Update existing record
-            const { error: updateError } = await supabase
-                .from('clinic_info')
-                .update({
-                    contact_number: contactNumber,
-                    emergency_line: emergencyLine,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', existingInfo.id);
-            
-            error = updateError;
-        } else {
-            // Create new record
-            const { error: insertError } = await supabase
-                .from('clinic_info')
-                .insert({
-                    contact_number: contactNumber,
-                    emergency_line: emergencyLine,
-                    clinic_name: 'School Clinic',
-                    operating_hours: '7:00 AM - 5:00 PM'
-                });
-            
-            error = insertError;
-        }
-        
-        if (error) {
-            console.error('Error saving clinic info:', error);
-            showToast('Failed to save clinic information', 'error');
-            return;
-        }
-        
-        showToast('Clinic information saved successfully', 'success');
-        
-    } catch (error) {
-        console.error('Error saving clinic info:', error);
-        showToast('An error occurred', 'error');
-    }
+    // Get existing clinic info from localStorage
+    const stored = localStorage.getItem(CLINIC_SETTINGS_KEY);
+    const prefs = stored ? JSON.parse(stored) : {};
+    
+    // Update with new values
+    prefs.clinicContactNumber = contactNumber;
+    prefs.clinicEmergencyLine = emergencyLine;
+    prefs.clinicUpdatedAt = new Date().toISOString();
+    
+    // Save to localStorage
+    localStorage.setItem(CLINIC_SETTINGS_KEY, JSON.stringify(prefs));
+    
+    showToast('Clinic information saved successfully', 'success');
+}
+
+/**
+ * Load clinic info from localStorage
+ */
+function loadClinicInfo() {
+    const stored = localStorage.getItem(CLINIC_SETTINGS_KEY);
+    if (!stored) return null;
+    
+    const prefs = JSON.parse(stored);
+    return {
+        contact_number: prefs.clinicContactNumber || '',
+        emergency_line: prefs.clinicEmergencyLine || ''
+    };
 }
 
 // ============================================================================
-// NOTIFICATION PREFERENCES
+// NOTIFICATION PREFERENCES (localStorage-based)
 // ============================================================================
 
 /**
- * Save notification preferences
+ * Save notification preferences to localStorage
  */
 async function saveNotificationPreferences() {
-    const newPatientAlerts = document.getElementById('notify-new-patient').checked;
-    const parentContactAlerts = document.getElementById('notify-parent-contact').checked;
-    const systemAnnouncements = document.getElementById('notify-system').checked;
+    const newPatientAlerts = document.getElementById('notify-new-patient')?.checked;
+    const parentContactAlerts = document.getElementById('notify-parent-contact')?.checked;
+    const systemAnnouncements = document.getElementById('notify-system')?.checked;
     
-    try {
-        // Check if preferences exist
-        const { data: existingPrefs, error: fetchError } = await supabase
-            .from('clinic_notification_preferences')
-            .select('id')
-            .eq('clinic_staff_id', currentUser.id)
-            .single();
-        
-        let error;
-        
-        if (existingPrefs) {
-            // Update existing preferences
-            const { error: updateError } = await supabase
-                .from('clinic_notification_preferences')
-                .update({
-                    new_patient_alerts: newPatientAlerts,
-                    parent_contact_alerts: parentContactAlerts,
-                    system_announcements: systemAnnouncements,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', existingPrefs.id);
-            
-            error = updateError;
-        } else {
-            // Create new preferences
-            const { error: insertError } = await supabase
-                .from('clinic_notification_preferences')
-                .insert({
-                    clinic_staff_id: currentUser.id,
-                    new_patient_alerts: newPatientAlerts,
-                    parent_contact_alerts: parentContactAlerts,
-                    system_announcements: systemAnnouncements
-                });
-            
-            error = insertError;
-        }
-        
-        if (error) {
-            console.error('Error saving preferences:', error);
-            showToast('Failed to save preferences', 'error');
-            return;
-        }
-        
-        showToast('Notification preferences saved', 'success');
-        
-    } catch (error) {
-        console.error('Error saving preferences:', error);
-        showToast('An error occurred', 'error');
-    }
+    const prefs = {
+        newPatientAlerts: newPatientAlerts ?? true,
+        parentContactAlerts: parentContactAlerts ?? true,
+        systemAnnouncements: systemAnnouncements ?? true
+    };
+    
+    saveNotificationPreferencesToStorage(prefs);
+    showToast('Notification preferences saved', 'success');
 }
 
 // ============================================================================
@@ -317,7 +368,9 @@ document.addEventListener('DOMContentLoaded', () => {
     checkboxes.forEach(id => {
         const checkbox = document.getElementById(id);
         if (checkbox) {
-            checkbox.addEventListener('change', saveNotificationPreferences);
+            checkbox.addEventListener('change', () => {
+                saveNotificationPreferences();
+            });
         }
     });
 });

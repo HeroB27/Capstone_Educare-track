@@ -94,31 +94,31 @@
                     </div>
                     <div class="p-8">
                         <div class="flex items-center gap-6 mb-8">
-                            <div class="h-20 w-20 rounded-2xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-red-500/30">
-                                ${currentUser?.full_name?.charAt(0) || '?'}
+                            <div class="h-20 w-20 rounded-2xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-red-500/30" id="profile-avatar">
+                                ?
                             </div>
                             <div>
-                                <h4 class="text-xl font-black text-gray-900">${currentUser?.full_name || 'Nurse'}</h4>
-                                <p class="text-sm text-gray-500 font-medium">${currentUser?.role_title || 'Clinic Staff'}</p>
-                                <p class="text-xs text-gray-400 mt-1 font-bold">ID: ${currentUser?.clinic_id_text || 'N/A'}</p>
+                                <h4 class="text-xl font-black text-gray-900" id="profile-display-name">Nurse</h4>
+                                <p class="text-sm text-gray-500 font-medium" id="profile-display-role">Clinic Staff</p>
+                                <p class="text-xs text-gray-400 mt-1 font-bold" id="profile-display-id">ID: Loading...</p>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
-                                <input type="text" id="profile-name" value="${currentUser?.full_name || ''}" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
+                                <input type="text" id="profile-name" value="" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Role Title</label>
-                                <input type="text" id="profile-role" value="${currentUser?.role_title || ''}" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
+                                <input type="text" id="profile-role" value="" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Staff ID</label>
-                                <input type="text" value="${currentUser?.clinic_id_text || ''}" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
+                                <input type="text" id="profile-staff-id" value="" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Username</label>
-                                <input type="text" value="${currentUser?.username || ''}" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
+                                <input type="text" id="profile-username" value="" disabled class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600 font-medium">
                             </div>
                         </div>
                     </div>

@@ -93,6 +93,7 @@
                     <button onclick="setToday()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">Today</button>
                     <button onclick="setThisWeek()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">This Week</button>
                     <button onclick="setThisMonth()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">This Month</button>
+                    <button onclick="setAllTime()" class="px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl">All Time</button>
                 </div>
             </div>
 
@@ -112,7 +113,7 @@
             <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
                 <div class="p-6 border-b border-gray-100 flex justify-between items-center">
                     <h3 class="font-black text-gray-900 text-lg tracking-tight">Detailed Visit Log</h3>
-                    <button onclick="exportToCSV()" class="flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold">
+                    <button onclick="exportData()" class="flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold">
                         <i data-lucide="download" class="w-4 h-4"></i> Export CSV
                     </button>
                 </div>

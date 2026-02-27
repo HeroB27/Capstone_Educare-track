@@ -54,10 +54,15 @@ function setCurrentDate() {
  * Load announcements from database
  */
 async function loadAnnouncements() {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
+    
+    if (!container) {
+        console.error('Announcements container not found');
+        return;
+    }
     
     try {
-        // FIXED: Use correct boolean column
+        // FIXED: Removed is_active filter - column doesn't exist in database
         const { data: announcements, error } = await supabase
             .from('announcements')
             .select(`
@@ -65,7 +70,6 @@ async function loadAnnouncements() {
                 admins(full_name)
             `)
             .eq('target_clinic', true)
-            .eq('is_active', true)
             .order('created_at', { ascending: false });
         
         if (error) {
@@ -122,7 +126,12 @@ async function loadAnnouncements() {
  * Render announcements to the list
  */
 function renderAnnouncements(announcements) {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
+    
+    if (!container) {
+        console.error('Announcements container not found');
+        return;
+    }
     
     container.innerHTML = announcements.map(announcement => {
         const date = new Date(announcement.created_at);
@@ -186,18 +195,22 @@ function filterAnnouncements(category) {
  * Load announcements with category filter
  */
 async function loadAnnouncementsFiltered(category) {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
+    
+    if (!container) {
+        console.error('Announcements container not found');
+        return;
+    }
     
     try {
-            // FIXED: Use correct boolean column
+            // FIXED: Removed is_active filter - column doesn't exist in database
             let query = supabase
                 .from('announcements')
                 .select(`
                     *,
                     admins(full_name)
                 `)
-                .eq('target_clinic', true)
-                .eq('is_active', true);
+                .eq('target_clinic', true);
         
         if (category === 'important') {
             query = query.eq('priority', 'high');
