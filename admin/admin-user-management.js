@@ -112,7 +112,19 @@ function setEnrollType(type) {
 }
 
 function nextStep() {
-    if (enrollType === 'staff') return submitStaffFinal();
+    if (enrollType === 'staff') {
+        // Show confirmation step for staff
+        const confirmArea = document.getElementById('staff-confirm-area');
+        if (confirmArea.classList.contains('hidden')) {
+            // First click - show confirmation
+            if (!showStaffConfirmation()) return;
+            document.getElementById('next-btn').innerText = "Confirm & Register";
+            return;
+        } else {
+            // Second click - submit
+            return submitStaffFinal();
+        }
+    }
     const val = (id) => document.getElementById(id)?.value?.trim();
 
     if (currentStep === 1) { // Parent Info
@@ -137,15 +149,96 @@ function nextStep() {
 }
 
 // --- FINAL SUBMISSION LOGIC ---
+function toggleStaffFields() {
+    const role = document.getElementById('s-role').value;
+    const teacherFields = document.getElementById('teacher-fields');
+    const clinicFields = document.getElementById('clinic-fields');
+    
+    if (role === 'teachers') {
+        teacherFields.classList.remove('hidden');
+        clinicFields.classList.add('hidden');
+    } else if (role === 'clinic_staff') {
+        teacherFields.classList.add('hidden');
+        clinicFields.classList.remove('hidden');
+    } else {
+        teacherFields.classList.add('hidden');
+        clinicFields.classList.add('hidden');
+    }
+}
+
+function showStaffConfirmation() {
+    const role = document.getElementById('s-role').value;
+    const name = document.getElementById('s-name').value;
+    const phone = document.getElementById('s-phone').value;
+    const username = document.getElementById('s-user').value;
+    
+    if (!name || !phone || !username) {
+        showNotification("Please fill in all required fields.", "error");
+        return false;
+    }
+    
+    let roleLabel = role === 'teachers' ? 'Teacher' : role === 'clinic_staff' ? 'Clinic Staff' : 'Guard';
+    let extraInfo = '';
+    
+    if (role === 'teachers') {
+        const email = document.getElementById('s-email').value;
+        const dept = document.getElementById('s-department').value;
+        extraInfo = `<p class="text-xs mt-2">Email: ${email || 'N/A'}</p><p class="text-xs">Department: ${dept || 'N/A'}</p>`;
+    } else if (role === 'clinic_staff') {
+        const roleTitle = document.getElementById('s-role-title').value;
+        extraInfo = `<p class="text-xs mt-2">Role: ${roleTitle || 'N/A'}</p>`;
+    }
+    
+    const confirmArea = document.getElementById('staff-confirm-area');
+    confirmArea.innerHTML = `
+        <div class="text-left space-y-2">
+            <p class="font-black text-sm uppercase">Confirm Staff Registration</p>
+            <p><span class="text-violet-600">Name:</span> ${name}</p>
+            <p><span class="text-violet-600">Role:</span> ${roleLabel}</p>
+            <p><span class="text-violet-600">Contact:</span> ${phone}</p>
+            <p><span class="text-violet-600">Username:</span> ${username}</p>
+            ${extraInfo}
+        </div>
+    `;
+    confirmArea.classList.remove('hidden');
+    return true;
+}
+
 async function submitStaffFinal() {
     const role = document.getElementById('s-role').value;
     const phone = document.getElementById('s-phone').value;
     const name = document.getElementById('s-name').value;
-    if (!name || !phone || !document.getElementById('s-user').value || !document.getElementById('s-pass').value) return showNotification("All fields are required.", "error");
+    const username = document.getElementById('s-user').value;
+    const password = document.getElementById('s-pass').value;
+    
+    if (!name || !phone || !username || !password) return showNotification("All fields are required.", "error");
 
     const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : 'clinic_id_text';
-    const payload = { full_name: name, contact_number: phone, username: document.getElementById('s-user').value, password: document.getElementById('s-pass').value, is_active: true };
+    const payload = { 
+        full_name: name, 
+        contact_number: phone, 
+        username: username, 
+        password: password, 
+        is_active: true 
+    };
+    
+    // Add role-specific fields
+    if (role === 'teachers') {
+        const email = document.getElementById('s-email').value;
+        const dept = document.getElementById('s-department').value;
+        if (email) payload.email = email;
+        if (dept) payload.department = dept;
+    } else if (role === 'clinic_staff') {
+        const roleTitle = document.getElementById('s-role-title').value;
+        if (roleTitle) payload.role_title = roleTitle;
+    }
+    
     payload[idKey] = generateID(role, phone);
+    
+    // UPDATED: Check for duplicate username before insertion
+    const userValid = await checkDuplicateFields(null, username);
+    if (!userValid) return;
+    
     try {
         const { error } = await supabase.from(role).insert([payload]);
         if (error) throw error;
@@ -156,13 +249,41 @@ async function submitStaffFinal() {
 async function finalizeParentStudent() {
     const btn = document.getElementById('next-btn');
     btn.disabled = true; btn.innerText = "Syncing...";
+    
+    // UPDATED: Check for duplicate LRN before insertion
+    const lrns = studentData.map(s => s.lrn);
+    for (let lrn of lrns) {
+        const isValid = await checkDuplicateFields(lrn, null);
+        if (!isValid) {
+            btn.disabled = false; btn.innerText = "Finalize & Print";
+            return;
+        }
+    }
+    
+    // Check parent username duplicate
+    const parentUserValid = await checkDuplicateFields(null, parentInfo.username);
+    if (!parentUserValid) {
+        btn.disabled = false; btn.innerText = "Finalize & Print";
+        return;
+    }
+    
     try {
         const { data: parent, error: pErr } = await supabase.from('parents').insert([{ ...parentInfo, parent_id_text: generateID('parents', parentInfo.contact_number), is_active: true }]).select().single();
         if (pErr) throw pErr;
-        const studentPayload = studentData.map(s => ({ full_name: s.name, lrn: s.lrn, student_id_text: generateID('students', s.lrn), parent_id: parent.id, address: parentInfo.address, emergency_contact: parentInfo.contact_number, status: 'Enrolled' }));
+        const studentPayload = studentData.map(s => ({ 
+            full_name: s.name, 
+            lrn: s.lrn, 
+            student_id_text: generateID('students', s.lrn), 
+            parent_id: parent.id, 
+            address: parentInfo.address, 
+            emergency_contact: parentInfo.contact_number, 
+            gender: s.gender || null,
+            class_id: s.class_id || null,
+            status: 'Enrolled' 
+        }));
         const { data: createdStu, error: sErr } = await supabase.from('students').insert(studentPayload).select();
         if (sErr) throw sErr;
-        renderBulkPrint(createdStu, parentInfo);
+        await renderBulkPrint(createdStu, parentInfo);
         showNotification("Family Registered Successfully!", "success"); closeEnrollmentModal(); loadUsers();
     } catch (e) { showNotification(e.message, "error"); btn.disabled = false; btn.innerText = "Finalize & Print"; }
 }
@@ -208,13 +329,20 @@ async function saveUserEdit() {
     const id = document.getElementById('edit-user-id').value;
     const table = document.getElementById('edit-user-table').value;
     const userOrig = allUsers.find(u => u.table === table && u.id == id);
+    
+    // UPDATED: Only include address for tables that have it (parents, students)
+    const tablesWithAddress = ['parents', 'students'];
     const updated = { 
         username: document.getElementById('edit-username').value, 
         password: document.getElementById('edit-password').value, 
         full_name: document.getElementById('edit-name').value, 
-        contact_number: document.getElementById('edit-phone').value, 
-        address: document.getElementById('edit-address').value 
+        contact_number: document.getElementById('edit-phone').value
     };
+    
+    // Only add address if the table has this column
+    if (tablesWithAddress.includes(table)) {
+        updated.address = document.getElementById('edit-address').value;
+    }
 
     // UPDATED: Handle the gatekeeper toggle for teachers
     if (table === 'teachers' && document.getElementById('edit-gatekeeper')) {
@@ -230,24 +358,41 @@ async function saveUserEdit() {
 }
 
 // --- PORTRAIT 2x3 PRINT ENGINE ---
-function renderBulkPrint(list, p) {
+// UPDATED: Integrated template settings from id_templates table
+async function renderBulkPrint(list, p) {
+    // Fetch template settings from database
+    let config = {
+        primaryColor: '#4c1d95',
+        secondaryColor: '#8b5cf6',
+        fields: { qr: true }
+    };
+    
+    try {
+        const { data } = await supabase.from('id_templates').select('settings').eq('template_type', 'student').single();
+        if (data && data.settings) {
+            config = data.settings;
+        }
+    } catch (e) {
+        console.log('Using default template settings');
+    }
+    
     const area = document.getElementById('id-print-queue');
     area.innerHTML = list.map(s => `
         <div class="id-page-break flex gap-10 justify-center items-center py-20 bg-white">
             <div class="w-[2in] h-[3in] border-2 border-gray-100 rounded-xl relative p-4 flex flex-col items-center bg-white shadow-lg font-sans">
-                <p class="text-[8px] font-black text-violet-900 uppercase">Educare Colleges Inc</p>
+                <p class="text-[8px] font-black" style="color: ${config.primaryColor}">Educare Colleges Inc</p>
                 <p class="text-[5px] text-gray-500 uppercase tracking-widest">Purok 4 Irisan Baguio City</p>
-                <div class="w-24 h-24 bg-gray-50 border-2 border-violet-100 p-1 rounded-2xl mt-4"><img src="https://ui-avatars.com/api/?name=${s.full_name}" class="w-full h-full object-cover"></div>
+                <div class="w-24 h-24 bg-gray-50 border-2 p-1 rounded-2xl mt-4" style="border-color: ${config.secondaryColor}"><img src="https://ui-avatars.com/api/?name=${s.full_name}" class="w-full h-full object-cover"></div>
                 <h2 class="text-[10px] font-black mt-4 uppercase text-center leading-tight">${s.full_name}</h2>
                 <div class="w-full text-left mt-auto pb-4 border-t pt-2"><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-bold leading-none">${s.address}</p></div>
-                <div class="h-1.5 bg-violet-900 w-full absolute bottom-0 left-0"></div>
+                <div class="h-1.5 w-full absolute bottom-0 left-0" style="background: ${config.primaryColor}"></div>
             </div>
             <div class="w-[2in] h-[3in] border-2 border-gray-100 rounded-xl relative p-6 flex flex-col items-center justify-center bg-white text-center shadow-lg font-sans">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${s.student_id_text}" class="w-20 h-20 mb-2 border p-1 rounded-lg">
                 <p class="text-[7px] font-mono font-black uppercase tracking-widest">${s.student_id_text}</p>
-                <div class="w-full text-left border-t pt-4"><p class="text-[5px] text-gray-400 font-bold uppercase mb-1">Guardian / Contact</p><p class="text-[7px] font-black text-gray-800">${p.full_name}</p><p class="text-[7px] font-bold text-violet-700">${p.contact_number}</p></div>
+                <div class="w-full text-left border-t pt-4"><p class="text-[5px] text-gray-400 font-bold uppercase mb-1">Guardian / Contact</p><p class="text-[7px] font-black text-gray-800">${p.full_name}</p><p class="text-[7px] font-bold" style="color: ${config.secondaryColor}">${p.contact_number}</p></div>
                 <p class="text-[5px] text-gray-400 mt-6 italic">If lost, return to Purok 4 Irisan Baguio City</p>
-                <div class="h-1.5 bg-violet-900 w-full absolute bottom-0 left-0"></div>
+                <div class="h-1.5 w-full absolute bottom-0 left-0" style="background: ${config.primaryColor}"></div>
             </div>
         </div>`).join('');
     setTimeout(() => { window.print(); }, 1000);
@@ -264,13 +409,89 @@ function showStep(s) {
     updateModalUI(); 
 }
 
-function addStudentForm() { const id = Date.now(); document.getElementById('student-form-container').insertAdjacentHTML('beforeend', `<div class="stu-form p-6 bg-gray-50 rounded-3xl border border-gray-100" id="b-${id}"><div class="grid grid-cols-2 gap-4"><input type="text" class="stu-name col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="Child's Full Name"><select class="stu-grade border rounded-xl px-4 py-3 font-bold" onchange="const b=this.closest('.stu-form').querySelector('.s-area'); (this.value==='G11'||this.value==='G12')?b.classList.remove('hidden'):b.classList.add('hidden')"><option value="Kinder">Kinder</option>${Array.from({length:10},(_,i)=>`<option value="G${i+1}">Grade ${i+1}</option>`).join('')}<option value="G11">Grade 11</option><option value="G12">Grade 12</option></select><div class="s-area hidden"><select class="stu-strand w-full border rounded-xl px-4 py-3 font-bold"><option value="ABM">ABM</option><option value="STEM">STEM</option><option value="TVL-ICT">TVL-ICT</option></select></div><input type="text" class="stu-lrn col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="12-Digit LRN"></div></div>`); }
+// --- LOAD CLASSES FOR STUDENT ASSIGNMENT ---
+async function loadClasses() {
+    try {
+        const { data, error } = await supabase.from('classes').select('*');
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.error('Error loading classes:', e);
+        return [];
+    }
+}
+
+async function addStudentForm() {
+    const classes = await loadClasses();
+    const id = Date.now();
+    const classOptions = classes.map(c => `<option value="${c.id}">${c.grade_level} - ${c.section_name}</option>`).join('');
+    document.getElementById('student-form-container').insertAdjacentHTML('beforeend', `<div class="stu-form p-6 bg-gray-50 rounded-3xl border border-gray-100" id="b-${id}"><div class="grid grid-cols-2 gap-4"><input type="text" class="stu-name col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="Child's Full Name"><select class="stu-gender border rounded-xl px-4 py-3 font-bold"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><select class="stu-grade border rounded-xl px-4 py-3 font-bold" onchange="const b=this.closest('.stu-form').querySelector('.s-area'); (this.value==='G11'||this.value==='G12')?b.classList.remove('hidden'):b.classList.add('hidden')"><option value="Kinder">Kinder</option>${Array.from({length:10},(_,i)=>`<option value="G${i+1}">Grade ${i+1}</option>`).join('')}<option value="G11">Grade 11</option><option value="G12">Grade 12</option></select><div class="s-area hidden"><select class="stu-strand w-full border rounded-xl px-4 py-3 font-bold"><option value="ABM">ABM</option><option value="STEM">STEM</option><option value="TVL-ICT">TVL-ICT</option></select></div><select class="stu-class border rounded-xl px-4 py-3 font-bold"><option value="">Select Class (Optional)</option>${classOptions}</select><input type="text" class="stu-lrn col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="12-Digit LRN"></div></div>`);
+}
 function renderParentSummary() { document.getElementById('p-summary').innerHTML = `<div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PARENT NAME</p>${parentInfo.full_name}</div><div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PHONE</p>${parentInfo.contact_number}</div><div class="col-span-2"><p class="text-[8px] text-violet-400 uppercase tracking-widest">ADDRESS</p>${parentInfo.address}</div>`; }
 function renderStudentSummary() { document.getElementById('s-summary-container').innerHTML = studentData.map((s,i)=>`<div class="p-4 bg-violet-50 rounded-2xl border border-violet-100 font-bold text-xs">Student #${i+1}: ${s.name} (${s.grade})</div>`).join(''); }
-function collectStudents() { studentData = Array.from(document.querySelectorAll('.stu-form')).map(f => ({ name: f.querySelector('.stu-name').value, grade: f.querySelector('.stu-grade').value, lrn: f.querySelector('.stu-lrn').value })); }
+function collectStudents() {
+    studentData = Array.from(document.querySelectorAll('.stu-form')).map(f => ({
+        name: f.querySelector('.stu-name').value.trim(),
+        grade: f.querySelector('.stu-grade').value,
+        lrn: f.querySelector('.stu-lrn').value.trim(),
+        gender: f.querySelector('.stu-gender').value,
+        class_id: f.querySelector('.stu-class').value || null
+    }));
+
+    // Validate LRN length
+    for (let s of studentData) {
+        if (s.lrn.length !== 12 || isNaN(s.lrn)) {
+            showNotification("LRN must be exactly 12 digits.", "error");
+            return false;
+        }
+    }
+    return true;
+}
+
+// UPDATED: Check for duplicate LRN and username before insertion
+async function checkDuplicateFields(lrn = null, username = null) {
+    try {
+        if (lrn) {
+            const { data: existingLRN } = await supabase.from('students').select('id').eq('lrn', lrn).maybeSingle();
+            if (existingLRN) {
+                showNotification("LRN " + lrn + " is already registered.", "error");
+                return false;
+            }
+        }
+        
+        if (username) {
+            // Check all tables for duplicate username
+            const [t, g, c, a, p] = await Promise.all([
+                supabase.from('teachers').select('id').eq('username', username).maybeSingle(),
+                supabase.from('guards').select('id').eq('username', username).maybeSingle(),
+                supabase.from('clinic_staff').select('id').eq('username', username).maybeSingle(),
+                supabase.from('admins').select('id').eq('username', username).maybeSingle(),
+                supabase.from('parents').select('id').eq('username', username).maybeSingle()
+            ]);
+            
+            if (t.data || g.data || c.data || a.data || p.data) {
+                showNotification("Username '" + username + "' is already taken.", "error");
+                return false;
+            }
+        }
+        return true;
+    } catch (e) {
+        console.error('Error checking duplicates:', e);
+        return false;
+    }
+}
 function prevStep() { if(currentStep>1) showStep(currentStep-1); }
 function closeEditModal() { document.getElementById('editUserModal').classList.add('hidden'); }
-function closeEnrollmentModal() { document.getElementById('enrollmentModal').classList.add('hidden'); }
+function closeEnrollmentModal() { 
+    document.getElementById('enrollmentModal').classList.add('hidden');
+    // Reset staff confirmation area
+    const confirmArea = document.getElementById('staff-confirm-area');
+    if (confirmArea) {
+        confirmArea.classList.add('hidden');
+        confirmArea.innerHTML = '';
+    }
+    document.getElementById('next-btn').innerText = "Next Step";
+}
 
 function switchView(v) { 
     currentView = v; 

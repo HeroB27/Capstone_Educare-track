@@ -535,6 +535,9 @@ async function loadSubjectStudents(subjectLoadId) {
         infoDiv.innerHTML = `<h3 class="font-bold text-lg">${subjectLoad.subject_name} - Attendance</h3>`;
         studentList.appendChild(infoDiv);
         
+        // Store subject info for button calls
+        const subjectName = subjectLoad.subject_name;
+        
         students.forEach(student => {
             const row = document.createElement('div');
             row.className = 'flex items-center justify-between p-4 border-b border-gray-50 hover:bg-blue-50/50 transition-all group';
@@ -544,9 +547,9 @@ async function loadSubjectStudents(subjectLoadId) {
                     <span class="ml-2 font-bold text-gray-800 text-sm">${student.full_name}</span>
                 </div>
                 <div class="flex gap-2 opacity-60 group-hover:opacity-100 transition-all">
-                    <button onclick="markSubjectAttendance('${student.id}', 'Present')" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all">Present</button>
-                    <button onclick="markSubjectAttendance('${student.id}', 'Absent')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Absent</button>
-                    <button onclick="markSubjectAttendance('${student.id}', 'Excused')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Excused</button>
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Present')" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all">Present</button>
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Absent')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Absent</button>
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Excused')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Excused</button>
                 </div>
             `;
             studentList.appendChild(row);
@@ -601,48 +604,145 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
 }
 
 // 11. Load Clinic Pass Interface
+// UPDATED: Now includes subject teacher students + loads clinic stats
 async function loadClinicPassInterface() {
     const studentSelect = document.getElementById('clinic-student-select');
     if (!studentSelect) return;
     
     try {
+        // Get teacher's homeroom class (adviser)
         const { data: teacherClass } = await supabase
             .from('classes')
-            .select('id')
+            .select('id, grade_level, section_name')
             .eq('adviser_id', currentUser.id)
             .single();
         
-        if (!teacherClass) {
-            studentSelect.innerHTML = '<option value="">Not an adviser</option>';
+        // Get teacher's subject loads (for subject teachers)
+        const { data: subjectLoads } = await supabase
+            .from('subject_loads')
+            .select('class_id')
+            .eq('teacher_id', currentUser.id);
+        
+        const classIds = new Set();
+        let homeroomStudents = [];
+        let subjectStudents = [];
+        
+        // Add homeroom class if teacher is an adviser
+        if (teacherClass) {
+            classIds.add(teacherClass.id);
+            const { data: students } = await supabase
+                .from('students')
+                .select('id, student_id_text, full_name')
+                .eq('class_id', teacherClass.id)
+                .order('full_name');
+            homeroomStudents = students || [];
+        }
+        
+        // Add subject class students if teacher has subject loads
+        if (subjectLoads && subjectLoads.length > 0) {
+            subjectLoads.forEach(sl => classIds.add(sl.class_id));
+            
+            const { data: students } = await supabase
+                .from('students')
+                .select('id, student_id_text, full_name, classes(grade_level, section_name)')
+                .in('class_id', Array.from(classIds))
+                .order('full_name');
+            
+            if (students) {
+                // Deduplicate: prefer homeroom students, then add subject students
+                const homeroomIds = new Set(homeroomStudents.map(s => s.id));
+                subjectStudents = students.filter(s => !homeroomIds.has(s.id));
+            }
+        }
+        
+        // If no class access at all
+        if (homeroomStudents.length === 0 && subjectStudents.length === 0) {
+            studentSelect.innerHTML = '<option value="">No students assigned</option>';
             return;
         }
         
-        const { data: students } = await supabase
-            .from('students')
-            .select('id, student_id_text, full_name')
-            .eq('class_id', teacherClass.id)
-            .order('full_name');
-        
+        // Build options
         studentSelect.innerHTML = '<option value="">Select student...</option>';
         
-        students?.forEach(student => {
+        // Add homeroom students first (with badge)
+        homeroomStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
-            option.text = `${student.student_id_text} - ${student.full_name}`;
+            option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass.grade_level}-${teacherClass.section_name})`;
             studentSelect.appendChild(option);
         });
         
+        // Add subject students (deduplicated)
+        subjectStudents.forEach(student => {
+            const option = document.createElement('option');
+            option.value = student.id;
+            const classInfo = student.classes ? `${student.classes.grade_level}-${student.classes.section_name}` : '';
+            option.text = `${student.student_id_text} - ${student.full_name} (${classInfo})`;
+            studentSelect.appendChild(option);
+        });
+        
+        // Load recent passes and stats
         await loadRecentClinicPasses();
+        await loadClinicStats();
         
     } catch (err) {
         console.error('Error loading clinic pass interface:', err);
     }
 }
 
+// 11a. Load Clinic Statistics
+// UPDATED: Counts today passes, active passes, and completed passes
+async function loadClinicStats() {
+    const todayPassesEl = document.getElementById('today-passes');
+    const activePassesEl = document.getElementById('active-passes');
+    const completedPassesEl = document.getElementById('completed-passes');
+    
+    if (!todayPassesEl && !activePassesEl && !completedPassesEl) return;
+    
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get all passes issued by this teacher
+        const { data: passes, error } = await supabase
+            .from('clinic_visits')
+            .select('status, time_in')
+            .eq('referred_by_teacher_id', currentUser.id);
+        
+        if (error) {
+            console.error('Error loading clinic stats:', error);
+            return;
+        }
+        
+        // Today's passes (created today)
+        const todayPasses = passes?.filter(p => 
+            p.time_in && p.time_in.startsWith(today)
+        ).length || 0;
+        
+        // Active passes (Pending, Approved, or Checked In with no time_out)
+        const activePasses = passes?.filter(p => 
+            ['Pending', 'Approved', 'Checked In'].includes(p.status)
+        ).length || 0;
+        
+        // Completed passes (Completed, Cleared, or Sent Home)
+        const completedPasses = passes?.filter(p => 
+            ['Completed', 'Cleared', 'Sent Home'].includes(p.status)
+        ).length || 0;
+        
+        // Update UI
+        if (todayPassesEl) todayPassesEl.textContent = todayPasses;
+        if (activePassesEl) activePassesEl.textContent = activePasses;
+        if (completedPassesEl) completedPassesEl.textContent = completedPasses;
+        
+    } catch (err) {
+        console.error('Error in loadClinicStats:', err);
+    }
+}
+
 // 12. Issue Clinic Pass
+// UPDATED: Now notifies ALL clinic staff individually
 async function issueClinicPass() {
     const studentId = document.getElementById('clinic-student-select').value;
-    const reason = document.getElementById('clinic-reason').value;
+    const reason = document.getElementById('clinic-reason').value.trim();
     
     if (!studentId || !reason) {
         showNotification('Please select a student and enter a reason.', "error");
@@ -650,23 +750,66 @@ async function issueClinicPass() {
     }
     
     try {
-        const { error } = await supabase
+        // Check if student already has an active pass
+        const { data: existingPass } = await supabase
+            .from('clinic_visits')
+            .select('id, status')
+            .eq('student_id', studentId)
+            .in('status', ['Pending', 'Approved', 'Checked In'])
+            .is('time_out', null)
+            .single();
+        
+        if (existingPass) {
+            showNotification(`This student already has an active clinic pass (Status: ${existingPass.status}).`, "error");
+            return;
+        }
+        
+        // Get student name for notification
+        const { data: student } = await supabase
+            .from('students')
+            .select('full_name')
+            .eq('id', studentId)
+            .single();
+        
+        // Create the Clinic Visit Record
+        const { data: visit, error: visitError } = await supabase
             .from('clinic_visits')
             .insert({
                 student_id: studentId,
                 referred_by_teacher_id: currentUser.id,
                 reason: reason,
                 status: 'Pending'
-            });
+            })
+            .select()
+            .single();
         
-        if (error) {
-            showNotification('Error issuing clinic pass: ' + error.message, "error");
+        if (visitError) {
+            showNotification('Error issuing clinic pass: ' + visitError.message, "error");
             return;
         }
         
-        showNotification('Clinic pass issued successfully!', "success");
+        // Fetch ALL clinic staff and notify each individually
+        const { data: clinicStaff } = await supabase
+            .from('clinic_staff')
+            .select('id, full_name');
+        
+        if (clinicStaff && clinicStaff.length > 0) {
+            const notifications = clinicStaff.map(staff => ({
+                recipient_id: staff.id,
+                recipient_role: 'clinic_staff',
+                title: 'New Clinic Referral',
+                message: `${student?.full_name || 'A student'} has been referred to the clinic. Reason: ${reason}`,
+                type: 'clinic_referral',
+                is_read: false
+            }));
+            
+            await supabase.from('notifications').insert(notifications);
+        }
+        
+        showNotification('Clinic pass issued successfully! Nurse has been notified.', "success");
         document.getElementById('clinic-reason').value = '';
         await loadRecentClinicPasses();
+        await loadClinicStats();
         
     } catch (err) {
         console.error('Error issuing clinic pass:', err);
@@ -675,6 +818,7 @@ async function issueClinicPass() {
 }
 
 // 13. Load Recent Clinic Passes
+// UPDATED: Enhanced forward button logic - shows when nurse_notes exist OR status is 'Completed'
 async function loadRecentClinicPasses() {
     const passList = document.getElementById('recent-clinic-passes');
     if (!passList) return;
@@ -688,7 +832,7 @@ async function loadRecentClinicPasses() {
             `)
             .eq('referred_by_teacher_id', currentUser.id)
             .order('time_in', { ascending: false })
-            .limit(10);
+            .limit(20);
         
         if (error) {
             console.error('Error loading clinic passes:', error);
@@ -697,31 +841,71 @@ async function loadRecentClinicPasses() {
         
         passList.innerHTML = '';
         
+        // Status badge colors
+        const statusColors = {
+            'Pending': 'bg-amber-100 text-amber-700 border border-amber-200',
+            'Approved': 'bg-blue-100 text-blue-700 border border-blue-200',
+            'Checked In': 'bg-orange-100 text-orange-700 border border-orange-200',
+            'Sent Home': 'bg-red-100 text-red-700 border border-red-200',
+            'Cleared': 'bg-green-100 text-green-700 border border-green-200',
+            'Completed': 'bg-green-100 text-green-700 border border-green-200',
+            'Rejected': 'bg-gray-100 text-gray-700 border border-gray-200'
+        };
+        
         passes?.forEach(pass => {
-            const statusBadge = pass.status === 'Pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 
-                               pass.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200';
+            const statusBadge = statusColors[pass.status] || 'bg-gray-100 text-gray-600 border border-gray-200';
+            
+            // Display nurse notes and action taken
+            const notesDisplay = pass.nurse_notes 
+                ? `<p class="text-xs text-blue-600 mt-2 font-bold bg-blue-50 p-2 rounded-lg border border-blue-100"><i data-lucide="activity" class="w-3 h-3 inline mr-1"></i> Nurse: ${pass.nurse_notes}</p>` 
+                : '';
+            
+            const actionDisplay = pass.action_taken 
+                ? `<p class="text-xs text-green-600 mt-2 font-bold bg-green-50 p-2 rounded-lg border border-green-100"><i data-lucide="check-circle" class="w-3 h-3 inline mr-1"></i> Action: ${pass.action_taken}</p>` 
+                : '';
+            
+            // Forward button: show ONLY when (nurse_notes exist OR status is 'Completed') AND parent_notified is false
+            const canForward = (pass.nurse_notes || pass.status === 'Completed') && !pass.parent_notified;
+            const forwardedBadge = pass.parent_notified 
+                ? `<span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Forwarded to Parent</span>` 
+                : '';
+            
+            const forwardButton = canForward
+                ? `<button onclick="forwardToParent('${pass.id}', '${pass.students?.full_name}')" 
+                    class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm">
+                    📤 Forward Findings to Parent
+                  </button>`
+                : (pass.parent_notified 
+                    ? '' 
+                    : `<p class="mt-3 text-xs text-gray-400 italic">Waiting for nurse findings...</p>`);
             
             const div = document.createElement('div');
             div.className = 'p-4 border-b border-gray-50 hover:bg-gray-50 transition-all rounded-xl';
             div.innerHTML = `
-                <div class="flex justify-between items-center">
+                <div class="flex justify-between items-start">
                     <div>
-                        <span class="font-bold text-gray-800 text-sm">${pass.students?.full_name}</span>
-                        <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest ml-2">${pass.students?.student_id_text}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-800 text-sm">${pass.students?.full_name}</span>
+                            <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${pass.students?.student_id_text}</span>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-1">📋 ${pass.reason}</p>
+                        ${notesDisplay}
+                        ${actionDisplay}
+                        ${forwardButton}
                     </div>
-                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${pass.status}</span>
+                    <div class="text-right">
+                        <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${pass.status}</span>
+                        ${forwardedBadge}
+                        <p class="text-xs text-gray-400 mt-2">${pass.time_in ? new Date(pass.time_in).toLocaleString() : 'Pending'}</p>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-600 mt-2 font-medium bg-gray-50 p-2 rounded-lg border border-gray-100">${pass.reason}</p>
-                ${pass.nurse_notes ? `<p class="text-xs text-blue-600 mt-2 font-bold bg-blue-50 p-2 rounded-lg border border-blue-100"><i data-lucide="activity" class="w-3 h-3 inline mr-1"></i> Nurse: ${pass.nurse_notes}</p>` : ''}
-                ${pass.nurse_notes && !pass.parent_notified ? `
-                    <button onclick="forwardToParent('${pass.id}', '${pass.students?.full_name}')" 
-                        class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm">
-                        Forward to Parent
-                    </button>
-                ` : ''}
             `;
             passList.appendChild(div);
         });
+        
+        if (passList.children.length === 0) {
+            passList.innerHTML = '<p class="text-gray-500 text-center py-8">No clinic passes issued yet.</p>';
+        }
         
         if (window.lucide) lucide.createIcons();
         
@@ -731,19 +915,35 @@ async function loadRecentClinicPasses() {
 }
 
 // 14. Forward Clinic Findings to Parent
+// UPDATED: Added confirmation modal and enhanced logic
 async function forwardToParent(clinicVisitId, studentName) {
+    if (!confirm(`Forward clinic findings for ${studentName} to their parent?`)) {
+        return;
+    }
+    
     try {
+        // Get visit details with student/parent info
         const { data: visit } = await supabase
             .from('clinic_visits')
-            .select('student_id, nurse_notes')
+            .select('student_id, nurse_notes, action_taken, status')
             .eq('id', clinicVisitId)
             .single();
         
-        if (!visit) return;
+        if (!visit) {
+            showNotification('Visit record not found.', "error");
+            return;
+        }
         
+        // Double-check: don't forward if no findings
+        if (!visit.nurse_notes && !visit.action_taken && visit.status !== 'Completed') {
+            showNotification('No findings to forward yet. Please wait for the nurse to complete the visit.', "error");
+            return;
+        }
+        
+        // Get parent's info
         const { data: student } = await supabase
             .from('students')
-            .select('parent_id')
+            .select('parent_id, full_name')
             .eq('id', visit.student_id)
             .single();
         
@@ -752,20 +952,39 @@ async function forwardToParent(clinicVisitId, studentName) {
             return;
         }
         
+        // Get parent's contact info
+        const { data: parent } = await supabase
+            .from('parents')
+            .select('id, full_name, phone')
+            .eq('id', student.parent_id)
+            .single();
+        
+        // Build message
+        let message = `Good day! Your child ${student.full_name} visited the clinic today. `;
+        if (visit.nurse_notes) message += `Findings: ${visit.nurse_notes}. `;
+        if (visit.action_taken) message += `Action: ${visit.action_taken}. `;
+        message += 'Please contact the school clinic for more details.';
+        
+        // Send notification to parent
         await supabase.from('notifications').insert({
             recipient_id: student.parent_id,
             recipient_role: 'parent',
             title: 'Clinic Visit Alert',
-            message: `Your child ${studentName} visited the clinic. ${visit.nurse_notes ? 'Notes: ' + visit.nurse_notes : ''}`,
-            type: 'clinic_visit'
+            message: message,
+            type: 'clinic_visit',
+            is_read: false
         });
         
+        // Mark as notified in visit record
         await supabase
             .from('clinic_visits')
-            .update({ parent_notified: true })
+            .update({ 
+                parent_notified: true,
+                parent_notified_at: new Date().toISOString()
+            })
             .eq('id', clinicVisitId);
         
-        showNotification('Findings forwarded to parent successfully!', "success");
+        showNotification(`Findings forwarded to ${parent?.full_name || 'parent'} successfully!`, "success");
         await loadRecentClinicPasses();
         
     } catch (err) {
@@ -775,6 +994,10 @@ async function forwardToParent(clinicVisitId, studentName) {
 }
 
 // 15. Load Excuse Letters for Approval
+// UPDATED: Now updates stats counters, supports filtering, and uses showNotification
+let allExcuseLetters = []; // Store for filtering
+let currentExcuseFilter = 'all';
+
 async function loadExcuseLetters() {
     const letterList = document.getElementById('excuse-letter-list');
     if (!letterList) return;
@@ -782,12 +1005,12 @@ async function loadExcuseLetters() {
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
-            .select('id')
+            .select('id, grade_level, section_name')
             .eq('adviser_id', currentUser.id)
             .single();
         
         if (!teacherClass) {
-            letterList.innerHTML = '<div class="p-4 text-center text-gray-500">You are not assigned as an adviser</div>';
+            letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">📋</div><p class="text-gray-500">You are not assigned as an adviser</p><p class="text-sm text-gray-400">Excuse letters can only be approved by homeroom advisers</p></div>';
             return;
         }
         
@@ -799,7 +1022,7 @@ async function loadExcuseLetters() {
         const studentIds = students?.map(s => s.id) || [];
         
         if (studentIds.length === 0) {
-            letterList.innerHTML = '<div class="p-4 text-center text-gray-500">No students in your class</div>';
+            letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">👥</div><p class="text-gray-500">No students in your class</p></div>';
             return;
         }
         
@@ -810,51 +1033,196 @@ async function loadExcuseLetters() {
                 students (student_id_text, full_name)
             `)
             .in('student_id', studentIds)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(50);
         
         if (error) {
             console.error('Error loading excuse letters:', error);
+            showNotification('Error loading excuse letters', "error");
             return;
         }
         
-        letterList.innerHTML = '';
+        // Store for filtering
+        allExcuseLetters = letters || [];
         
-        letters?.forEach(letter => {
-            const statusBadge = letter.status === 'Pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                               letter.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200';
-            
-            const div = document.createElement('div');
-            div.className = 'bg-white p-6 border border-gray-100 rounded-2xl shadow-sm mb-4';
-            div.innerHTML = `
-                <div class="flex justify-between items-start mb-2">
-                    <div>
-                        <span class="font-bold text-gray-800 text-sm">${letter.students?.full_name}</span>
-                        <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest ml-2">${letter.students?.student_id_text}</span>
-                    </div>
-                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${letter.status}</span>
-                </div>
-                <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Date Absent: ${letter.date_absent}</p>
-                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 mb-3">${letter.reason}</p>
-                ${letter.image_proof_url ? `
-                    <a href="${letter.image_proof_url}" target="_blank" class="inline-flex items-center gap-2 text-blue-600 text-xs font-bold hover:underline mb-3"><i data-lucide="image" class="w-4 h-4"></i> View Proof Attachment</a>
-                ` : ''}
-                ${letter.status === 'Pending' ? `
-                    <div class="flex gap-2 mt-3">
-                        <button onclick="approveExcuseLetter('${letter.id}', '${letter.student_id}', '${letter.date_absent}')" 
-                            class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm shadow-emerald-200">Approve</button>
-                        <button onclick="rejectExcuseLetter('${letter.id}')" 
-                            class="flex-1 bg-white border border-red-200 text-red-500 hover:bg-red-50 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">Reject</button>
-                    </div>
-                ` : ''}
-            `;
-            letterList.appendChild(div);
-            if (window.lucide) lucide.createIcons();
-        });
+        // Update stats counters
+        const pendingCount = allExcuseLetters.filter(l => l.status === 'Pending').length;
+        const approvedCount = allExcuseLetters.filter(l => l.status === 'Approved').length;
+        const rejectedCount = allExcuseLetters.filter(l => l.status === 'Rejected').length;
+        
+        const pendingEl = document.getElementById('pending-count');
+        const approvedEl = document.getElementById('approved-count');
+        const rejectedEl = document.getElementById('rejected-count');
+        
+        if (pendingEl) pendingEl.textContent = pendingCount;
+        if (approvedEl) approvedEl.textContent = approvedCount;
+        if (rejectedEl) rejectedEl.textContent = rejectedCount;
+        
+        // Render with current filter
+        renderExcuseLetters(teacherClass);
         
     } catch (err) {
         console.error('Error in loadExcuseLetters:', err);
+        showNotification('Error loading excuse letters', "error");
     }
 }
+
+// Render excuse letters with current filter
+function renderExcuseLetters(teacherClass) {
+    const letterList = document.getElementById('excuse-letter-list');
+    if (!letterList) return;
+    
+    let filteredLetters = allExcuseLetters;
+    if (currentExcuseFilter !== 'all') {
+        filteredLetters = allExcuseLetters.filter(l => l.status === currentExcuseFilter.charAt(0).toUpperCase() + currentExcuseFilter.slice(1));
+    }
+    
+    // Update tab styles
+    ['pending', 'approved', 'rejected'].forEach(status => {
+        const tab = document.getElementById(`tab-${status}`);
+        if (tab) {
+            if (currentExcuseFilter === status) {
+                tab.className = `px-4 py-2 ${status === 'pending' ? 'bg-yellow-100 text-yellow-700' : status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-xl text-sm font-medium transition-all duration-200`;
+            } else {
+                tab.className = 'px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-all duration-200';
+            }
+        }
+    });
+    
+    if (filteredLetters.length === 0) {
+        letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">📭</div><p class="text-gray-500">No excuse letters found</p></div>';
+        return;
+    }
+    
+    letterList.innerHTML = '';
+    
+    filteredLetters.forEach(letter => {
+        const statusColors = {
+            'Pending': 'border-l-yellow-400 bg-yellow-50',
+            'Approved': 'border-l-green-400 bg-green-50',
+            'Rejected': 'border-l-red-400 bg-red-50'
+        };
+        
+        const statusBadge = letter.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                           letter.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+        
+        const dateFormatted = new Date(letter.date_absent).toLocaleDateString('en-PH', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        
+        const div = document.createElement('div');
+        div.className = `bg-white p-4 border rounded-lg mb-4 border-l-4 ${statusColors[letter.status] || 'border-l-gray-400'} shadow-sm hover:shadow-md transition`;
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-3">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-lg text-gray-800">${letter.students?.full_name}</span>
+                        <span class="text-sm text-gray-500">${letter.students?.student_id_text}</span>
+                    </div>
+                    <span class="px-2 py-1 rounded text-xs ${statusBadge}">${letter.status}</span>
+                </div>
+                <div class="text-right text-sm text-gray-500">
+                    <p>Date: ${dateFormatted}</p>
+                    <p class="text-xs">${new Date(letter.created_at).toLocaleDateString()}</p>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <p class="text-sm"><strong class="text-gray-700">Reason:</strong> ${letter.reason}</p>
+                ${letter.teacher_remarks ? `<p class="text-sm mt-1"><strong class="text-gray-700">Your Remarks:</strong> ${letter.teacher_remarks}</p>` : ''}
+            </div>
+            
+            ${letter.image_proof_url ? `
+                <div class="mb-3">
+                    <button onclick="viewProof('${letter.image_proof_url}')" 
+                        class="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        View Proof Image
+                    </button>
+                </div>
+            ` : '<p class="text-sm text-gray-400 italic mb-3">No proof image attached</p>'}
+            
+            ${letter.status === 'Pending' ? `
+                <div class="flex gap-2 mt-4 pt-3 border-t">
+                    <button onclick="approveExcuseLetter('${letter.id}', '${letter.student_id}', '${letter.date_absent}')" 
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition">
+                        ✓ Approve
+                    </button>
+                    <button onclick="rejectExcuseLetter('${letter.id}')" 
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium transition">
+                        ✕ Reject
+                    </button>
+                </div>
+            ` : `
+                <div class="mt-3 pt-3 border-t">
+                    <p class="text-sm text-green-600 font-medium">✓ ${letter.status} on ${new Date(letter.updated_at || letter.created_at).toLocaleDateString()}</p>
+                </div>
+            `}
+        `;
+        letterList.appendChild(div);
+    });
+}
+
+// Filter excuse letters by status
+function filterLetters(status) {
+    currentExcuseFilter = status;
+    const teacherClass = { grade_level: '', section_name: '' }; // Class info not needed for re-render
+    renderExcuseLetters(teacherClass);
+}
+
+// View Proof Image Modal
+function viewProof(imageUrl) {
+    let modal = document.getElementById('proof-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'proof-modal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-75 z-[60] hidden flex items-center justify-center p-4';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center p-4 border-b">
+                    <h3 class="font-bold text-lg">Excuse Letter Proof</h3>
+                    <button onclick="closeProofModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-100">
+                    <img id="proof-image" src="" alt="Excuse Letter Proof" class="max-w-full max-h-[60vh] object-contain rounded shadow-lg">
+                </div>
+                <div class="p-4 border-t flex justify-end">
+                    <button onclick="closeProofModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Close on background click
+        modal.onclick = function(e) {
+            if (e.target === modal) closeProofModal();
+        };
+    }
+    
+    modal.classList.remove('hidden');
+    document.getElementById('proof-image').src = imageUrl;
+}
+
+// Close Proof Modal
+function closeProofModal() {
+    const modal = document.getElementById('proof-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeProofModal();
+    }
+});
 
 // 16. Approve Excuse Letter
 async function approveExcuseLetter(letterId, studentId, dateAbsent) {
@@ -885,38 +1253,186 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
 }
 
 // 17. Reject Excuse Letter
+// UPDATED: Uses showConfirmationModal instead of prompt
 async function rejectExcuseLetter(letterId) {
-    const reason = prompt('Reason for rejection:');
-    if (reason === null) return;
-    
-    try {
-        await supabase
-            .from('excuse_letters')
-            .update({ 
-                status: 'Rejected',
-                teacher_remarks: reason || 'Rejected by teacher'
-            })
-            .eq('id', letterId);
-        
-        showNotification('Excuse letter rejected.', "success");
-        await loadExcuseLetters();
-        
-    } catch (err) {
-        console.error('Error rejecting excuse letter:', err);
-        showNotification('Error rejecting excuse letter. Please try again.', "error");
-    }
+    showConfirmationModal(
+        'Reject Excuse Letter',
+        `<div class="text-left space-y-4 p-2">
+            <p class="text-gray-600">Are you sure you want to reject this excuse letter?</p>
+            <div>
+                <label class="text-xs font-bold text-gray-400 uppercase">Reason for Rejection</label>
+                <textarea id="reject-reason" rows="3" class="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm" placeholder="Enter reason for rejection..."></textarea>
+            </div>
+        </div>`,
+        async () => {
+            const reason = document.getElementById('reject-reason')?.value.trim();
+            if (!reason) {
+                showNotification('Please provide a reason for rejection.', "error");
+                return;
+            }
+            
+            try {
+                const { error } = await supabase
+                    .from('excuse_letters')
+                    .update({ 
+                        status: 'Rejected',
+                        teacher_remarks: reason,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', letterId);
+                
+                if (error) throw error;
+                
+                showNotification('Excuse letter rejected.', "success");
+                await loadExcuseLetters();
+                
+            } catch (err) {
+                console.error('Error rejecting excuse letter:', err);
+                showNotification('Error rejecting excuse letter. Please try again.', "error");
+            }
+        },
+        'Reject'
+    );
 }
 
 // 18. Load Analytics
+// UPDATED: Now updates stats cards and loads critical absences
 async function loadAnalytics() {
+    await loadAttendanceStats();
     await loadAttendancePieChart();
     await loadMonthlyBarChart();
+    await loadCriticalAbsences();
+}
+
+// NEW: Load attendance statistics for the stats cards
+async function loadAttendanceStats() {
+    const presentRateEl = document.getElementById('present-rate');
+    const absentRateEl = document.getElementById('absent-rate');
+    const lateRateEl = document.getElementById('late-rate');
+    const excusedRateEl = document.getElementById('excused-rate');
+    
+    if (!presentRateEl && !absentRateEl && !lateRateEl && !excusedRateEl) return;
+    
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+        
+        if (!teacherClass) return;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const { data: students } = await supabase
+            .from('students')
+            .select('id')
+            .eq('class_id', teacherClass.id);
+        
+        const studentIds = students?.map(s => s.id) || [];
+        const totalStudents = studentIds.length;
+        
+        if (totalStudents === 0) return;
+        
+        // Get today's attendance
+        const { data: attendanceLogs } = await supabase
+            .from('attendance_logs')
+            .select('status')
+            .eq('log_date', today)
+            .in('student_id', studentIds);
+        
+        let present = 0, absent = 0, late = 0, excused = 0;
+        attendanceLogs?.forEach(log => {
+            if (log.status === 'On Time' || log.status === 'Present') present++;
+            else if (log.status === 'Absent') absent++;
+            else if (log.status === 'Late') late++;
+            else if (log.status === 'Excused') excused++;
+        });
+        
+        // Calculate rates based on total students (not just those with logs)
+        const presentRate = Math.round((present / totalStudents) * 100);
+        const absentRate = Math.round((absent / totalStudents) * 100);
+        const lateRate = Math.round((late / totalStudents) * 100);
+        const excusedRate = Math.round((excused / totalStudents) * 100);
+        
+        if (presentRateEl) presentRateEl.textContent = presentRate + '%';
+        if (absentRateEl) absentRateEl.textContent = absentRate + '%';
+        if (lateRateEl) lateRateEl.textContent = lateRate + '%';
+        if (excusedRateEl) excusedRateEl.textContent = excusedRate + '%';
+        
+    } catch (err) {
+        console.error('Error loading attendance stats:', err);
+    }
+}
+
+// NEW: Load critical absences (students with 10+ absences in last 30 days)
+async function loadCriticalAbsences() {
+    const list = document.getElementById('critical-absences-list');
+    if (!list) return;
+    
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+        
+        if (!teacherClass) {
+            list.innerHTML = '<p class="text-center text-gray-400 py-4 italic">No homeroom class assigned</p>';
+            return;
+        }
+        
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        const { data: logs, error } = await supabase
+            .from('attendance_logs')
+            .select(`
+                *,
+                students!inner(class_id, full_name)
+            `)
+            .eq('students.class_id', teacherClass.id)
+            .eq('status', 'Absent')
+            .gte('log_date', thirtyDaysAgo);
+        
+        if (error) throw error;
+        
+        // Count absences per student
+        const absenceMap = {};
+        logs?.forEach(log => {
+            const name = log.students?.full_name || 'Unknown';
+            absenceMap[name] = (absenceMap[name] || 0) + 1;
+        });
+        
+        // CRITICAL ABSENCE RULE: Flag at 10 (halfway to 20)
+        const critical = Object.entries(absenceMap).filter(([_, count]) => count >= 10);
+        
+        if (critical.length > 0) {
+            list.innerHTML = critical.map(([name, count]) => `
+                <div class="flex justify-between items-center p-4 bg-red-50 rounded-xl border border-red-100 mb-2">
+                    <div>
+                        <p class="font-bold text-red-900">${name}</p>
+                        <p class="text-[10px] text-red-600 font-black uppercase">Reached Halfway Mark (${count}/20)</p>
+                    </div>
+                    <span class="bg-red-600 text-white px-3 py-1 rounded-lg font-bold">${count}</span>
+                </div>`).join('');
+        } else {
+            list.innerHTML = '<p class="text-center text-gray-400 py-4 italic">No students with critical absences.</p>';
+        }
+        
+    } catch (err) {
+        console.error('Error loading critical absences:', err);
+        list.innerHTML = '<p class="text-center text-red-500 py-4">Error loading data</p>';
+    }
 }
 
 // 19. Attendance Pie Chart
 async function loadAttendancePieChart() {
     const ctx = document.getElementById('attendancePieChart');
     if (!ctx) return;
+    
+    // Destroy existing chart if any
+    if (window.pieChart) {
+        window.pieChart.destroy();
+    }
     
     try {
         const { data: teacherClass } = await supabase
@@ -948,7 +1464,7 @@ async function loadAttendancePieChart() {
             else if (log.status === 'Excused') excused++;
         });
         
-        new Chart(ctx, {
+        window.pieChart = new Chart(ctx, {
             type: 'pie',
             data: {
                 labels: ['Present', 'Absent', 'Late', 'Excused'],
@@ -977,6 +1493,11 @@ async function loadAttendancePieChart() {
 async function loadMonthlyBarChart() {
     const ctx = document.getElementById('monthlyBarChart');
     if (!ctx) return;
+    
+    // Destroy existing chart if any
+    if (window.barChart) {
+        window.barChart.destroy();
+    }
     
     try {
         const { data: teacherClass } = await supabase
@@ -1012,7 +1533,7 @@ async function loadMonthlyBarChart() {
             absentData.push(absent);
         }
         
-        new Chart(ctx, {
+        window.barChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: dates,
@@ -1041,14 +1562,45 @@ async function loadMonthlyBarChart() {
     }
 }
 
-// 21. Load Announcements Board
+// 21. Load Announcements Board - Load received announcements from admin
 async function loadAnnouncementsBoard() {
     await loadExistingAnnouncements();
 }
 
-// 22. Load Existing Announcements
+// 22. Load Existing Announcements - Load received announcements from admin
 async function loadExistingAnnouncements() {
-    console.log('Loading existing announcements...');
+    const list = document.getElementById('announcements-list');
+    if (!list) return;
+    
+    try {
+        // Fetch announcements where teacher is the recipient
+        const { data, error } = await supabase
+            .from('announcements')
+            .select('*')
+            .eq('target_teachers', true)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p class="text-center text-gray-400 italic py-8">No announcements from administration.</p>';
+            return;
+        }
+        
+        list.innerHTML = data.map(ann => `
+            <div class="p-4 bg-blue-50 rounded-xl border border-blue-100 mb-3">
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="font-bold text-gray-800">${ann.title || 'Untitled'}</h4>
+                    <span class="text-xs text-gray-500">${new Date(ann.created_at).toLocaleDateString()}</span>
+                </div>
+                <p class="text-sm text-gray-600">${ann.content || ''}</p>
+            </div>
+        `).join('');
+        
+    } catch (err) {
+        console.error('Error loading announcements:', err);
+        list.innerHTML = '<p class="text-center text-red-500 py-8">Could not load announcements.</p>';
+    }
 }
 
 // 23. Post Announcement to Parents (with Confirmation)
@@ -1189,30 +1741,41 @@ async function loadSentAnnouncements() {
     if (!list) return;
 
     try {
-        const { data, error } = await supabase.rpc('get_teacher_announcements', { teacher_id_param: currentUser.id });
+        // Use direct query instead of RPC (RPC function may not exist)
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, message, created_at, is_urgent, batch_id, scheduled_at, is_read')
+            .eq('sender_id', currentUser.id)
+            .eq('type', 'announcement')
+            .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        if (data.length === 0) {
+        if (!data || data.length === 0) {
             list.innerHTML = '<p class="text-center text-gray-400 italic">You have not sent any announcements.</p>';
             return;
         }
 
-        list.innerHTML = data.map(ann => `
-            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <p class="font-bold text-gray-800">${ann.title.replace('Announcement: ', '')}</p>
-                        <p class="text-xs text-gray-500 truncate max-w-xs">${ann.message}</p>
-                    </div>
-                    <div class="text-right">
-                        <span class="px-2 py-1 rounded-lg text-xs font-bold ${ann.read_count / ann.total_count > 0.5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-                            ${ann.read_count} / ${ann.total_count} Seen
-                        </span>
+        // For simplicity, show total count (read tracking would require join with read_receipts)
+        list.innerHTML = data.map(ann => {
+            const title = ann.title ? ann.title.replace('Announcement: ', '') : 'Untitled';
+            const isScheduled = ann.scheduled_at && new Date(ann.scheduled_at) > new Date();
+            return `
+                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="font-bold text-gray-800">${title}</p>
+                            <p class="text-xs text-gray-500 truncate max-w-xs">${ann.message || ''}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="px-2 py-1 rounded-lg text-xs font-bold ${isScheduled ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}">
+                                ${isScheduled ? 'Scheduled' : 'Sent'}
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
     } catch (err) {
         console.error("Error loading sent announcements:", err);

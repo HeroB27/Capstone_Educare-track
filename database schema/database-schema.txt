@@ -101,6 +101,22 @@ CREATE TABLE public.holidays (
   is_suspended boolean DEFAULT true,
   target_grades text DEFAULT 'All'::text
 );
+
+-- Grade-Level Attendance Schedules (for per-grade entrance/dismissal times)
+-- Note: This can also be stored in the settings table using prefixed keys:
+-- grade_kinder_start, grade_kinder_end, grade_kinder_late_threshold, grade_kinder_early_cutoff
+-- grade_grades1_3_start, grade_grades1_3_end, etc.
+CREATE TABLE public.grade_schedules (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  grade_level text NOT NULL UNIQUE,
+  start_time time without time zone NOT NULL,
+  end_time time without time zone NOT NULL,
+  late_threshold time without time zone,
+  early_cutoff time without time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT grade_schedules_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.id_templates (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   template_type text NOT NULL UNIQUE,
