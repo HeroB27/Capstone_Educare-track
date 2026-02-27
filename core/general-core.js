@@ -3,7 +3,8 @@
 // 1. Session Checker
 // Call this at the top of every dashboard's specific core.js
 function checkSession(requiredRole) {
-    const userStr = localStorage.getItem('educare_user');
+    // BUG FIX: Check both localStorage (Remember Me) AND sessionStorage (Temporary)
+    const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
     
     // If no session exists, kick them out
     if (!userStr) {
@@ -12,26 +13,37 @@ function checkSession(requiredRole) {
         return null;
     }
 
-    const user = JSON.parse(userStr);
+    try {
+        const user = JSON.parse(userStr);
 
-    // Strict Role Check (Security)
-    // If a Student tries to open admin-dashboard.html, this blocks them.
-    if (user.role !== requiredRole) {
-        alert(`Unauthorized! You are logged in as ${user.role}, not ${requiredRole}.`);
-        window.location.href = '../index.html';
+        // Strict Role Check (Security)
+        if (user.role !== requiredRole) {
+            alert(`Unauthorized! You are logged in as ${user.role}, not ${requiredRole}.`);
+            window.location.href = '../index.html';
+            return null;
+        }
+
+        return user;
+    } catch (e) {
+        // If the JSON is corrupted, force a logout
+        alert("Session corrupted. Please login again.");
+        logout();
         return null;
     }
-
-    return user;
 }
 
 // 2. Logout Function
 function logout() {
     if(confirm("Are you sure you want to logout?")) {
+        // BUG FIX: Clear EVERYTHING from both storages to prevent ghost sessions
         localStorage.removeItem('educare_user'); 
-        localStorage.removeItem('educare_session');
-        sessionStorage.removeItem('teacher_identity_loaded'); // Clear teacher session cache
+        sessionStorage.removeItem('educare_user');
+        sessionStorage.removeItem('teacher_identity_loaded'); 
+        
+        // Nuke all other potential cached data
         localStorage.clear();
+        sessionStorage.clear();
+        
         window.location.href = '../index.html';
     }
 }
