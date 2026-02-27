@@ -4,289 +4,124 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Announcements - Educare Clinic</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="clinic-core.js" defer></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-                    colors: {
-                        red: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' }
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="clinic-announcements-board.js" defer></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
 </head>
-<body class="bg-gray-50 font-sans h-screen flex overflow-hidden">
+<body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl">
-        <div class="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
-            <div class="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-lg shadow-red-500/30">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-            </div>
-            <span class="font-bold text-gray-800 text-lg tracking-tight">Clinic</span>
+    <aside class="w-64 m-4 rounded-[32px] bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="heart-pulse" class="w-6 h-6 text-red-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter uppercase">CLINIC</span>
         </div>
-        <nav class="flex-1 py-4 px-3 space-y-1">
-            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-                Dashboard
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
-            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
-                Patient Check-In
+            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="scan-line" class="w-5 h-5"></i> Patient Check-In
             </a>
-            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Visit Records
+            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="file-text" class="w-5 h-5"></i> Visit Records
             </a>
-            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Daily Logs
+            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Daily Logs
             </a>
-            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                Notifications
+            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bell" class="w-5 h-5"></i> Notifications
             </a>
-            <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 font-medium transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                Announcements
+            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-3 bg-red-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
             </a>
-            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Settings
+            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings
             </a>
         </nav>
-        <div class="p-3 border-t border-gray-100">
-            <button onclick="logout()" class="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                Logout
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-gray-300 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
             </button>
         </div>
     </aside>
 
-    <main class="flex-1 flex flex-col relative overflow-hidden">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
         <!-- Gradient Header -->
-        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
             <div>
-                <h2 class="text-2xl font-bold text-gray-800">School Announcements</h2>
-                <p class="text-sm text-gray-500">Stay informed about school-wide updates</p>
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">School Announcements</h2>
+                <p class="text-sm text-gray-500 mt-1 font-medium">Stay informed about school-wide updates</p>
             </div>
             <div class="flex items-center gap-3">
                 <div class="text-right">
-                    <p id="clinic-name" class="font-semibold text-gray-800 text-sm">Nurse</p>
-                    <p class="text-xs text-gray-500">Clinic Staff</p>
+                    <p id="clinic-name" class="font-black text-gray-900 text-sm leading-none mb-1">Clinic Staff</p>
+                    <p class="text-[10px] text-red-600 font-black tracking-widest uppercase">Medical Care</p>
                 </div>
-                <div class="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-lg shadow-red-500/30">N</div>
+                <div class="h-12 w-12 bg-red-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
+                    <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                </div>
             </div>
         </header>
 
         <!-- Filter Tabs -->
-        <div class="px-8 pt-6 pb-2 flex items-center gap-2">
-            <button onclick="filterAnnouncements('all')" class="px-5 py-2.5 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-xl text-sm font-medium text-red-600 shadow-sm transition-all duration-200" id="tab-all">
+        <div class="px-10 pt-8 pb-4 flex items-center gap-2">
+            <button onclick="filterAnnouncements('all')" class="px-5 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-sm font-bold text-red-600 shadow-sm transition-all duration-200" id="tab-all">
                 All
             </button>
-            <button onclick="filterAnnouncements('important')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-important">
+            <button onclick="filterAnnouncements('important')" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-important">
                 Important
             </button>
-            <button onclick="filterAnnouncements('health')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-health">
+            <button onclick="filterAnnouncements('health')" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-health">
                 Health Related
             </button>
-            <button onclick="filterAnnouncements('events')" class="px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-events">
+            <button onclick="filterAnnouncements('events')" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-all duration-200" id="tab-events">
                 Events
             </button>
         </div>
 
-        <div class="flex-1 overflow-auto px-8 pb-8">
+        <div class="flex-1 overflow-y-auto px-10 pb-8 custom-scrollbar">
             <!-- Announcements Grid -->
             <div id="announcements-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div class="col-span-full p-12 text-center text-gray-500">
-                    <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                    <p>Loading announcements...</p>
+                    <i data-lucide="megaphone" class="w-16 h-16 mx-auto text-gray-300 mb-4"></i>
+                    <p class="font-medium">Loading announcements...</p>
                 </div>
             </div>
         </div>
     </main>
 
     <!-- Announcement Detail Modal -->
-    <div id="announcement-modal" class="fixed inset-0 bg-black/20 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-2xl shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
-            <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-                <h3 id="modal-title" class="text-xl font-bold text-gray-800">Announcement Details</h3>
-                <button onclick="closeAnnouncementModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-all duration-200">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg>
+    <div id="announcement-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-[32px] shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
+            <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50">
+                <h3 id="modal-title" class="text-xl font-black text-gray-900">Announcement Details</h3>
+                <button onclick="closeAnnouncementModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-all">
+                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
                 </button>
             </div>
-            <div id="modal-content" class="p-6 max-h-[60vh] overflow-y-auto">
+            <div id="modal-content" class="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
             </div>
         </div>
     </div>
 
     <script>
-        let allAnnouncements = [];
-        let currentFilter = 'all';
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (currentUser) {
-                await loadAnnouncements();
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
         });
-
-        async function loadAnnouncements() {
-            allAnnouncements = await fetchClinicAnnouncements();
-            renderAnnouncements();
-        }
-
-        function renderAnnouncements() {
-            const container = document.getElementById('announcements-grid');
-            
-            let filtered = allAnnouncements;
-            if (currentFilter !== 'all') {
-                filtered = allAnnouncements.filter(a => {
-                    const title = (a.title || '').toLowerCase();
-                    const content = (a.content || '').toLowerCase();
-                    return title.includes(currentFilter) || content.includes(currentFilter);
-                });
-            }
-            
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full p-12 text-center text-gray-500">
-                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                        <p class="text-lg">No announcements found</p>
-                        <p class="text-sm mt-2">Check back later for updates</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = filtered.map(announcement => {
-                const isImportant = isImportantAnnouncement(announcement);
-                const borderClass = isImportant ? 'border-red-200 bg-red-50/30' : '';
-                const badgeClass = isImportant ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
-                const icon = getCategoryIcon(announcement);
-                
-                return `
-                    <div onclick="viewAnnouncement(${announcement.id})" class="bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-red-200 transition-all duration-300 cursor-pointer ${borderClass}">
-                        <div class="p-5">
-                            <div class="flex items-start justify-between mb-3">
-                                <div class="flex items-center gap-2">
-                                    <div class="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                                        ${icon}
-                                    </div>
-                                    <span class="text-xs px-2 py-1 rounded-full ${badgeClass} font-medium">${getCategoryLabel(announcement)}</span>
-                                </div>
-                                <span class="text-xs text-gray-400">${formatDate(announcement.created_at)}</span>
-                            </div>
-                            <h3 class="text-lg font-bold text-gray-800 mb-2 line-clamp-2">${announcement.title || 'Untitled'}</h3>
-                            <p class="text-gray-600 text-sm line-clamp-3 mb-4">${announcement.content || ''}</p>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-gray-400 flex items-center gap-1">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                                    Read more
-                                </span>
-                                <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/></svg>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function isImportantAnnouncement(announcement) {
-            const title = (announcement.title || '').toLowerCase();
-            const content = (announcement.content || '').toLowerCase();
-            return title.includes('urgent') || title.includes('important') || title.includes('health') || 
-                   content.includes('health') || content.includes('medical') || content.includes('suspension');
-        }
-
-        function getCategoryIcon(announcement) {
-            const title = (announcement.title || '').toLowerCase();
-            const content = (announcement.content || '').toLowerCase();
-            
-            if (title.includes('health') || content.includes('health') || title.includes('medical')) {
-                return '<svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>';
-            }
-            if (title.includes('event') || title.includes('activity')) {
-                return '<svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>';
-            }
-            return '<svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>';
-        }
-
-        function getCategoryLabel(announcement) {
-            const title = (announcement.title || '').toLowerCase();
-            const content = (announcement.content || '').toLowerCase();
-            
-            if (title.includes('health') || content.includes('health') || title.includes('medical')) return 'Health';
-            if (title.includes('event') || title.includes('activity')) return 'Event';
-            if (title.includes('urgent') || title.includes('important')) return 'Important';
-            return 'General';
-        }
-
-        function filterAnnouncements(filter) {
-            currentFilter = filter;
-            const tabs = ['all', 'important', 'health', 'events'];
-            tabs.forEach(t => {
-                const tab = document.getElementById(`tab-${t}`);
-                if (t === filter) {
-                    tab.classList.add('bg-white', 'shadow-sm', 'text-red-600', 'border-red-200');
-                    tab.classList.remove('text-gray-500');
-                } else {
-                    tab.classList.remove('bg-white', 'shadow-sm', 'text-red-600', 'border-red-200');
-                    tab.classList.add('text-gray-500');
-                }
-            });
-            renderAnnouncements();
-        }
-
-        function viewAnnouncement(announcementId) {
-            const announcement = allAnnouncements.find(a => a.id === announcementId);
-            if (!announcement) return;
-            
-            const isImportant = isImportantAnnouncement(announcement);
-            const icon = getCategoryIcon(announcement);
-            
-            const content = document.getElementById('modal-content');
-            content.innerHTML = `
-                <div class="space-y-4">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                            ${icon}
-                        </div>
-                        <span class="text-sm px-3 py-1 rounded-full ${isImportant ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'} font-medium">
-                            ${getCategoryLabel(announcement)}
-                        </span>
-                    </div>
-                    <h2 class="text-2xl font-bold text-gray-800">${announcement.title || 'Untitled'}</h2>
-                    <div class="flex items-center gap-4 text-sm text-gray-500">
-                        <span class="flex items-center gap-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                            Posted: ${formatDate(announcement.created_at)}
-                        </span>
-                    </div>
-                    <div class="border-t pt-4">
-                        <div class="prose max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">${announcement.content || 'No content'}</div>
-                    </div>
-                    <div class="flex justify-end gap-3 mt-6">
-                        <button onclick="closeAnnouncementModal()" class="px-5 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-medium text-gray-600">Close</button>
-                    </div>
-                </div>
-            `;
-            document.getElementById('announcement-modal').classList.remove('hidden');
-            document.getElementById('announcement-modal').classList.add('flex');
-        }
-
-        function closeAnnouncementModal() {
-            const modal = document.getElementById('announcement-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
     </script>
 </body>
 </html>
