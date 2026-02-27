@@ -62,7 +62,6 @@ async function loadAnnouncements() {
                 admins(full_name)
             `)
             .eq('target_guards', true)
-            .eq('is_active', true)
             .order('created_at', { ascending: false })
             .limit(20);
         
@@ -188,8 +187,7 @@ async function loadAnnouncementsFiltered(category) {
                 *,
                 admins(full_name)
             `)
-            .eq('target_guards', true)
-            .eq('is_active', true);
+            .eq('target_guards', true);
         
         if (category === 'important') {
             query = query.eq('priority', 'high');

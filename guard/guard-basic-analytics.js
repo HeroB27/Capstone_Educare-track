@@ -1,19 +1,44 @@
 // guard/guard-basic-analytics.js - Guard Analytics Dashboard
 
 // Session check
-// Session check
 // currentUser is now global in guard-core.js
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     if (currentUser) {
-        setWelcomeMessage('guard-name', currentUser);
+        // Set guard name in sidebar
+        const sidebarName = document.getElementById('guard-name-sidebar');
+        if (sidebarName) sidebarName.textContent = currentUser.full_name || 'Guard';
+        
+        // Set header name
+        const headerName = document.getElementById('guard-name');
+        if (headerName) headerName.textContent = currentUser.full_name || 'Guard';
     }
+    
+    // Set current date
+    setCurrentDate();
+    
     loadTodayStats();
     loadTopLates();
     loadTopAbsentees();
     loadWeeklyTrend();
 });
+
+/**
+ * Set current date in sidebar
+ */
+function setCurrentDate() {
+    const now = new Date();
+    const dateEl = document.getElementById('current-date');
+    const dayEl = document.getElementById('current-day');
+    
+    if (dateEl) {
+        dateEl.textContent = now.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    }
+    if (dayEl) {
+        dayEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+}
 
 // ============================================
 // Today's Statistics
