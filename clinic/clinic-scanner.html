@@ -3,480 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Check-In - Educare Clinic</title>
+    <title>Patient Scanner - Clinic</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qr-code/2.3.8/html5-qrcode.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="clinic-core.js" defer></script>
+    <script src="clinic-scanner.js" defer></script>
     
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        #qr-reader { border: none !important; border-radius: 1rem; overflow: hidden; }
     </style>
 </head>
-<body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex">
+<body class="text-white min-h-screen flex flex-col">
 
-    <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-2xl bg-red-900/95 backdrop-blur-sm text-white flex flex-col shadow-2xl">
-        <div class="p-6 border-b border-red-800/50">
-            <h1 class="font-bold text-xl tracking-tight flex items-center gap-2">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                </svg>
-                CLINIC
-            </h1>
-        </div>
-        <nav class="flex-1 py-4 space-y-1">
-            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                </svg>
-                <span>Dashboard</span>
-            </a>
-            <a href="clinic-scanner.html" class="flex items-center gap-3 px-6 py-3 bg-red-800/50 border-l-4 border-white rounded-r-xl mx-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                </svg>
-                <span>Patient Check-In</span>
-            </a>
-            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-                <span>Visit Records</span>
-            </a>
-            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                </svg>
-                <span>Daily Logs</span>
-            </a>
-            <a href="clinic-notifications.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                </svg>
-                <span>Notifications</span>
-            </a>
-            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
-                </svg>
-                <span>Announcements</span>
-            </a>
-            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <span>Settings</span>
-            </a>
-        </nav>
-        <div class="p-4 border-t border-red-800/50">
-            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-gray-900 hover:bg-gray-800 rounded-xl transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                </svg>
-                <span class="font-medium">Logout</span>
-            </button>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-        
-        <!-- Glassmorphism Header -->
-        <header class="h-16 bg-white/90 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-40">
-            <div class="flex items-center gap-4">
-                <a href="clinic-dashboard.html" class="text-red-600 hover:text-red-700 font-medium flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
-                    Back
+    <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 p-4">
+        <div class="flex items-center justify-between max-w-2xl mx-auto">
+            <div class="flex items-center gap-3">
+                <a href="clinic-dashboard.html" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 </a>
-                <h2 class="text-2xl font-bold text-gray-800">Patient Check-In</h2>
-            </div>
-            <div class="flex items-center gap-4">
-                <span id="clinic-name" class="font-medium text-gray-600">Loading...</span>
-                <div class="h-10 w-10 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-red-500/30">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                    </svg>
+                <div>
+                    <h1 class="font-bold text-lg">Patient Scanner</h1>
+                    <p class="text-xs text-gray-400">Scan Student ID for Check-in</p>
                 </div>
             </div>
-        </header>
+            <div id="current-time" class="font-mono text-lg font-bold text-red-400">--:--:--</div>
+        </div>
+    </header>
 
-        <div class="p-8 overflow-y-auto flex-1">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                <!-- Scanner Section -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-red-100">
-                    <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
-                        </svg>
-                        Scan Student ID
-                    </h3>
-                    
-                    <!-- THE GHOST SCANNER FIX: Tap to Start overlay for browser autoplay policy -->
-                    <div id="start-overlay" class="absolute inset-0 bg-red-900/90 z-50 flex items-center justify-center backdrop-blur-sm rounded-2xl">
-                        <button onclick="startClinicScanner()" class="px-8 py-4 bg-white text-red-600 font-bold rounded-2xl text-xl hover:bg-gray-100 transition shadow-[0_0_15px_rgba(255,255,255,0.5)]">
-                            Tap to Start Clinic Scanner
-                        </button>
-                    </div>
-                    
-                    <!-- USB Scanner Input -->
-                    <input type="text" id="usb-scanner-input" class="absolute opacity-0 pointer-events-none" autocomplete="off">
-                    
-                    <!-- QR Scanner Container -->
-                    <div id="qr-reader" class="w-full rounded-xl overflow-hidden bg-gray-100" style="min-height: 300px;"></div>
-                    
-                    <div class="mt-4 text-center">
-                        <p class="text-gray-500 text-sm">Or search manually below</p>
-                    </div>
-                </div>
-
-                <!-- Search & Check-In Form -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-red-100">
-                    <h3 class="text-lg font-bold text-gray-800 mb-4">Manual Search</h3>
-                    
-                    <!-- Search Input -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Search Student</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="student-search" placeholder="Enter name, student ID, or LRN" 
-                                class="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
-                                oninput="handleSearch(this.value)">
-                        </div>
-                    </div>
-                    
-                    <!-- Search Results -->
-                    <div id="search-results" class="space-y-2 max-h-60 overflow-y-auto mb-4">
-                        <!-- Results loaded dynamically -->
-                    </div>
-
-                    <!-- Check-In Form -->
-                    <form id="checkin-form" onsubmit="handleCheckIn(event)" class="space-y-4 border-t border-gray-200 pt-4">
-                        <h4 class="font-bold text-gray-700">Check-In Information</h4>
-                        
-                        <input type="hidden" id="selected-student-id">
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Selected Student</label>
-                            <div id="selected-student-display" class="p-4 bg-gray-50 rounded-xl text-gray-500">
-                                No student selected
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Referred By (Teacher)</label>
-                            <select id="referred-by" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
-                                <option value="">Select teacher...</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Reason for Visit *</label>
-                            <textarea id="visit-reason" rows="3" required
-                                class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 resize-none"
-                                placeholder="Describe the reason for visiting the clinic..."></textarea>
-                        </div>
-                        
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" id="notify-parent" class="h-5 w-5 text-red-600 focus:ring-red-500 border-gray-300 rounded">
-                            <label for="notify-parent" class="text-sm text-gray-700">Notify parent about clinic visit</label>
-                        </div>
-                        
-                        <button type="submit" id="checkin-btn" disabled
-                            class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium shadow-lg shadow-red-500/30 transition-all duration-200 hover:-translate-y-0.5 disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                            </svg>
-                            Check In Patient
-                        </button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Recent Check-ins -->
-            <div class="mt-6 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-red-100">
-                <div class="px-6 py-4 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Today's Recent Check-ins</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50/80 backdrop-blur-sm sticky top-0">
-                            <tr class="border-b border-gray-200">
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Time</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Student</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Class</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Reason</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Referred By</th>
-                            </tr>
-                        </thead>
-                        <tbody id="recent-checkins-body" class="divide-y divide-gray-100">
-                            <tr>
-                                <td colspan="5" class="px-6 py-8 text-center text-gray-500">Loading...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+    <main class="flex-1 flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto w-full">
+        <div class="w-full relative">
+            <div id="qr-reader" class="w-full aspect-square bg-gray-800 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"></div>
+        </div>
+        <div id="status-indicator" class="w-full text-center py-3 px-4 rounded-xl bg-gray-800/80 border border-gray-700">
+            <p class="text-sm text-gray-300">Ready to scan student ID</p>
+        </div>
+        <div id="last-scan" class="w-full hidden p-6 rounded-2xl bg-gray-800/80 border border-gray-700">
+            <h2 id="scan-student-name" class="text-2xl font-bold mb-1">Student Name</h2>
+            <p id="scan-status" class="text-lg font-medium">Status</p>
         </div>
     </main>
 
-    <script>
-        let html5QrcodeScanner = null;
-        let searchTimeout = null;
-        let selectedStudent = null;
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (currentUser) {
-                await loadTeachers();
-                await loadRecentCheckIns();
-                initializeScanner();
-                setupUsbScanner();
-            }
-        });
-
-        function initializeScanner() {
-            if (typeof Html5QrcodeScanner !== 'undefined') {
-                html5QrcodeScanner = new Html5QrcodeScanner(
-                    "qr-reader", 
-                    { 
-                        fps: 10, 
-                        qrbox: { width: 250, height: 250 },
-                        aspectRatio: 1.0
-                    },
-                    false
-                );
-                html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-            } else {
-                document.getElementById('qr-reader').innerHTML = `
-                    <div class="flex items-center justify-center h-full text-gray-500 py-12">
-                        <div class="text-center">
-                            <svg class="w-16 h-16 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
-                            <p>QR Scanner not available</p>
-                            <p class="text-sm">Use USB scanner or manual search</p>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        function setupUsbScanner() {
-            const hiddenInput = document.getElementById('usb-scanner-input');
-            
-            hiddenInput.addEventListener('input', async (e) => {
-                const value = e.target.value.trim();
-                if (value && value.includes('\n')) {
-                    const cleanValue = value.replace('\n', '').trim();
-                    await handleScannerInput(cleanValue);
-                    e.target.value = '';
-                }
-            });
-            
-            hiddenInput.addEventListener('keypress', async (e) => {
-                if (e.key === 'Enter') {
-                    const value = hiddenInput.value.trim();
-                    if (value) {
-                        await handleScannerInput(value);
-                        hiddenInput.value = '';
-                    }
-                }
-            });
-            
-            hiddenInput.focus();
-            document.addEventListener('click', () => hiddenInput.focus());
-        }
-
-        async function handleScannerInput(input) {
-            try {
-                if (typeof playBeepSound === 'function') playBeepSound();
-                const result = await processClinicCheckIn(input);
-                showToast(`${result.type}: ${result.name}`, 'success');
-                await loadRecentCheckIns();
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        async function onScanSuccess(decodedText, decodedResult) {
-            try {
-                if (typeof playBeepSound === 'function') playBeepSound();
-                const result = await processClinicCheckIn(decodedText);
-                showToast(`${result.type}: ${result.name}`, 'success');
-                await loadRecentCheckIns();
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-
-        function onScanFailure(error) {}
-
-        async function handleSearch(query) {
-            clearTimeout(searchTimeout);
-            
-            if (query.length < 2) {
-                document.getElementById('search-results').innerHTML = '';
-                return;
-            }
-            
-            searchTimeout = setTimeout(async () => {
-                await performSearch(query);
-            }, 300);
-        }
-
-        async function performSearch(query) {
-            const results = await searchStudents(query);
-            const container = document.getElementById('search-results');
-            
-            if (results.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-4">No students found</p>';
-                return;
-            }
-            
-            container.innerHTML = results.map(student => {
-                const classInfo = student.classes;
-                return `
-                    <div onclick="selectStudentFromSearch(${student.id})" 
-                        class="p-4 hover:bg-gray-50 rounded-xl cursor-pointer flex items-center gap-3 transition-colors">
-                        <div class="h-10 w-10 rounded-full bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center text-red-600 font-bold">
-                            ${student.full_name?.charAt(0) || '?'}
-                        </div>
-                        <div class="flex-1">
-                            <p class="font-medium text-gray-800">${student.full_name}</p>
-                            <p class="text-sm text-gray-500">${classInfo?.grade_level || ''} - ${classInfo?.section_name || ''}</p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function selectStudentFromSearch(studentId) {
-            const student = await getStudentById(studentId);
-            if (student) {
-                selectStudent(student);
-            }
-        }
-
-        async function selectStudent(student) {
-            selectedStudent = student;
-            
-            document.getElementById('selected-student-id').value = student.id;
-            document.getElementById('selected-student-display').innerHTML = `
-                <div class="flex items-center gap-3">
-                    <div class="h-10 w-10 rounded-full bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center text-red-600 font-bold">
-                        ${student.full_name?.charAt(0) || '?'}
-                    </div>
-                    <div>
-                        <p class="font-medium text-gray-800">${student.full_name}</p>
-                        <p class="text-sm text-gray-500">ID: ${student.student_id_text || 'N/A'} | Class: ${student.classes?.grade_level || ''} - ${student.classes?.section_name || ''}</p>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('checkin-btn').disabled = false;
-            document.getElementById('search-results').innerHTML = '';
-            document.getElementById('student-search').value = '';
-        }
-
-        async function loadTeachers() {
-            const teachers = await fetchTeachers();
-            const select = document.getElementById('referred-by');
-            
-            select.innerHTML = '<option value="">Select teacher...</option>' +
-                teachers.map(t => `<option value="${t.id}">${t.full_name} (${t.department})</option>`).join('');
-        }
-
-        async function handleCheckIn(event) {
-            event.preventDefault();
-            
-            const studentId = document.getElementById('selected-student-id').value;
-            const teacherId = document.getElementById('referred-by').value;
-            const reason = document.getElementById('visit-reason').value;
-            const notifyParent = document.getElementById('notify-parent').checked;
-            
-            if (!studentId || !reason) {
-                showToast('Please fill in all required fields', 'warning');
-                return;
-            }
-            
-            try {
-                await checkInPatient({
-                    studentId: parseInt(studentId),
-                    teacherId: teacherId ? parseInt(teacherId) : null,
-                    reason: reason
-                });
-                
-                if (notifyParent) {
-                    const student = await getStudentById(parseInt(studentId));
-                    if (student?.parents?.id) {
-                        await notifyParentClinicVisit(student.parents.id, student.full_name, reason);
-                    }
-                }
-                
-                showToast('Patient checked in successfully!', 'success');
-                
-                document.getElementById('checkin-form').reset();
-                document.getElementById('selected-student-display').innerHTML = '<span class="text-gray-500">No student selected</span>';
-                document.getElementById('checkin-btn').disabled = true;
-                selectedStudent = null;
-                
-                await loadRecentCheckIns();
-                
-            } catch (error) {
-                showToast('Error checking in patient', 'error');
-            }
-        }
-
-        async function loadRecentCheckIns() {
-            const today = new Date().toISOString().split('T')[0];
-            const visits = await fetchVisitsByDateRange(today, today);
-            const tbody = document.getElementById('recent-checkins-body');
-            
-            if (visits.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-gray-500">No check-ins today</td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            tbody.innerHTML = visits.slice(0, 10).map(visit => `
-                <tr class="hover:bg-gray-50/50 transition-colors">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatTime(visit.time_in)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="h-8 w-8 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-600 text-sm font-bold mr-2">
-                                ${visit.students?.full_name?.charAt(0) || '?'}
-                            </div>
-                            <span class="text-sm font-medium text-gray-800">${visit.students?.full_name || 'Unknown'}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.section_name || ''}</td>
-                    <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">${visit.reason || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${visit.teachers?.full_name || 'Self-referred'}</td>
-                </tr>
-            `).join('');
-        }
-
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-lg text-white font-medium z-50 ${
-                type === 'success' ? 'bg-green-600' : 
-                type === 'error' ? 'bg-red-600' : 'bg-blue-600'
-            }`;
-            toast.innerText = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-    </script>
 </body>
 </html>

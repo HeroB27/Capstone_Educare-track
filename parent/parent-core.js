@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (welcomeEl) {
             welcomeEl.innerText = `Welcome, ${currentUser.full_name.split(' ')[0]}`;
         }
+
+        // Add listener for child changes to update header
+        document.addEventListener('childChanged', (e) => {
+            const childNameEl = document.getElementById('current-child-name');
+            if (childNameEl) childNameEl.innerText = e.detail.full_name;
+        });
         
         // Load children and initialize child switcher
         await loadChildren();
@@ -73,7 +79,7 @@ async function loadChildren() {
         // Trigger child loaded event for other scripts
         if (currentChild) {
             localStorage.setItem('educare_selected_child', currentChild.id);
-            document.dispatchEvent(new CustomEvent('childChanged', { detail: currentChild }));
+            document.dispatchEvent(new CustomEvent('childChanged', { detail: { ...currentChild } }));
         }
 
     } catch (err) {
@@ -214,7 +220,7 @@ async function switchChild(childId) {
     if (!child) return;
 
     currentChild = child;
-    localStorage.setItem('selectedChildId', childId);
+    localStorage.setItem('educare_selected_child', childId);
     
     // 2. Update the UI header
     const childNameEl = document.getElementById('current-child-name');
@@ -223,7 +229,7 @@ async function switchChild(childId) {
     }
     
     // 3. BROADCAST: Tell other pages to refresh their data
-    const event = new CustomEvent('childChanged', { detail: { studentId: childId } });
+    const event = new CustomEvent('childChanged', { detail: { ...child } });
     window.dispatchEvent(event);
     
     // Close modal if open (ignore if function doesn't exist)
@@ -270,11 +276,10 @@ function setupRealtimeSubscriptions() {
             schema: 'public',
             table: 'attendance_logs',
             filter: `student_id=eq.${currentChild.id}`
-        }, (payload) => {
+        }, async (payload) => {
             console.log('Attendance change received:', payload);
-            if (typeof updateLiveStatus === 'function') {
-                updateLiveStatus();
-            }
+            await loadChildLiveStatus(); // Re-fetch the latest status
+            // Refresh dashboard or calendar if the functions exist on the current page
             if (typeof refreshDashboard === 'function') {
                 refreshDashboard();
             }
@@ -284,11 +289,8 @@ function setupRealtimeSubscriptions() {
             schema: 'public',
             table: 'clinic_visits',
             filter: `student_id=eq.${currentChild.id}`
-        }, (payload) => {
+        }, async (payload) => {
             console.log('Clinic visit change received:', payload);
-            if (typeof updateClinicStatus === 'function') {
-                updateClinicStatus();
-            }
             if (typeof refreshDashboard === 'function') {
                 refreshDashboard();
             }
@@ -368,7 +370,8 @@ function navigateTo(page) {
         'attendance': 'parent-childs-attendance.html',
         'excuse': 'parent-excuse-letter-template.html',
         'notifications': 'parent-notifications.html',
-        'announcements': 'parent-announcements-board.html'
+        'announcements': 'parent-announcements-board.html',
+        'schedule': 'parent-schedule.html' // NEW: Add schedule page route
     };
     
     if (pageMap[page]) {

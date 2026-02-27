@@ -22,11 +22,11 @@
         .nav-item:hover { transform: translateX(4px); }
     </style>
 </head>
-<body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex">
+<body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-2xl bg-red-900/95 backdrop-blur-sm text-white flex flex-col shadow-2xl">
-        <div class="p-6 border-b border-red-800/50">
+    <aside class="w-64 m-4 rounded-[32px] bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <h1 class="font-bold text-xl tracking-tight flex items-center gap-2">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
@@ -34,44 +34,44 @@
                 CLINIC
             </h1>
         </div>
-        <nav class="flex-1 py-4 space-y-1">
-            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-6 py-3 bg-red-800/50 border-l-4 border-white rounded-r-xl mx-2">
+        <nav class="flex-1 py-6 px-4 space-y-1.5">
+            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 bg-red-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                 </svg>
                 <span>Dashboard</span>
             </a>
-            <a href="clinic-scanner.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 17h.01M9 11h.01M12 11h.01M15 11h.01M15 17h.01"/>
                 </svg>
                 <span>Patient Check-In</span>
             </a>
-            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
                 <span>Visit Records</span>
             </a>
-            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
                 <span>Daily Logs</span>
             </a>
-            <a href="clinic-notifications.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                 </svg>
                 <span>Notifications</span>
             </a>
-            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
                 </svg>
                 <span>Announcements</span>
             </a>
-            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-6 py-3 hover:bg-red-800/50 border-l-4 border-transparent rounded-r-xl mx-2 text-red-200 hover:text-white nav-item">
+            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -79,8 +79,8 @@
                 <span>Settings</span>
             </a>
         </nav>
-        <div class="p-4 border-t border-red-800/50">
-            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-gray-900 hover:bg-gray-800 rounded-xl transition-all duration-200">
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-gray-300 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                 </svg>
@@ -93,10 +93,10 @@
     <main class="flex-1 flex flex-col overflow-hidden">
         
         <!-- Glassmorphism Header -->
-        <header class="h-16 glass-header border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-40">
-            <h2 class="text-2xl font-bold text-gray-800">Clinic Dashboard</h2>
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Clinic Dashboard</h2>
             <div class="flex items-center gap-4">
-                <span id="clinic-name" class="font-medium text-gray-600">Loading...</span>
+                <span id="clinic-name" class="font-bold text-gray-700">Loading...</span>
                 <div class="relative">
                     <button onclick="toggleNotifications()" class="relative p-2 rounded-full hover:bg-gray-100 transition-colors">
                         <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,7 +105,7 @@
                         <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
                     </button>
                 </div>
-                <div class="h-10 w-10 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg shadow-red-500/30">
+                <div class="h-12 w-12 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-red-500/30">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                     </svg>
@@ -116,10 +116,10 @@
         <div class="p-8 overflow-y-auto flex-1">
             
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
                 
                 <!-- Today's Check-ins -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-red-100 card-hover">
+                <div class="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-red-600/70 font-medium">Today's Check-ins</p>
@@ -142,7 +142,7 @@
                 </div>
 
                 <!-- Currently in Clinic -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-red-100 card-hover">
+                <div class="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-red-600/70 font-medium">Currently in Clinic</p>
@@ -162,7 +162,7 @@
                 </div>
 
                 <!-- Discharged Today -->
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-red-100 card-hover">
+                <div class="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-red-600/70 font-medium">Discharged Today</p>
@@ -188,7 +188,7 @@
             <!-- Quick Actions -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h3 class="text-xl font-bold text-gray-700">Currently Admitted Patients</h3>
-                <a href="clinic-scanner.html" class="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-lg shadow-green-500/30 transition-all duration-200 hover:-translate-y-0.5 card-hover">
+                <a href="clinic-scanner.html" class="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg shadow-red-200 transition-all duration-200 hover:-translate-y-0.5 card-hover">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -197,7 +197,7 @@
             </div>
 
             <!-- Pending Approvals Section -->
-            <div id="pending-approvals-section" class="bg-yellow-50/80 backdrop-blur-sm border border-yellow-200 rounded-xl p-4 mb-6" style="display: none;">
+            <div id="pending-approvals-section" class="bg-white rounded-3xl p-6 border border-yellow-200 shadow-sm mb-6" style="display: none;">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-bold text-yellow-800 flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +213,7 @@
             </div>
 
             <!-- Approved Passes Section -->
-            <div id="approved-passes-section" class="bg-blue-50/80 backdrop-blur-sm border border-blue-200 rounded-xl p-4 mb-6" style="display: none;">
+            <div id="approved-passes-section" class="bg-white rounded-3xl p-6 border border-blue-200 shadow-sm mb-6" style="display: none;">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-bold text-blue-800 flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,7 +229,7 @@
             </div>
 
             <!-- Active Patients Table -->
-            <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden">
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead class="bg-gray-50/80 backdrop-blur-sm sticky top-0 z-10">

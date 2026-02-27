@@ -19,7 +19,12 @@ async function loadAllChildren() {
             .from('students')
             .select(`
                 *,
-                classes (grade_level, section_name, strand, adviser_id)
+                classes (
+                    grade_level, 
+                    section_name, 
+                    strand, 
+                    teachers (full_name, contact_number)
+                )
             `)
             .eq('parent_id', currentUser.id);
 
@@ -161,6 +166,7 @@ function getStatusText(status) {
 async function showChildDetail(index) {
     const child = childrenData[index];
     if (!child) return;
+    const adviser = child.classes?.teachers;
 
     // Show modal
     document.getElementById('child-modal').classList.remove('hidden');
@@ -205,6 +211,24 @@ async function showChildDetail(index) {
                 <span class="font-medium text-gray-800">${child.emergency_contact || 'N/A'}</span>
             </div>
         </div>
+
+        <!-- Adviser Contact Section -->
+        ${adviser ? `
+            <div class="mt-4 pt-4 border-t">
+                <h4 class="font-medium text-gray-700 mb-2">Homeroom Adviser</h4>
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">
+                    <div class="flex-1">
+                        <button onclick="contactAdviser('${adviser.contact_number}')" class="text-left w-full">
+                            <p class="font-bold text-gray-800 group-hover:text-green-600 transition-colors">${adviser.full_name}</p>
+                            <p class="text-xs text-gray-500">Adviser for ${child.classes.grade_level} - ${child.classes.section_name}</p>
+                        </button>
+                    </div>
+                    <div class="p-2 text-green-600 opacity-50 group-hover:opacity-100 transition-opacity">
+                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+                    </div>
+                </div>
+            </div>
+        ` : ''}
 
         <!-- Current Status -->
         <div class="bg-gray-50 rounded-lg p-4 mt-4">
@@ -352,9 +376,22 @@ document.getElementById('child-modal')?.addEventListener('click', (e) => {
     }
 });
 
+/**
+ * Opens the phone's dialer with the adviser's contact number.
+ */
+function contactAdviser(contactNumber) {
+    if (!contactNumber) {
+        alert("Adviser's contact information is not available.");
+        return;
+    }
+    // This will open the phone's dialer on mobile devices
+    window.location.href = `tel:${contactNumber}`;
+}
+
 // Make functions available globally
 window.showChildDetail = showChildDetail;
 window.closeModal = closeModal;
+window.contactAdviser = contactAdviser;
 
 // Listen for child changed event to reload children data
 window.addEventListener('childChanged', () => {

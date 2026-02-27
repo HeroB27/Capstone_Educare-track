@@ -184,7 +184,7 @@ function renderScheduleOnDashboard() {
         </div>
     `).join('');
     
-    if(window.lucide) lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
 }
 
 // 3g. Navigate to Subject Attendance page with selected subject
@@ -280,7 +280,7 @@ async function loadSchedule() {
     }
 }
 
-// 6. Load Homeroom Students with Real-time Gate Status (from teacher-homeroom.js)
+// 6. Load Homeroom Students with Real-time Gate Status
 async function loadHomeroomStudents() {
     const studentList = document.getElementById('homeroom-student-list');
     const searchInput = document.getElementById('student-search');
@@ -309,7 +309,7 @@ async function loadHomeroomStudents() {
             classInfoEl.innerText = `${teacherClass.grade_level} - ${teacherClass.section_name}`;
         }
 
-        // Fetch Students + Today's Gate Logs (JOIN-style query)
+        // Fetch Students + Today's Gate Logs
         const { data: students, error: studentError } = await supabase
             .from('students')
             .select(`
@@ -326,27 +326,22 @@ async function loadHomeroomStudents() {
 
         const allClassStudents = students || [];
 
-        // NEW: Filter students based on search query
+        // Filter students based on search query
         const filteredStudents = allClassStudents.filter(student => 
             student.full_name.toLowerCase().includes(searchQuery) || 
             student.student_id_text.toLowerCase().includes(searchQuery)
         );
 
-        // NEW: Calculate attendance rate based on the *entire class*
+        // Calculate attendance rate based on the entire class
         const presentCount = allClassStudents.filter(s => {
             const log = s.attendance_logs.find(l => l.log_date === today);
-            return log && log.status !== 'Absent'; // On Time, Late, Excused are all "present" for rate
+            return log && log.status !== 'Absent';
         }).length;
         const totalStudents = allClassStudents.length;
         const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
         
         const rateEl = document.getElementById('attendance-rate');
         if (rateEl) rateEl.innerText = `${rate}%`;
-
-        // Populate homeroom student IDs for real-time filtering
-        if (typeof myHomeroomStudentIds !== 'undefined') {
-            myHomeroomStudentIds = students.map(student => student.id);
-        }
 
         studentList.innerHTML = '';
 
@@ -357,7 +352,6 @@ async function loadHomeroomStudents() {
 
         // Render the filtered list
         filteredStudents.forEach(student => {
-            // Get the first log entry for today if it exists
             const log = student.attendance_logs.find(l => l.log_date === today);
             const timeIn = log && log.time_in ? formatTime(log.time_in) : '--:--';
             
@@ -402,7 +396,7 @@ async function loadHomeroomStudents() {
 
 // 7. Mark Attendance for Homeroom
 async function markAttendance(studentId, status) {
-    if (!status) return; // No change selected
+    if (!status) return;
     
     try {
         const today = new Date().toISOString().split('T')[0];
@@ -411,7 +405,6 @@ async function markAttendance(studentId, status) {
         let displayStatus = status;
         if (status === 'Present') displayStatus = 'On Time';
         
-        // 1. FETCH FIRST to protect the Guard's data
         const { data: existingLog } = await supabase
             .from('attendance_logs')
             .select('time_in, remarks')
@@ -419,25 +412,22 @@ async function markAttendance(studentId, status) {
             .eq('log_date', today)
             .single();
             
-        // 2. Determine safe time_in (Keep existing, use 'now' if blank, null if Absent)
         let safeTimeIn = null;
         if (status !== 'Absent') {
             safeTimeIn = existingLog?.time_in ? existingLog.time_in : now;
         }
 
-        // 3. Append remarks cleanly
         let safeRemarks = existingLog?.remarks || '';
         if (!safeRemarks.includes('Manual override')) {
             safeRemarks = safeRemarks ? `${safeRemarks} | Manual override by Teacher` : 'Manual override by Teacher';
         }
 
-        // 4. Safely Upsert with protected time_in
         const { error } = await supabase
             .from('attendance_logs')
             .upsert({
                 student_id: studentId,
                 log_date: today,
-                time_in: safeTimeIn, // Protected!
+                time_in: safeTimeIn,
                 status: displayStatus,
                 remarks: safeRemarks
             }, {
@@ -450,7 +440,20 @@ async function markAttendance(studentId, status) {
             return;
         }
 
-        // Refresh the list
+        // If this was an update, notify the parent of the correction
+        if (existingLog) {
+            const { data: student } = await supabase.from('students').select('parent_id, full_name').eq('id', studentId).single();
+            if (student && student.parent_id) {
+                await supabase.from('notifications').insert({
+                    recipient_id: student.parent_id,
+                    recipient_role: 'parent',
+                    title: 'Attendance Correction',
+                    message: `Attendance for ${student.full_name} on ${new Date(today).toLocaleDateString()} was updated to: ${displayStatus}.`,
+                    type: 'attendance_correction'
+                });
+            }
+        }
+
         await loadHomeroomStudents();
         
     } catch (err) {
@@ -506,7 +509,6 @@ async function loadSubjectStudents(subjectLoadId) {
     }
     
     try {
-        // Get the class_id for this subject load
         const { data: subjectLoad } = await supabase
             .from('subject_loads')
             .select('class_id, subject_name')
@@ -515,7 +517,6 @@ async function loadSubjectStudents(subjectLoadId) {
         
         if (!subjectLoad) return;
         
-        // Get students in this class
         const { data: students, error } = await supabase
             .from('students')
             .select('id, student_id_text, full_name')
@@ -529,7 +530,6 @@ async function loadSubjectStudents(subjectLoadId) {
         
         studentList.innerHTML = '';
         
-        // Header info
         const infoDiv = document.createElement('div');
         infoDiv.className = 'mb-4';
         infoDiv.innerHTML = `<h3 class="font-bold text-lg">${subjectLoad.subject_name} - Attendance</h3>`;
@@ -558,31 +558,45 @@ async function loadSubjectStudents(subjectLoadId) {
 }
 
 // 10. Mark Subject-Specific Attendance
-async function markSubjectAttendance(studentId, status) {
+async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
     try {
         const today = new Date().toISOString().split('T')[0];
-        const now = new Date().toISOString();
-        
-        // For subject attendance, we mark with subject-specific remark
-        await supabase
+
+        // 1. Fetch the existing log to preserve its data
+        const { data: existingLog, error: fetchError } = await supabase
             .from('attendance_logs')
-            .upsert({
-                student_id: studentId,
-                log_date: today,
-                time_in: status === 'Absent' ? null : now,
-                status: status === 'Excused' ? 'Excused' : (status === 'Present' ? 'On Time' : 'Absent'),
-                remarks: `Subject attendance marked by teacher`
-            }, {
-                onConflict: 'student_id, log_date'
-            });
-        
-        // Visual feedback
-        event.target.classList.add('scale-95');
-        setTimeout(() => event.target.classList.remove('scale-95'), 100);
-        
+            .select('remarks')
+            .eq('student_id', studentId)
+            .eq('log_date', today)
+            .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError; // Ignore "not found" errors
+
+        // 2. Cleanly update remarks
+        let remarks = existingLog?.remarks || '';
+        const remarkRegex = new RegExp(`\\[${subjectName}: (Present|Absent|Excused)\\]`, 'g');
+        remarks = remarks.replace(remarkRegex, '').trim(); // Remove old status for this subject
+        remarks = `${remarks} [${subjectName}: ${newStatus}]`.trim(); // Add new status
+
+        // 3. Upsert the log, preserving original status and time_in if they exist
+        const { error: upsertError } = await supabase.from('attendance_logs').upsert({
+            student_id: studentId,
+            log_date: today,
+            remarks: remarks
+        }, { 
+            onConflict: 'student_id, log_date',
+            ignoreDuplicates: false 
+        });
+
+        if (upsertError) throw upsertError;
+
+        showNotification(`${subjectName} attendance marked as ${newStatus}.`, 'success');
+        // Re-render the specific list to show the change
+        loadSubjectStudents(subjectLoadId);
+
     } catch (err) {
         console.error('Error marking subject attendance:', err);
-        showNotification('Error marking attendance. Please try again.', "error");
+        showNotification('Failed to mark subject attendance.', "error");
     }
 }
 
@@ -592,7 +606,6 @@ async function loadClinicPassInterface() {
     if (!studentSelect) return;
     
     try {
-        // Get homeroom students
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
@@ -619,7 +632,6 @@ async function loadClinicPassInterface() {
             studentSelect.appendChild(option);
         });
         
-        // Load recent clinic passes
         await loadRecentClinicPasses();
         
     } catch (err) {
@@ -711,7 +723,7 @@ async function loadRecentClinicPasses() {
             passList.appendChild(div);
         });
         
-        if(window.lucide) lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
         
     } catch (err) {
         console.error('Error in loadRecentClinicPasses:', err);
@@ -721,7 +733,6 @@ async function loadRecentClinicPasses() {
 // 14. Forward Clinic Findings to Parent
 async function forwardToParent(clinicVisitId, studentName) {
     try {
-        // Get student info
         const { data: visit } = await supabase
             .from('clinic_visits')
             .select('student_id, nurse_notes')
@@ -730,7 +741,6 @@ async function forwardToParent(clinicVisitId, studentName) {
         
         if (!visit) return;
         
-        // Get parent ID
         const { data: student } = await supabase
             .from('students')
             .select('parent_id')
@@ -742,7 +752,6 @@ async function forwardToParent(clinicVisitId, studentName) {
             return;
         }
         
-        // Create notification for parent
         await supabase.from('notifications').insert({
             recipient_id: student.parent_id,
             recipient_role: 'parent',
@@ -751,7 +760,6 @@ async function forwardToParent(clinicVisitId, studentName) {
             type: 'clinic_visit'
         });
         
-        // Mark as notified
         await supabase
             .from('clinic_visits')
             .update({ parent_notified: true })
@@ -772,7 +780,6 @@ async function loadExcuseLetters() {
     if (!letterList) return;
     
     try {
-        // Get teacher's homeroom class
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
@@ -784,7 +791,6 @@ async function loadExcuseLetters() {
             return;
         }
         
-        // Get students in this class
         const { data: students } = await supabase
             .from('students')
             .select('id')
@@ -797,7 +803,6 @@ async function loadExcuseLetters() {
             return;
         }
         
-        // Get excuse letters for these students
         const { data: letters, error } = await supabase
             .from('excuse_letters')
             .select(`
@@ -843,7 +848,7 @@ async function loadExcuseLetters() {
                 ` : ''}
             `;
             letterList.appendChild(div);
-            if(window.lucide) lucide.createIcons();
+            if (window.lucide) lucide.createIcons();
         });
         
     } catch (err) {
@@ -854,13 +859,11 @@ async function loadExcuseLetters() {
 // 16. Approve Excuse Letter
 async function approveExcuseLetter(letterId, studentId, dateAbsent) {
     try {
-        // Update excuse letter status
         await supabase
             .from('excuse_letters')
             .update({ status: 'Approved' })
             .eq('id', letterId);
         
-        // Update attendance log for that date
         await supabase
             .from('attendance_logs')
             .upsert({
@@ -884,7 +887,7 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
 // 17. Reject Excuse Letter
 async function rejectExcuseLetter(letterId) {
     const reason = prompt('Reason for rejection:');
-    if (reason === null) return; // User cancelled
+    if (reason === null) return;
     
     try {
         await supabase
@@ -906,7 +909,6 @@ async function rejectExcuseLetter(letterId) {
 
 // 18. Load Analytics
 async function loadAnalytics() {
-    // Chart.js is loaded via CDN in HTML
     await loadAttendancePieChart();
     await loadMonthlyBarChart();
 }
@@ -985,7 +987,6 @@ async function loadMonthlyBarChart() {
         
         if (!teacherClass) return;
         
-        // Get last 7 days of data
         const dates = [];
         const presentData = [];
         const absentData = [];
@@ -1045,7 +1046,12 @@ async function loadAnnouncementsBoard() {
     await loadExistingAnnouncements();
 }
 
-// 22. Post Announcement to Parents (with Confirmation)
+// 22. Load Existing Announcements
+async function loadExistingAnnouncements() {
+    console.log('Loading existing announcements...');
+}
+
+// 23. Post Announcement to Parents (with Confirmation)
 async function postAnnouncement() {
     const title = document.getElementById('announcement-title').value;
     const content = document.getElementById('announcement-content').value;
@@ -1096,8 +1102,7 @@ async function postAnnouncement() {
 
     showConfirmationModal('Confirm Announcement', confirmationMessage, async () => {
         try {
-            // 1. Get teacher's homeroom class ID
-            const batchId = crypto.randomUUID(); // Generate a unique ID for this batch
+            const batchId = crypto.randomUUID();
             const { data: teacherClass, error: classError } = await supabase
                 .from('classes')
                 .select('id')
@@ -1108,7 +1113,6 @@ async function postAnnouncement() {
                 throw new Error("You are not an adviser and cannot post class announcements.");
             }
 
-            // 2. Get all students in that class
             const { data: students, error: studentError } = await supabase
                 .from('students')
                 .select('parent_id')
@@ -1117,14 +1121,12 @@ async function postAnnouncement() {
 
             if (studentError) throw studentError;
 
-            // 3. Create a unique list of parent IDs
             const parentIds = [...new Set(students.map(s => s.parent_id))];
 
             if (parentIds.length === 0) {
                 throw new Error("No parents found for your homeroom students.");
             }
 
-            // 4. Create a notification payload for each parent
             const notifications = parentIds.map(parentId => ({
                 recipient_id: parentId,
                 recipient_role: 'parent',
@@ -1137,7 +1139,6 @@ async function postAnnouncement() {
                 batch_id: batchId
             }));
 
-            // 5. Bulk insert notifications
             const { error: notifError } = await supabase.from('notifications').insert(notifications);
 
             if (notifError) throw notifError;
@@ -1148,7 +1149,6 @@ async function postAnnouncement() {
             
             showNotification(successMessage, "success");
             
-            // Reset form
             document.getElementById('announcement-title').value = '';
             document.getElementById('announcement-content').value = '';
             document.getElementById('announcement-date').value = '';
@@ -1156,7 +1156,7 @@ async function postAnnouncement() {
             document.getElementById('announcement-urgent').checked = false;
             const charCounter = document.getElementById('char-counter');
             if (charCounter) charCounter.textContent = '0';
-            loadScheduledAnnouncements(); // Refresh the scheduled list
+            loadScheduledAnnouncements();
         } catch (err) {
             console.error('Error posting class announcement:', err);
             showNotification(err.message, "error");
@@ -1164,37 +1164,7 @@ async function postAnnouncement() {
     });
 }
 
-// 23. Load Existing Announcements (placeholder)
-async function loadExistingAnnouncements() {
-    // This is a placeholder - actual implementation would load existing announcements
-    console.log('Loading existing announcements...');
-}
-
-// 24. Toggle Gatekeeper Mode
-function toggleGatekeeperMode() {
-    if (isGatekeeperMode) {
-        window.location.href = 'teacher-gatekeeper-mode.html';
-    }
-}
-
-// 25. Navigate to Section
-function navigateTo(section) {
-    const routes = {
-        'dashboard': 'teacher-dashboard.html',
-        'homeroom': 'teacher-homeroom.html',
-        'subject': 'teacher-subject-attendance.html',
-        'clinic': 'teacher-clinicpass.html',
-        'excuse': 'teacher-excuse-letter-approval.html',
-        'analytics': 'teacher-data-analytics.html',
-        'announcements': 'teacher-announcements-board.html'
-    };
-    
-    if (routes[section]) {
-        window.location.href = routes[section];
-    }
-}
-
-// 26. Setup Announcement Page
+// 24. Setup Announcement Page
 async function setupAnnouncementPage() {
     await loadAnnouncementsBoard();
     await loadScheduledAnnouncements();
@@ -1213,7 +1183,7 @@ async function setupAnnouncementPage() {
     }
 }
 
-// 27. Load Sent Announcements
+// 25. Load Sent Announcements
 async function loadSentAnnouncements() {
     const list = document.getElementById('sent-announcements-list');
     if (!list) return;
@@ -1250,7 +1220,7 @@ async function loadSentAnnouncements() {
     }
 }
 
-// 28. Open Edit Announcement Modal
+// 26. Open Edit Announcement Modal
 async function openEditAnnouncementModal(ann) {
     const scheduledDate = new Date(ann.scheduled_at);
     
@@ -1281,7 +1251,7 @@ async function openEditAnnouncementModal(ann) {
     showConfirmationModal('Edit Scheduled Announcement', confirmationMessage, submitAnnouncementEdit, 'Save Changes');
 }
 
-// 29. Submit Announcement Edit
+// 27. Submit Announcement Edit
 async function submitAnnouncementEdit() {
     const batchId = document.getElementById('edit-batch-id').value;
     const title = document.getElementById('edit-title').value;
@@ -1307,7 +1277,7 @@ async function submitAnnouncementEdit() {
     }
 }
 
-// 30. Load Scheduled Announcements
+// 28. Load Scheduled Announcements
 async function loadScheduledAnnouncements() {
     const list = document.getElementById('scheduled-announcements-list');
     if (!list) return;
@@ -1343,7 +1313,7 @@ async function loadScheduledAnnouncements() {
             </div>
         `).join('');
         
-        if(window.lucide) lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
 
     } catch (err) {
         console.error("Error loading scheduled announcements:", err);
@@ -1351,16 +1321,40 @@ async function loadScheduledAnnouncements() {
     }
 }
 
-// 31. Cancel Scheduled Announcement
+// 29. Cancel Scheduled Announcement
 async function cancelScheduledAnnouncement(batchId) {
     if (!confirm("Are you sure you want to cancel this scheduled announcement? This will delete it for all recipients.")) return;
     try {
         const { error } = await supabase.from('notifications').delete().eq('batch_id', batchId);
         if (error) throw error;
         showNotification("Scheduled announcement cancelled.", "success");
-        loadScheduledAnnouncements(); // Refresh the list
+        loadScheduledAnnouncements();
     } catch (err) {
         showNotification("Failed to cancel announcement.", "error");
+    }
+}
+
+// 30. Toggle Gatekeeper Mode
+function toggleGatekeeperMode() {
+    if (isGatekeeperMode) {
+        window.location.href = 'teacher-gatekeeper-mode.html';
+    }
+}
+
+// 31. Navigate to Section
+function navigateTo(section) {
+    const routes = {
+        'dashboard': 'teacher-dashboard.html',
+        'homeroom': 'teacher-homeroom.html',
+        'subject': 'teacher-subject-attendance.html',
+        'clinic': 'teacher-clinicpass.html',
+        'excuse': 'teacher-excuse-letter-approval.html',
+        'analytics': 'teacher-data-analytics.html',
+        'announcements': 'teacher-announcements-board.html'
+    };
+    
+    if (routes[section]) {
+        window.location.href = routes[section];
     }
 }
 
@@ -1390,7 +1384,6 @@ function showNotification(msg, type='info', callback=null) {
 
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
         if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1480,7 +1473,6 @@ function printHomeroomList() {
     styleSheet.innerText = printStyles;
     document.head.appendChild(styleSheet);
     window.print();
-    // Use a timeout to ensure the print dialog is closed before removing the stylesheet
     setTimeout(() => {
         document.head.removeChild(styleSheet);
     }, 500);

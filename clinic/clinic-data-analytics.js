@@ -1,257 +1,149 @@
-/**
- * Clinic Data Analytics - Intelligence Center
- * Handles visit logs, charts, and export functionality
- */
+// clinic/clinic-data-analytics.js
 
-// Store visit data globally
 let visitData = [];
 let reasonsChart = null;
 let dailyChart = null;
 
-/**
- * Fetch visits by date range with JOINs
- * Gets student details, class info, and referring teacher
- */
-async function fetchVisitsByDateRange(dateFrom, dateTo) {
-    try {
-        const startOfDay = new Date(dateFrom);
-        startOfDay.setHours(0, 0, 0, 0);
-        
-        const endOfDay = new Date(dateTo);
-        endOfDay.setHours(23, 59, 59, 999);
+document.addEventListener('DOMContentLoaded', () => {
+    setToday();
+});
 
-        const { data, error } = await supabase
-            .from('clinic_visits')
-            .select(`
-                *,
-                students!inner (
-                    full_name,
-                    student_id_text,
-                    classes!inner (
-                        grade_level,
-                        section_name
-                    )
-                ),
-                teachers (
-                    full_name
-                )
-            `)
-            .gte('time_in', startOfDay.toISOString())
-            .lte('time_in', endOfDay.toISOString())
-            .order('time_in', { ascending: false });
+async function applyDateFilter() {
+    const dateFrom = document.getElementById('date-from').value;
+    const dateTo = document.getElementById('date-to').value;
 
-        if (error) {
-            console.error('Error fetching visits:', error);
-            return [];
-        }
-
-        // Flatten nested objects for easier access
-        return data.map(visit => ({
-            ...visit,
-            students: {
-                ...visit.students,
-                ...visit.students?.classes
-            },
-            full_name: visit.students?.full_name,
-            student_id_text: visit.students?.student_id_text,
-            grade_level: visit.students?.grade_level,
-            section_name: visit.students?.section_name,
-            referred_by_name: visit.teachers?.full_name
-        }));
-    } catch (err) {
-        console.error('Exception fetching visits:', err);
-        return [];
-    }
-}
-
-/**
- * Fetch daily clinic statistics
- */
-async function fetchDailyClinicStats(date) {
-    try {
-        const { data, error } = await supabase
-            .from('clinic_visits')
-            .select('time_out')
-            .gte('time_in', `${date}T00:00:00`)
-            .lte('time_in', `${date}T23:59:59`);
-
-        if (error) {
-            console.error('Error fetching stats:', error);
-            return { totalCheckIns: 0, stillInClinic: 0, dischargedToday: 0 };
-        }
-
-        const totalCheckIns = data.length;
-        const dischargedToday = data.filter(v => v.time_out).length;
-        const stillInClinic = totalCheckIns - dischargedToday;
-
-        return { totalCheckIns, stillInClinic, dischargedToday };
-    } catch (err) {
-        console.error('Exception fetching stats:', err);
-        return { totalCheckIns: 0, stillInClinic: 0, dischargedToday: 0 };
-    }
-}
-
-/**
- * Fetch and aggregate visit reasons with TEXT NORMALIZATION
- * Key fix: Normalize text so 'Fever' and 'fever' are counted together
- */
-async function fetchVisitReasons(date) {
-    try {
-        const { data, error } = await supabase
-            .from('clinic_visits')
-            .select('reason')
-            .gte('time_in', `${date}T00:00:00`)
-            .lte('time_in', `${date}T23:59:59}`)
-            .not('reason', 'is', null);
-
-        if (error) {
-            console.error('Error fetching reasons:', error);
-            return {};
-        }
-
-        // Count reasons with text normalization
-        const reasonCounts = {};
-        
-        data.forEach(visit => {
-            // Normalize text: lowercase, trim, then capitalize first letter
-            const rawReason = (visit.reason || 'Not Specified').trim().toLowerCase();
-            const reason = rawReason.charAt(0).toUpperCase() + rawReason.slice(1);
-            reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
-        });
-
-        // Sort by count descending
-        const sortedReasons = Object.entries(reasonCounts)
-            .sort((a, b) => b[1] - a[1])
-            .reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
-
-        return sortedReasons;
-    } catch (err) {
-        console.error('Exception fetching reasons:', err);
-        return {};
-    }
-}
-
-/**
- * Calculate duration between time_in and time_out
- * Returns formatted string (e.g., "45m", "1h 30m")
- */
-function calculateDuration(timeIn, timeOut) {
-    if (!timeIn) return 'N/A';
-    
-    const start = new Date(timeIn);
-    
-    if (!timeOut) {
-        // Still in clinic - calculate from start to now
-        const now = new Date();
-        const diffMs = now - start;
-        const diffMins = Math.floor(diffMs / 60000);
-        
-        if (diffMins < 60) return `${diffMins}m`;
-        const hours = Math.floor(diffMins / 60);
-        const mins = diffMins % 60;
-        return `${hours}h ${mins}m`;
-    }
-    
-    const end = new Date(timeOut);
-    const diffMs = end - start;
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 0) return 'Error';
-    if (diffMins < 60) return `${diffMins}m`;
-    
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
-    return `${hours}h ${mins}m`;
-}
-
-/**
- * Format date for display
- */
-function formatDate(dateStr) {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/**
- * Format time for display
- */
-function formatTime(dateStr) {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
-}
-
-/**
- * Export data to CSV file
- */
-function exportToCSV(exportData, filename) {
-    if (!exportData || exportData.length === 0) {
-        showToast('No data to export', 'warning');
+    if (!dateFrom || !dateTo) {
+        showToast('Please select a valid date range.', 'warning');
         return;
     }
 
-    // Get headers from first object
-    const headers = Object.keys(exportData[0]);
-    
-    // Build CSV content
-    const csvContent = [
-        headers.join(','),
-        ...exportData.map(row => headers.map(header => {
-            const value = row[header];
-            // Escape commas and quotes
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-                return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value || '';
-        }).join(','))
-    ].join('\n');
-
-    // Create download link
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    visitData = await fetchVisitsByDateRange(dateFrom, dateTo);
+    renderReasonsChart(visitData);
+    renderDailyTrendChart(visitData);
+    renderDetailedLogs(visitData);
 }
 
-/**
- * Show toast notification
- */
-function showToast(message, type = 'info') {
-    // Create toast element if it doesn't exist
-    let toast = document.getElementById('toast-notification');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'toast-notification';
-        toast.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0';
-        document.body.appendChild(toast);
-    }
-
-    // Set type styles
-    const styles = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
-    };
-
-    toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0 ${styles[type] || styles.info}`;
-    toast.textContent = message;
-
-    // Show toast
-    requestAnimationFrame(() => {
-        toast.classList.remove('translate-y-full', 'opacity-0');
+function renderReasonsChart(visits) {
+    const ctx = document.getElementById('reasons-chart').getContext('2d');
+    const reasonCounts = {};
+    visits.forEach(v => {
+        const reason = (v.reason || 'Not Specified').trim();
+        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
     });
 
-    // Hide after 3 seconds
-    setTimeout(() => {
-        toast.classList.add('translate-y-full', 'opacity-0');
-    }, 3000);
+    const sortedReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    if (reasonsChart) reasonsChart.destroy();
+    reasonsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedReasons.map(r => r[0]),
+            datasets: [{
+                label: 'Number of Visits',
+                data: sortedReasons.map(r => r[1]),
+                backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                borderColor: 'rgba(239, 68, 68, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
+    });
 }
+
+function renderDailyTrendChart(visits) {
+    const ctx = document.getElementById('daily-chart').getContext('2d');
+    const dailyCounts = {};
+    visits.forEach(v => {
+        const date = new Date(v.time_in).toISOString().split('T')[0];
+        dailyCounts[date] = (dailyCounts[date] || 0) + 1;
+    });
+
+    const sortedDays = Object.entries(dailyCounts).sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+    if (dailyChart) dailyChart.destroy();
+    dailyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sortedDays.map(d => d[0]),
+            datasets: [{
+                label: 'Daily Visits',
+                data: sortedDays.map(d => d[1]),
+                borderColor: 'rgba(220, 38, 38, 1)',
+                backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+function renderDetailedLogs(visits) {
+    const tbody = document.getElementById('detailed-logs-body');
+    if (visits.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-500">No records for this period.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = visits.map(v => `
+        <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 text-sm text-gray-500">${formatDate(v.time_in)} ${formatTime(v.time_in)}</td>
+            <td class="px-6 py-4 font-medium text-gray-800">${v.students?.full_name || 'N/A'}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">${v.reason || 'N/A'}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">${v.action_taken || 'N/A'}</td>
+            <td class="px-6 py-4 text-sm font-mono text-red-600">${calculateDuration(v.time_in, v.time_out)}</td>
+        </tr>
+    `).join('');
+}
+
+function setToday() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date-from').value = today;
+    document.getElementById('date-to').value = today;
+    applyDateFilter();
+}
+
+function setThisWeek() {
+    const today = new Date();
+    const first = today.getDate() - today.getDay();
+    const firstDay = new Date(today.setDate(first)).toISOString().split('T')[0];
+    const lastDay = new Date(today.setDate(first + 6)).toISOString().split('T')[0];
+    document.getElementById('date-from').value = firstDay;
+    document.getElementById('date-to').value = lastDay;
+    applyDateFilter();
+}
+
+function setThisMonth() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+    document.getElementById('date-from').value = firstDay;
+    document.getElementById('date-to').value = lastDay;
+    applyDateFilter();
+}
+
+function exportData() {
+    if (visitData.length === 0) {
+        showToast('No data to export.', 'warning');
+        return;
+    }
+    const exportable = visitData.map(v => ({
+        Date: formatDate(v.time_in),
+        Time_In: formatTime(v.time_in),
+        Time_Out: v.time_out ? formatTime(v.time_out) : 'N/A',
+        Student_Name: v.students?.full_name,
+        Class: `${v.students?.classes?.grade_level} - ${v.students?.classes?.section_name}`,
+        Reason: v.reason,
+        Referred_By: v.teachers?.full_name || 'Walk-in',
+        Action_Taken: v.action_taken,
+        Nurse_Notes: v.nurse_notes,
+        Duration: calculateDuration(v.time_in, v.time_out)
+    }));
+    exportToCSV(exportable, `clinic_report_${document.getElementById('date-from').value}_to_${document.getElementById('date-to').value}`);
+}
+
+window.applyDateFilter = applyDateFilter;
+window.setToday = setToday;
+window.setThisWeek = setThisWeek;
+window.setThisMonth = setThisMonth;
+window.exportData = exportData;

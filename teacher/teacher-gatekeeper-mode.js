@@ -1,341 +1,219 @@
-// teacher-gatekeeper-mode.js
-// Gatekeeper Mode - QR Scanner for Teachers
+// teacher/teacher-gatekeeper-mode.js
 
-// 1. Global Variables
-let isProcessingScan = false;
-let html5QrcodeScanner = null;
-const scanCooldowns = new Map(); // Prevent duplicate scans within 5 seconds
+// Ensure teacher is logged in and has gatekeeper rights
+const currentUser = checkSession('teachers');
+if (!currentUser || !currentUser.is_gatekeeper) {
+    alert("Unauthorized Access. Redirecting to dashboard.");
+    window.location.href = 'teacher-dashboard.html';
+}
 
-// 2. Initialize on DOM Ready
-document.addEventListener('DOMContentLoaded', async () => {
-    // Update time display
-    updateTimeDisplay();
-    setInterval(updateTimeDisplay, 1000);
-    
-    // Initialize QR Scanner
-    await initializeScanner();
+// Global variables for scanner logic
+let html5QrcodeScanner;
+let lastScanResult = null;
+const SCAN_DEBOUNCE_MS = 3000; // 3 seconds between scans of the same ID
+
+// DOM Ready
+document.addEventListener('DOMContentLoaded', () => {
+    initializeDateTime();
+    initializeScanner();
 });
 
-// 3. Update Time Display
-function updateTimeDisplay() {
-    const now = new Date();
+// Initialize date and time display
+function initializeDateTime() {
     const timeEl = document.getElementById('current-time');
     const dateEl = document.getElementById('current-date');
     
-    if (timeEl) {
-        timeEl.innerText = now.toLocaleTimeString('en-PH', { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            second: '2-digit',
-            hour12: false 
-        });
+    function updateTime() {
+        const now = new Date();
+        if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US');
+        if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
     
-    if (dateEl) {
-        dateEl.innerText = now.toLocaleDateString('en-PH', { 
-            weekday: 'long',
-            month: 'short', 
-            day: 'numeric',
-            year: 'numeric'
-        });
-    }
+    updateTime();
+    setInterval(updateTime, 1000);
 }
 
-// 4. Initialize QR Scanner
-async function initializeScanner() {
-    try {
-        html5QrcodeScanner = new Html5Qrcode("qr-reader");
-        
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
-        };
-        
-        await html5QrcodeScanner.start(
-            { facingMode: "environment" },
-            config,
-            onScanSuccess,
-            onScanFailure
-        );
-        
-        console.log('QR Scanner started successfully');
-    } catch (err) {
-        console.error('Error starting QR scanner:', err);
-        showStatus('Camera error. Please allow camera access.', 'error');
-    }
-}
-
-// 5. Handle Successful Scan
-function onScanSuccess(decodedText, decodedResult) {
-    console.log('Scan result:', decodedText);
-    processTeacherGateScan(decodedText);
-}
-
-// 6. Handle Scan Failure
-function onScanFailure(error) {
-    // Silently handle scan failures (normal when no QR in frame)
-}
-
-// 7. Process Teacher Gate Scan - Core Logic
-async function processTeacherGateScan(qrCodeData) {
-    if (isProcessingScan) return;
-    
-    const now = Date.now();
-    if (scanCooldowns.has(qrCodeData) && (now - scanCooldowns.get(qrCodeData) < 5000)) {
-        console.log('Duplicate scan ignored');
+// Initialize the QR code scanner
+function initializeScanner() {
+    if (typeof Html5QrcodeScanner === "undefined") {
+        console.error("html5-qrcode library not loaded.");
         return;
     }
 
-    isProcessingScan = true;
-    scanCooldowns.set(qrCodeData, now);
+    function onScanSuccess(decodedText, decodedResult) {
+        if (lastScanResult === decodedText) {
+            return;
+        }
+        lastScanResult = decodedText;
+        setTimeout(() => { lastScanResult = null; }, SCAN_DEBOUNCE_MS);
 
+        processScan(decodedText);
+    }
+
+    function onScanFailure(error) {
+        // This can be noisy, so it's commented out.
+        // console.warn(`QR scan error: ${error}`);
+    }
+
+    html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-reader", 
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        false
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+}
+
+// Main logic to process a scan
+async function processScan(studentIdText) {
+    const statusIndicator = document.getElementById('status-indicator');
+    statusIndicator.innerHTML = `<p class="text-sm text-yellow-300">Processing: ${studentIdText}</p>`;
+    
     try {
-        const today = new Date().toISOString().split('T')[0];
-        const currentTime = new Date().toISOString();
-
-        // 1. Find the Student by QR code
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name')
-            .eq('qr_code_data', qrCodeData)
+            .select('id, full_name, classes(grade_level, section_name)')
+            .eq('student_id_text', studentIdText)
             .single();
 
-        if (studentError || !student) {
-            throw new Error("Invalid Student ID");
-        }
+        if (studentError || !student) throw new Error('Student ID not found.');
 
-        // 2. Check today's Log for this student
-        const { data: existingLog } = await supabase
+        const today = new Date().toISOString().split('T')[0];
+        const { data: lastLog, error: logError } = await supabase
             .from('attendance_logs')
             .select('*')
             .eq('student_id', student.id)
             .eq('log_date', today)
+            .is('time_out', null)
             .maybeSingle();
 
-        let actionType = '';
-        let finalStatus = 'On Time';
-        const teacherRemark = `Scanned by Teacher: ${currentUser.full_name}`; 
+        if (logError) throw logError;
 
-        if (!existingLog) {
-            // TIME IN - No log exists for today
-            actionType = 'ENTRY';
+        const now = new Date();
+        const scanTime = now.toTimeString().split(' ')[0].substring(0, 5);
+        let action, status, logData;
+
+        if (lastLog) {
+            action = 'EXIT';
+            const dismissalTime = getDismissalTime(student.classes.grade_level);
+            status = isEarlyExit(scanTime, dismissalTime) ? 'Early Exit' : 'Normal Exit';
             
-            // Check if late (after 8 AM)
-            const currentHour = new Date().getHours();
-            if (currentHour > 8) {
-                finalStatus = 'Late';
-            }
+            logData = await supabase
+                .from('attendance_logs')
+                .update({ time_out: now.toISOString(), status: status })
+                .eq('id', lastLog.id)
+                .select()
+                .single();
 
-            // Create new attendance log
-            await supabase.from('attendance_logs').insert({
-                student_id: student.id,
-                log_date: today,
-                time_in: currentTime,
-                status: finalStatus,
-                remarks: teacherRemark
-            });
+        } else {
+            action = 'ENTRY';
+            const lateThreshold = await getLateThreshold(student.classes.grade_level);
+            status = isLate(scanTime, student.classes.grade_level, lateThreshold) ? 'Late' : 'On Time';
 
-        } else if (existingLog && !existingLog.time_out) {
-            // TIME OUT - Has time_in but no time_out yet
-            actionType = 'EXIT';
-            
-            // Update with time_out
-            const existingRemarks = existingLog.remarks || '';
-            await supabase.from('attendance_logs')
-                .update({ 
-                    time_out: currentTime,
-                    remarks: existingRemarks ? `${existingRemarks} | Out: ${teacherRemark}` : `Out: ${teacherRemark}`
+            logData = await supabase
+                .from('attendance_logs')
+                .insert({
+                    student_id: student.id,
+                    log_date: today,
+                    time_in: now.toISOString(),
+                    status: status
                 })
-                .eq('id', existingLog.id);
-
-        } else {
-            throw new Error("Student already scanned out.");
+                .select()
+                .single();
         }
+        
+        if (logData.error) throw logData.error;
 
-        // Trigger success feedback
-        triggerGatekeeperFeedback(true, student.full_name, actionType, finalStatus);
+        updateLastScanUI(student, action, status, scanTime);
+        playAudioFeedback(status);
+        showToast(`${student.full_name} scanned ${action.toLowerCase()} successfully.`, 'success');
 
-    } catch (err) {
-        console.error('Gatekeeper scan error:', err);
-        triggerGatekeeperFeedback(false, err.message, 'ERROR', '');
+    } catch (error) {
+        console.error('Scan processing error:', error);
+        updateLastScanUI(null, 'ERROR', error.message, new Date().toTimeString().split(' ')[0].substring(0, 5));
+        playAudioFeedback('error');
+        showToast(error.message, 'error');
     } finally {
-        isProcessingScan = false;
-        
-        // Clear cooldown after 5 seconds
-        setTimeout(() => {
-            scanCooldowns.delete(qrCodeData);
-        }, 5000);
+        statusIndicator.innerHTML = `<p class="text-sm text-slate-300">Ready to scan next student ID</p>`;
     }
 }
 
-// 8. Trigger Visual and Audio Feedback
-function triggerGatekeeperFeedback(isSuccess, studentName, actionType, status) {
-    const statusIndicator = document.getElementById('status-indicator');
-    const lastScanDiv = document.getElementById('last-scan');
-    const scanStudentName = document.getElementById('scan-student-name');
-    const scanAction = document.getElementById('scan-action');
-    const scanStatusEl = document.getElementById('scan-status');
-    const scanTime = document.getElementById('scan-time');
+// UI Update function
+function updateLastScanUI(student, action, status, time) {
+    const lastScanEl = document.getElementById('last-scan');
+    const studentNameEl = document.getElementById('scan-student-name');
+    const statusEl = document.getElementById('scan-status');
+    const timeEl = document.getElementById('scan-time');
+    const actionEl = document.getElementById('scan-action');
+
+    lastScanEl.classList.remove('hidden');
     
-    // Play audio
-    if (isSuccess) {
-        if (status === 'Late') {
-            playAudio('audio-late');
-        } else {
-            playAudio('audio-success');
-        }
+    if (student) {
+        studentNameEl.textContent = student.full_name;
+        statusEl.textContent = status;
+        timeEl.textContent = `Time: ${time}`;
+        actionEl.textContent = action;
+        
+        let actionColor = 'bg-green-600';
+        if (action === 'EXIT') actionColor = 'bg-blue-600';
+        if (action === 'ERROR') actionColor = 'bg-red-600';
+        actionEl.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${actionColor}`;
+        
+        let statusColor = 'text-green-400';
+        if (status === 'Late' || status === 'Early Exit') statusColor = 'text-yellow-400';
+        if (action === 'ERROR') statusColor = 'text-red-400';
+        statusEl.className = `text-lg font-medium ${statusColor}`;
+
     } else {
-        playAudio('audio-error');
-    }
-    
-    // Show last scan info
-    lastScanDiv.classList.remove('hidden');
-    scanStudentName.innerText = studentName;
-    scanAction.innerText = actionType;
-    scanTime.innerText = `Time: ${new Date().toLocaleTimeString('en-PH')}`;
-    
-    if (isSuccess) {
-        // Success/Entry/Exit styling
-        if (actionType === 'ENTRY') {
-            if (status === 'Late') {
-                scanStatusEl.innerText = '⚠️ Late Entry';
-                scanStatusEl.className = 'text-lg font-medium text-yellow-400';
-                statusIndicator.className = 'w-full text-center py-3 px-4 rounded-xl bg-yellow-600/30 border border-yellow-500 flash-warning';
-                statusIndicator.innerHTML = '<p class="text-sm text-yellow-300">⚠️ Late Entry Recorded</p>';
-            } else {
-                scanStatusEl.innerText = '✅ On Time Entry';
-                scanStatusEl.className = 'text-lg font-medium text-green-400';
-                statusIndicator.className = 'w-full text-center py-3 px-4 rounded-xl bg-green-600/30 border border-green-500 flash-success';
-                statusIndicator.innerHTML = '<p class="text-sm text-green-300">✅ Entry Recorded</p>';
-            }
-        } else if (actionType === 'EXIT') {
-            scanStatusEl.innerText = '✅ Exit Recorded';
-            scanStatusEl.className = 'text-lg font-medium text-blue-400';
-            statusIndicator.className = 'w-full text-center py-3 px-4 rounded-xl bg-blue-600/30 border border-blue-500 flash-success';
-            statusIndicator.innerHTML = '<p class="text-sm text-blue-300">✅ Exit Recorded</p>';
-        }
-        
-        showToastSuccess(`${studentName} - ${actionType === 'ENTRY' ? (status === 'Late' ? 'Late Entry' : 'Entry') : 'Exit'} Recorded`);
-        
-    } else {
-        // Error styling
-        scanStatusEl.innerText = `❌ ${studentName}`;
-        scanStatusEl.className = 'text-lg font-medium text-red-400';
-        statusIndicator.className = 'w-full text-center py-3 px-4 rounded-xl bg-red-600/30 border border-red-500 flash-error';
-        statusIndicator.innerHTML = `<p class="text-sm text-red-300">❌ ${studentName}</p>`;
-        
-        showToastError(studentName);
-    }
-    
-    // Reset status after delay
-    setTimeout(() => {
-        statusIndicator.className = 'w-full text-center py-3 px-4 rounded-xl bg-slate-800/80 border border-slate-700';
-        statusIndicator.innerHTML = '<p class="text-sm text-slate-300">Ready to scan student ID</p>';
-    }, 3000);
-}
-
-// 9. Play Audio Feedback
-function playAudio(audioId) {
-    try {
-        const audio = document.getElementById(audioId);
-        if (audio) {
-            audio.currentTime = 0;
-            audio.play().catch(e => console.log('Audio play failed:', e));
-        }
-    } catch (e) {
-        console.log('Audio error:', e);
+        studentNameEl.textContent = 'Scan Error';
+        statusEl.textContent = status; // The error message
+        timeEl.textContent = `Time: ${time}`;
+        actionEl.textContent = 'ERROR';
+        actionEl.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase bg-red-600';
+        statusEl.className = 'text-lg font-medium text-red-400';
     }
 }
 
-// 10. Show Status Message
-function showStatus(message, type) {
-    const statusIndicator = document.getElementById('status-indicator');
-    if (!statusIndicator) return;
-    
-    let className = 'w-full text-center py-3 px-4 rounded-xl ';
-    let html = '';
-    
-    if (type === 'error') {
-        className += 'bg-red-600/30 border border-red-500';
-        html = `<p class="text-sm text-red-300">${message}</p>`;
-    } else {
-        className += 'bg-slate-800/80 border border-slate-700';
-        html = `<p class="text-sm text-slate-300">${message}</p>`;
+// Audio feedback
+function playAudioFeedback(status) {
+    let audioId = 'audio-success';
+    if (status === 'Late' || status === 'Early Exit') {
+        audioId = 'audio-late';
+    } else if (status === 'error') {
+        audioId = 'audio-error';
     }
-    
-    statusIndicator.className = className;
-    statusIndicator.innerHTML = html;
+    document.getElementById(audioId)?.play().catch(e => console.warn("Audio play failed:", e));
 }
 
-// 11. Show Success Toast
-function showToastSuccess(message) {
-    const toast = document.getElementById('toast-success');
-    const toastMessage = document.getElementById('toast-success-message');
+// Toast notifications
+function showToast(message, type = 'success') {
+    const toastId = type === 'success' ? 'toast-success' : 'toast-error';
+    const toast = document.getElementById(toastId);
     
-    if (toast && toastMessage) {
-        toastMessage.innerText = message;
+    if (toast) {
+        toast.innerHTML = message;
         toast.classList.remove('translate-y-24', 'opacity-0');
-        
         setTimeout(() => {
             toast.classList.add('translate-y-24', 'opacity-0');
         }, 3000);
     }
 }
 
-// 12. Show Error Toast
-function showToastError(message) {
-    const toast = document.getElementById('toast-error');
-    const toastMessage = document.getElementById('toast-error-message');
-    
-    if (toast && toastMessage) {
-        toastMessage.innerText = message;
-        toast.classList.remove('translate-y-24', 'opacity-0');
-        
-        setTimeout(() => {
-            toast.classList.add('translate-y-24', 'opacity-0');
-        }, 3000);
-    }
-}
-
-// 13. Manual Entry Functions
+// Manual Entry Modal
 function showManualEntry() {
-    const modal = document.getElementById('manual-entry-modal');
-    const input = document.getElementById('manual-student-id');
-    
-    if (modal) {
-        modal.classList.remove('hidden');
-    }
-    
-    if (input) {
-        input.value = '';
-        setTimeout(() => input.focus(), 100);
-    }
+    document.getElementById('manual-entry-modal').classList.remove('hidden');
+    document.getElementById('manual-entry-modal').classList.add('flex');
+    document.getElementById('manual-student-id').focus();
 }
 
 function closeManualEntry() {
-    const modal = document.getElementById('manual-entry-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
+    document.getElementById('manual-entry-modal').classList.add('hidden');
+    document.getElementById('manual-entry-modal').classList.remove('flex');
 }
 
-async function submitManualEntry() {
-    const input = document.getElementById('manual-student-id');
-    const studentId = input ? input.value.trim() : '';
-    
-    if (!studentId) {
-        alert('Please enter a Student ID');
-        return;
+function submitManualEntry() {
+    const studentId = document.getElementById('manual-student-id').value.trim();
+    if (studentId) {
+        processScan(studentId);
     }
-    
     closeManualEntry();
-    await processTeacherGateScan(studentId);
 }
-
-// 14. Cleanup on Page Unload
-window.addEventListener('beforeunload', () => {
-    if (html5QrcodeScanner) {
-        html5QrcodeScanner.stop().catch(err => console.log('Error stopping scanner:', err));
-    }
-});

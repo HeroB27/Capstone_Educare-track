@@ -72,42 +72,31 @@ async function checkIsHoliday(date) {
 
 // 5. Get Late Threshold for Grade Level
 // Returns the threshold time string (HH:MM) for a given grade level
+let thresholdSettings = null; // Cache settings to reduce DB calls
+
 async function getLateThreshold(gradeLevel) {
     try {
-        let settingKey = '';
-        
-        // Map grade level to setting key
-        if (gradeLevel.includes('Kinder') || gradeLevel === 'K') {
-            settingKey = 'threshold_kinder';
-        } else if (['1', '2', '3'].some(g => gradeLevel.includes(g))) {
-            settingKey = 'threshold_g1_g3';
-        } else if (['4', '5', '6'].some(g => gradeLevel.includes(g))) {
-            settingKey = 'threshold_g4_g6';
-        } else if (['7', '8'].some(g => gradeLevel.includes(g))) {
-            settingKey = 'threshold_g7_g8';
-        } else if (['9', '10'].some(g => gradeLevel.includes(g))) {
-            settingKey = 'threshold_g9_g10';
-        } else if (['11', '12'].some(g => gradeLevel.includes(g))) {
-            settingKey = 'threshold_shs_am'; // SHS uses AM threshold for morning
-        } else {
-            settingKey = 'threshold_g1_g3'; // Default
+        // Fetch and cache settings if not already loaded
+        if (!thresholdSettings) {
+            const { data, error } = await supabase.from('settings').select('setting_key, setting_value');
+            if (error) throw error;
+            thresholdSettings = data.reduce((acc, setting) => {
+                acc[setting.setting_key] = setting.setting_value;
+                return acc;
+            }, {});
         }
-        
-        const { data, error } = await supabase
-            .from('settings')
-            .select('setting_value')
-            .eq('setting_key', settingKey)
-            .single();
-        
-        if (error) {
-            // Return default values if not found
-            return gradeLevel.includes('11') || gradeLevel.includes('12') ? '08:30' : '08:15';
-        }
-        
-        return data.setting_value || '08:15';
+
+        // Determine which threshold to use based on grade level
+        if (gradeLevel.includes('Kinder')) return thresholdSettings['threshold_kinder'] || '11:30';
+        if (['1', '2', '3'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g1_g3'] || '08:00';
+        if (['4', '5', '6'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g4_g6'] || '08:00';
+        if (['7', '8', '9', '10'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g7_g10'] || '08:00';
+        if (['11', '12'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_shs'] || '07:30';
+
+        return '08:00'; // Default fallback
     } catch (err) {
         console.error('Error getting late threshold:', err);
-        return '08:15'; // Default fallback
+        return '08:00'; // Default fallback
     }
 }
 

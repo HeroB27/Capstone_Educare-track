@@ -41,6 +41,7 @@ async function loadAttendanceCalendar() {
         
         // Render calendar
         renderCalendar();
+        renderTrendChart();
         
         // Calculate and show stats
         calculateStats();
@@ -247,6 +248,80 @@ function getDayClass(attendance, holiday, isWeekend, dateStr) {
     } else {
         return 'bg-green-200 text-green-800';
     }
+}
+
+/**
+ * Renders the attendance trend chart for the current month.
+ */
+function renderTrendChart() {
+    const ctx = document.getElementById('attendance-trend-chart')?.getContext('2d');
+    if (!ctx) return;
+
+    const dailyCounts = {};
+    Object.values(attendanceData).forEach(log => {
+        if (!dailyCounts[log.log_date]) {
+            dailyCounts[log.log_date] = { present: 0, late: 0, absent: 0 };
+        }
+        if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Excused') {
+            dailyCounts[log.log_date].present++;
+        } else if (log.status === 'Late') {
+            dailyCounts[log.log_date].late++;
+        } else if (log.status === 'Absent') {
+            dailyCounts[log.log_date].absent++;
+        }
+    });
+
+    const labels = Object.keys(dailyCounts).sort();
+
+    if (window.attendanceTrendChart) window.attendanceTrendChart.destroy();
+    window.attendanceTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Present', data: labels.map(l => dailyCounts[l]?.present || 0), borderColor: '#22c55e', tension: 0.1, fill: false },
+                { label: 'Late', data: labels.map(l => dailyCounts[l]?.late || 0), borderColor: '#f59e0b', tension: 0.1, fill: false },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+}
+
+/**
+ * Renders the attendance trend chart for the current month.
+ */
+function renderTrendChart() {
+    const ctx = document.getElementById('attendance-trend-chart')?.getContext('2d');
+    if (!ctx) return;
+
+    const dailyCounts = {};
+    Object.values(attendanceData).forEach(log => {
+        if (!dailyCounts[log.log_date]) {
+            dailyCounts[log.log_date] = { present: 0, late: 0, absent: 0 };
+        }
+        if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Excused') {
+            dailyCounts[log.log_date].present++;
+        } else if (log.status === 'Late') {
+            dailyCounts[log.log_date].late++;
+        } else if (log.status === 'Absent') {
+            dailyCounts[log.log_date].absent++;
+        }
+    });
+
+    const labels = Object.keys(dailyCounts).sort();
+
+    if (window.attendanceTrendChart) window.attendanceTrendChart.destroy();
+    window.attendanceTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Present', data: labels.map(l => dailyCounts[l]?.present || 0), borderColor: '#22c55e', tension: 0.1, fill: false },
+                { label: 'Late', data: labels.map(l => dailyCounts[l]?.late || 0), borderColor: '#f59e0b', tension: 0.1, fill: false },
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
 }
 
 /**

@@ -37,18 +37,21 @@
 <body class="bg-gradient-to-br from-green-50 via-white to-green-50 min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-40">
+    <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-6 sticky top-0 z-40 shrink-0">
         <div class="flex items-center gap-3">
             <button onclick="navigateTo('children')" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
+                <div class="h-12 w-12 rounded-2xl bg-green-600 flex items-center justify-center text-white font-bold shadow-lg shadow-green-200" id="child-avatar-header">
+                    ?
+                </div>
             </button>
-            <h1 class="font-bold text-xl text-gray-800">Dashboard</h1>
+            <div>
+                <h1 id="current-child-name" class="font-black text-xl text-gray-900 tracking-tight">Dashboard</h1>
+                <div id="live-status-indicator" class="text-xs font-bold uppercase tracking-widest">Loading...</div>
+            </div>
         </div>
-        <button onclick="logout()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors">
-            Logout
-        </button>
+        <a href="parent-settings.html" class="p-3 bg-white border border-gray-100 rounded-2xl text-gray-500 hover:text-green-600 hover:border-green-200 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </a>
     </header>
 
     <main class="flex-1 overflow-y-auto">
@@ -56,7 +59,7 @@
         
             <!-- Welcome Section -->
             <div class="mb-6">
-                <h2 id="parent-name" class="text-xl font-bold text-gray-800 mb-4">Welcome</h2>
+                <h2 id="parent-name" class="text-2xl font-bold text-gray-800 mb-4">Welcome</h2>
                 
                 <!-- Instagram Stories Style Child Switcher -->
                 <div id="child-switcher" class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -73,7 +76,7 @@
             <div id="dashboard-content" class="hidden space-y-4">
                 
                 <!-- Live Status Card - Centered Pulsing Badge -->
-                <div class="bg-white rounded-3xl shadow-lg p-6 relative overflow-hidden">
+                <div class="bg-white rounded-3xl shadow-lg p-8 relative overflow-hidden border border-gray-100">
                     <!-- Decorative gradient -->
                     <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-100 to-transparent rounded-full -translate-y-1/2 translate-x-1/2"></div>
                     
@@ -83,7 +86,7 @@
                         <p id="child-class" class="text-sm text-gray-500 mb-6">--</p>
                         
                         <!-- Pulsing Status Badge -->
-                        <div class="flex justify-center mb-6">
+                        <div class="flex justify-center mb-8">
                             <div id="status-badge-container" class="relative">
                                 <!-- Pulse effect -->
                                 <div class="absolute inset-0 bg-green-500 rounded-full pulse-ring" style="color: #22c55e;"></div>
@@ -97,7 +100,7 @@
                         </div>
                         
                         <!-- Time Info -->
-                        <div id="time-info" class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+                        <div id="time-info" class="grid grid-cols-2 gap-6 pt-6 border-t border-gray-100">
                             <div>
                                 <p class="text-xs text-gray-500 uppercase tracking-wider">Time In</p>
                                 <p id="time-in-display" class="text-lg font-bold text-gray-800">--:--</p>
@@ -110,8 +113,22 @@
                     </div>
                 </div>
 
+                <!-- Attendance Summary Card -->
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                    <h4 class="font-bold text-gray-700 mb-3">This Month's Attendance</h4>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-4xl font-bold text-green-600" id="summary-percentage">--%</p>
+                            <p class="text-xs text-gray-500">Attendance Rate</p>
+                        </div>
+                        <div id="summary-chart-container" class="w-20 h-20">
+                            <canvas id="summary-pie-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Clinic Alert (shown when child is in clinic) -->
-                <div id="clinic-alert" class="hidden bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-2xl p-4">
+                <div id="clinic-alert" class="hidden bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-3xl p-6">
                     <div class="flex items-start gap-4">
                         <div class="relative flex-shrink-0">
                             <span class="text-3xl">🏥</span>
@@ -126,8 +143,8 @@
                 </div>
 
                 <!-- Quick Actions -->
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="navigateTo('excuse')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="navigateTo('excuse')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -135,7 +152,7 @@
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Submit Excuse</span>
                     </button>
-                    <button onclick="navigateTo('attendance')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                    <button onclick="navigateTo('attendance')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -143,16 +160,16 @@
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Attendance</span>
                     </button>
-                    <button onclick="navigateTo('notifications')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                    <button onclick="navigateTo('notifications')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center relative">
                             <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                             </svg>
-                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">0</span>
+                            <span id="notif-badge-quick-action" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">0</span>
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Alerts</span>
                     </button>
-                    <button onclick="navigateTo('announcements')" class="bg-white rounded-2xl shadow-md p-4 flex flex-col items-center gap-2 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                    <button onclick="navigateTo('announcements')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
@@ -160,23 +177,31 @@
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Updates</span>
                     </button>
+                    <button onclick="navigateTo('schedule')" class="col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                        <div class="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
+                            <svg class="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM12 12h.01"/>
+                            </svg>
+                        </div>
+                        <span class="text-lg font-semibold text-gray-700">View Class Schedule</span>
+                    </button>
                 </div>
 
                 <!-- Today's Activity Timeline -->
-                <div>
+                <div class="mt-6">
                     <h3 class="font-bold text-gray-700 mb-3 text-lg">Today's Activity</h3>
-                    <div id="activity-timeline" class="bg-white rounded-2xl shadow-md p-4 space-y-4">
+                    <div id="activity-timeline" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 space-y-4">
                         <!-- Activity items populated by JS -->
                     </div>
                 </div>
 
                 <!-- Recent Notifications -->
-                <div>
+                <div class="mt-6">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="font-bold text-gray-700 text-lg">Recent Alerts</h3>
                         <button onclick="navigateTo('notifications')" class="text-sm text-green-600 font-medium hover:text-green-700">View All →</button>
                     </div>
-                    <div id="notifications-preview" class="bg-white rounded-2xl shadow-md p-4 space-y-3">
+                    <div id="notifications-preview" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 space-y-3">
                         <!-- Notifications populated by JS -->
                     </div>
                 </div>
@@ -186,7 +211,7 @@
     </main>
 
     <!-- Bottom Navigation with Drop Shadow -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-3 flex justify-between items-center shadow-[0_-8px_30px_rgba(0,0,0,0.12)] z-50">
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-6 py-3 flex justify-around items-center shadow-[0_-8px_30px_rgba(0,0,0,0.08)] z-50">
         <button onclick="navigateTo('dashboard')" class="flex flex-col items-center gap-1 p-3 text-green-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
@@ -237,7 +262,8 @@
             await Promise.all([
                 loadClinicStatus(),
                 loadTodayActivities(),
-                loadNotificationsPreview()
+                loadNotificationsPreview(),
+                loadAttendanceSummary()
             ]);
 
             updateUI();
@@ -317,6 +343,70 @@
                 console.error('Error in loadNotificationsPreview:', err);
                 window.notificationsPreview = [];
             }
+        }
+
+        async function loadAttendanceSummary() {
+            const percentageEl = document.getElementById('summary-percentage');
+            const chartContainer = document.getElementById('summary-chart-container');
+            if (!percentageEl || !chartContainer) return;
+
+            try {
+                const now = new Date();
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+                const { data: logs, error } = await supabase
+                    .from('attendance_logs')
+                    .select('status')
+                    .eq('student_id', currentChild.id)
+                    .gte('log_date', monthStart)
+                    .lte('log_date', monthEnd);
+
+                if (error) throw error;
+
+                const schoolDays = getSchoolDaysInMonth(now.getFullYear(), now.getMonth());
+                const present = logs.filter(l => l.status === 'On Time' || l.status === 'Present' || l.status === 'Excused').length;
+                const late = logs.filter(l => l.status === 'Late').length;
+                const absent = schoolDays - (present + late);
+
+                const rate = schoolDays > 0 ? Math.round((present / schoolDays) * 100) : 100;
+                percentageEl.innerText = `${rate}%`;
+
+                // Render pie chart
+                const ctx = document.getElementById('summary-pie-chart').getContext('2d');
+                if (window.summaryChart) window.summaryChart.destroy();
+                window.summaryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Present', 'Late', 'Absent'],
+                        datasets: [{
+                            data: [present, late, Math.max(0, absent)],
+                            backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        cutout: '70%'
+                    }
+                });
+            } catch (err) { console.error("Error loading attendance summary:", err); }
+        }
+
+        function getSchoolDaysInMonth(year, month) {
+            let days = 0;
+            const date = new Date(year, month + 1, 0);
+            const today = new Date();
+            for (let i = 1; i <= date.getDate(); i++) {
+                const currentDay = new Date(year, month, i);
+                if (currentDay > today) break;
+                const dayOfWeek = currentDay.getDay();
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    days++;
+                }
+            }
+            return days;
         }
 
         function updateUI() {

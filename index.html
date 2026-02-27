@@ -79,6 +79,11 @@
 
                 if (!user) throw new Error("Invalid credentials");
 
+                // CRITICAL FIX: Check if the user account is active
+                if (user.is_active === false) {
+                    throw new Error("Your account has been deactivated. Please contact an administrator.");
+                }
+
                 // Save Session
                 const userSession = { ...user, role: role };
                 const storage = rememberMe ? localStorage : sessionStorage;

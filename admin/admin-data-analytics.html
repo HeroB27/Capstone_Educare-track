@@ -4,162 +4,120 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Analytics - Educare Admin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="admin-core.js" defer></script>
     <script src="admin-data-analytics.js" defer></script>
+    
     <style>
         body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .chart-container { position: relative; width: 100%; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
 
     <aside class="w-64 m-4 rounded-[32px] bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
-            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="bar-chart-big" class="w-6 h-6 text-violet-300"></i></div>
             <span class="text-2xl font-black tracking-tighter uppercase">EDUCARE</span>
         </div>
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
-            </a>
-            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="users" class="w-5 h-5"></i> User Management
-            </a>
-            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
-            </a>
-            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
-            </a>
-            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
-            </a>
-            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
-            </a>
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard</a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="users" class="w-5 h-5"></i> User Management</a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="book-open" class="w-5 h-5"></i> Class Management</a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all"><i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics</a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="megaphone" class="w-5 h-5"></i> Announcements</a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="settings" class="w-5 h-5"></i> Settings Hub</a>
         </nav>
-        <div class="p-6 border-t border-white/10">
-            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
-                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
-            </button>
-        </div>
     </aside>
 
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight">System Intelligence</h2>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Intelligence Hub</h2>
+            
             <div class="flex items-center gap-6">
-                <div class="text-right">
-                    <p id="admin-name" class="font-black text-gray-900 text-sm leading-none mb-1">Admin</p>
-                    <p class="text-[10px] text-violet-600 font-black tracking-widest uppercase">Data Analyst</p>
+                <div class="flex items-center bg-gray-50 rounded-2xl px-4 py-2 border-2 border-gray-100 shadow-inner">
+                    <input type="date" id="dateStart" class="bg-transparent text-xs font-bold text-gray-700 outline-none">
+                    <span class="mx-3 text-[10px] font-black text-gray-300 uppercase tracking-widest">TO</span>
+                    <input type="date" id="dateEnd" class="bg-transparent text-xs font-bold text-gray-700 outline-none">
+                    <button onclick="loadAnalyticsData()" class="ml-4 p-2 bg-violet-600 text-white rounded-xl shadow-md hover:scale-105 transition-transform">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
                 </div>
-                <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-violet-200">A</div>
+
+                <div class="h-10 w-px bg-gray-200"></div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p id="admin-name" class="font-black text-gray-900 text-sm leading-none mb-1">Admin</p>
+                        <p class="text-[10px] text-violet-600 font-black tracking-widest uppercase">Global Control</p>
+                    </div>
+                    <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">A</div>
+                </div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8">
             
-            <div class="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm mb-10 flex flex-wrap justify-between items-center gap-6">
-                <div class="flex gap-2 bg-gray-50 p-1.5 rounded-2xl">
-                    <button onclick="changeDateRange('week')" id="btn-week" class="px-6 py-2 bg-violet-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md transition-all">Weekly</button>
-                    <button onclick="changeDateRange('month')" id="btn-month" class="px-6 py-2 text-gray-400 font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-gray-700 transition-all">Monthly</button>
+            <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="font-black text-gray-900 text-xl tracking-tight">Attendance Trend</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Present vs Late vs Absent over time</p>
+                    </div>
                 </div>
+                <div class="chart-container h-[300px]">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center bg-gray-50 rounded-2xl px-4 py-2 gap-3 border border-gray-100">
-                        <input type="date" id="dateStart" class="bg-transparent border-none outline-none text-xs font-bold text-gray-600">
-                        <span class="text-gray-300 font-black text-[10px]">TO</span>
-                        <input type="date" id="dateEnd" class="bg-transparent border-none outline-none text-xs font-bold text-gray-600">
+                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col">
+                    <h3 class="font-black text-gray-900 text-lg tracking-tight mb-1">Status Distribution</h3>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">Total Percentage Breakdown</p>
+                    <div class="chart-container flex-1 min-h-[250px] flex items-center justify-center">
+                        <canvas id="pieChart"></canvas>
                     </div>
-                    <button onclick="exportData()" class="flex items-center gap-2 px-8 py-3 bg-white border-2 border-violet-100 text-violet-600 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-violet-50 transition-all">
-                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
-                    </button>
                 </div>
+
+                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col">
+                    <h3 class="font-black text-gray-900 text-lg tracking-tight mb-1">Common Reasons</h3>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">Top Excuses & Clinic Visits</p>
+                    <div class="chart-container flex-1 min-h-[250px]">
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col h-[350px]">
+                    <h3 class="font-black text-red-600 text-lg tracking-tight mb-1">Critical Watchlist</h3>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">Students near 20-absence limit</p>
+                    
+                    <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3" id="criticalListContainer">
+                        <div class="flex justify-center items-center h-full text-gray-400 text-sm font-bold italic">
+                            Awaiting data sync...
+                        </div>
+                    </div>
+                </div>
+
             </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-10">
-                <div class="lg:col-span-2 bg-white rounded-[32px] border border-gray-100 p-10 shadow-sm h-[480px] flex flex-col">
-                    <div class="flex justify-between items-center mb-8 shrink-0">
-                        <div>
-                            <h3 class="font-black text-gray-800 text-xl tracking-tight">Attendance Volume</h3>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Status Distribution Over Time</p>
-                        </div>
-                        <div class="flex gap-4">
-                            <div class="flex items-center gap-2">
-                                <span class="w-3 h-3 bg-violet-500 rounded-full"></span>
-                                <span class="text-[10px] font-black text-gray-400 uppercase">Present</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="w-3 h-3 bg-amber-400 rounded-full"></span>
-                                <span class="text-[10px] font-black text-gray-400 uppercase">Late</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex-1 min-h-0">
-                        <canvas id="attendanceChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="space-y-10">
-                    <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[480px]">
-                        <div class="px-8 py-6 border-b border-gray-50 bg-red-50/30 flex justify-between items-center">
-                            <div>
-                                <h3 class="font-black text-red-600 text-lg uppercase tracking-tighter leading-none">Critical Absences</h3>
-                                <p class="text-[9px] text-red-400 font-bold uppercase tracking-widest mt-1">Reached 10+ Absences</p>
-                            </div>
-                            <i data-lucide="alert-octagon" class="text-red-500 w-5 h-5"></i>
-                        </div>
-                        <div id="criticalAbsencesList" class="p-4 space-y-3 overflow-y-auto custom-scrollbar flex-1">
-                            <div class="py-20 text-center">
-                                <p class="text-gray-300 text-xs italic">Calculating risk levels...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                <div class="lg:col-span-2 bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[400px]">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-amber-50/30 flex justify-between items-center">
-                        <div>
-                            <h3 class="font-black text-amber-600 text-lg uppercase tracking-tighter leading-none">Frequent Lates</h3>
-                            <p class="text-[9px] text-amber-400 font-bold uppercase tracking-widest mt-1">High Volume Delays</p>
-                        </div>
-                        <i data-lucide="clock" class="text-amber-500 w-5 h-5"></i>
-                    </div>
-                    <div id="frequentLatesList" class="p-4 space-y-3 overflow-y-auto custom-scrollbar flex-1">
-                        </div>
-                </div>
-
-                <div class="bg-violet-600 rounded-[32px] p-8 text-white flex flex-col justify-between shadow-lg shadow-violet-200">
-                    <p class="text-[10px] font-black uppercase tracking-widest opacity-60">Avg Daily Present</p>
-                    <div>
-                        <h4 id="stat-avg-present" class="text-5xl font-black tracking-tighter leading-none">0</h4>
-                        <p class="text-[10px] font-bold mt-4 opacity-80 uppercase tracking-widest">Across Student Body</p>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm flex flex-col justify-between">
-                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Absences</p>
-                    <div>
-                        <h4 id="stat-total-absent" class="text-5xl font-black text-gray-800 tracking-tighter leading-none">0</h4>
-                        <div class="flex items-center gap-1 text-red-500 font-black text-[10px] uppercase tracking-widest mt-4">
-                            <i data-lucide="trending-up" class="w-3 h-3"></i>
-                            Action Required
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
 </body>
 </html>

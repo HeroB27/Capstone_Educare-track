@@ -28,7 +28,8 @@ async function loadDashboardStats() {
     const today = new Date().toISOString().split('T')[0];
     try {
         // Parallel execution for maximum speed
-        const [students, present, late, absent, clinic] = await Promise.all([
+        const [teachers, students, present, late, absent, clinic] = await Promise.all([
+            supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Enrolled'),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Present'),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Late'),
@@ -36,6 +37,7 @@ async function loadDashboardStats() {
             supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null)
         ]);
 
+        document.getElementById('stat-total-teachers').innerText = teachers.count || 0;
         document.getElementById('stat-total-students').innerText = students.count || 0;
         document.getElementById('stat-present').innerText = present.count || 0;
         document.getElementById('stat-late').innerText = late.count || 0;
