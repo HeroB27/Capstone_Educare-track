@@ -44,6 +44,15 @@
             <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
+            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
+            </a>
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
+            </a>
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
         </nav>
         <div class="p-6 border-t border-white/10">
             <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
@@ -69,7 +78,7 @@
                 <div id="gradeTabs" class="flex gap-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm overflow-x-auto custom-scrollbar">
                     </div>
                 <button onclick="openClassModal()" class="flex items-center gap-2 px-8 py-3 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest shrink-0">
-                    <i data-lucide="plus" class="w-4 h-4"></i> New Section
+                    <i data-lucide="plus" class="w-4 h-4"></i> New Class
                 </button>
             </div>
 
@@ -91,10 +100,26 @@
                         <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Grade Level</label>
                         <select id="gradeLevel" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold" required></select>
                     </div>
-                    <div>
+                    
+                    <!-- Section Identity: Hidden for SHS (G11-G12) -->
+                    <div id="sectionField" class="block">
                         <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Section Identity</label>
-                        <input type="text" id="sectionName" placeholder="e.g. Rizal" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold" required>
+                        <input type="text" id="sectionName" placeholder="e.g. Rizal" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                        <p class="text-[10px] text-gray-400 mt-1">For Kinder-G10: Class identified by grade level only</p>
                     </div>
+                    
+                    <!-- Strand: Shown only for SHS (G11-G12) -->
+                    <div id="strandField" class="hidden">
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Strand (SHS only)</label>
+                        <select id="strandSelect" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                            <option value="">Select Strand</option>
+                            <option value="STEM">STEM</option>
+                            <option value="HUMSS">HUMSS</option>
+                            <option value="ABM">ABM</option>
+                            <option value="TVL-ICT">TVL-ICT</option>
+                        </select>
+                    </div>
+                    
                     <div>
                         <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Homeroom Adviser</label>
                         <select id="adviserId" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold" required></select>

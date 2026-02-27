@@ -3,6 +3,14 @@ let teachers = [];
 let selectedGrade = 'Kinder';
 let currentOpenClass = null;
 
+// Grade levels array
+const GRADE_LEVELS = ['Kinder', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10', 'G11', 'G12'];
+
+// Check if grade is SHS (G11 or G12)
+function isSHSGrade(grade) {
+    return grade === 'G11' || grade === 'G12';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (!checkSession('admins')) return;
     await loadTeachers();
@@ -22,20 +30,33 @@ async function loadTeachers() {
 }
 
 async function loadClasses(grade) {
-    selectedGrade = grade; renderGradeTabs();
+    selectedGrade = grade; 
+    renderGradeTabs();
     const grid = document.getElementById('classGrid');
     grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400 italic">Loading rosters...</div>';
     const { data } = await supabase.from('classes').select('*, teachers(full_name), students(count)').eq('grade_level', grade);
     
-    grid.innerHTML = data?.length ? data.map(c => `
+    // Display logic: For non-SHS show grade only, for SHS show grade + strand
+    grid.innerHTML = data?.length ? data.map(c => {
+        const isSHS = isSHSGrade(c.grade_level);
+        const displayName = isSHS 
+            ? `${c.grade_level} – ${c.strand || 'No Strand'}` 
+            : c.grade_level;
+        
+        // For non-SHS, section_name is stored as the grade; for SHS use strand or section
+        const sectionDisplay = isSHS ? (c.strand || c.section_name || 'N/A') : c.grade_level;
+        
+        return `
         <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
-            <h3 class="text-xl font-black text-gray-900 leading-tight">${c.grade_level} - ${c.section_name}</h3>
+            <h3 class="text-xl font-black text-gray-900 leading-tight">${displayName}</h3>
             <p class="text-xs font-bold text-violet-600 uppercase mt-1">${c.teachers?.full_name || 'No Adviser'}</p>
             <div class="flex gap-2 mt-4 pt-4 border-t border-gray-50">
-                <button onclick="openSubjectLoad(${c.id}, '${c.section_name}')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600">Manage Subjects</button>
+                <button onclick="openSubjectLoad(${c.id}, '${sectionDisplay}')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600">Manage Subjects</button>
+                <button onclick="editClass(${c.id})" class="p-2 text-gray-300 hover:text-violet-500"><i data-lucide="pencil" class="w-4 h-4"></i></button>
                 <button onclick="deleteClass(${c.id}, ${c.students?.[0]?.count || 0})" class="p-2 text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
-        </div>`).join('') : '<div class="col-span-full py-12 text-center text-gray-400">No classes found.</div>';
+        </div>`;
+    }).join('') : '<div class="col-span-full py-12 text-center text-gray-400">No classes found.</div>';
     lucide.createIcons();
 }
 
@@ -69,11 +90,161 @@ async function saveSubject() {
 }
 
 function renderGradeTabs() {
-    const grades = ['Kinder', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10', 'G11', 'G12'];
-    document.getElementById('gradeTabs').innerHTML = grades.map(g => `<button onclick="loadClasses('${g}')" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedGrade === g ? 'bg-violet-600 text-white shadow-lg' : 'bg-white text-gray-400 hover:bg-gray-50'}">${g}</button>`).join('');
+    document.getElementById('gradeTabs').innerHTML = GRADE_LEVELS.map(g => `<button onclick="loadClasses('${g}')" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedGrade === g ? 'bg-violet-600 text-white shadow-lg' : 'bg-white text-gray-400 hover:bg-gray-50'}">${g}</button>`).join('');
 }
-function openClassModal() { document.getElementById('classModal').classList.remove('hidden'); }
-function closeClassModal() { document.getElementById('classModal').classList.add('hidden'); }
+
+// Populate grade dropdown with all grade levels
+function populateGradeDropdown(selectedValue = '') {
+    const select = document.getElementById('gradeLevel');
+    const options = GRADE_LEVELS.map(g => `<option value="${g}" ${g === selectedValue ? 'selected' : ''}>${g}</option>`).join('');
+    select.innerHTML = '<option value="">Select Grade Level</option>' + options;
+}
+
+// Toggle section/strand fields based on grade selection
+function handleGradeChange() {
+    const grade = document.getElementById('gradeLevel').value;
+    const isSHS = isSHSGrade(grade);
+    
+    // Show/hide section field for non-SHS, hide for SHS
+    document.getElementById('sectionField').classList.toggle('hidden', isSHS);
+    // Show/hide strand field for SHS
+    document.getElementById('strandField').classList.toggle('hidden', !isSHS);
+    
+    // Clear the hidden field values when grade changes
+    document.getElementById('sectionName').value = '';
+    document.getElementById('strandSelect').value = '';
+}
+
+// Open class modal - populate dropdowns and show/hide fields based on grade
+function openClassModal(classData = null) {
+    const modal = document.getElementById('classModal');
+    const title = document.getElementById('classModalTitle');
+    
+    // Clear form
+    document.getElementById('classId').value = '';
+    document.getElementById('sectionName').value = '';
+    document.getElementById('strandSelect').value = '';
+    
+    // Populate grade dropdown
+    populateGradeDropdown(classData?.grade_level || '');
+    
+    // Attach grade change listener
+    document.getElementById('gradeLevel').addEventListener('change', handleGradeChange);
+    
+    if (classData) {
+        // Edit mode - populate existing data
+        title.innerText = 'Edit Class';
+        document.getElementById('classId').value = classData.id;
+        document.getElementById('sectionName').value = classData.section_name || '';
+        document.getElementById('strandSelect').value = classData.strand || '';
+        document.getElementById('adviserId').value = classData.adviser_id || '';
+        
+        // Trigger grade change to show correct fields
+        handleGradeChange();
+    } else {
+        // Create mode
+        title.innerText = 'Register Class';
+        // Default to selected grade tab
+        const gradeSelect = document.getElementById('gradeLevel');
+        if (selectedGrade) {
+            gradeSelect.value = selectedGrade;
+            handleGradeChange();
+        }
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+// Edit class - fetch data and open modal
+async function editClass(id) {
+    const { data, error } = await supabase.from('classes').select('*').eq('id', id).single();
+    if (error) {
+        showNotification(error.message, 'error');
+        return;
+    }
+    openClassModal(data);
+}
+
+// Save class - insert or update with duplicate checking
+async function saveClass() {
+    const id = document.getElementById('classId').value;
+    const grade = document.getElementById('gradeLevel').value;
+    
+    if (!grade) {
+        showNotification('Please select a grade level.', 'error');
+        return;
+    }
+    
+    const isSHS = isSHSGrade(grade);
+    let sectionName = null;
+    let strand = null;
+    
+    if (isSHS) {
+        // For SHS, get strand
+        strand = document.getElementById('strandSelect').value;
+        if (!strand) {
+            showNotification('Please select a strand for Senior High School.', 'error');
+            return;
+        }
+        // Section name for SHS will be the strand
+        sectionName = strand;
+    } else {
+        // For non-SHS, section name is the grade level
+        sectionName = grade;
+    }
+    
+    const adviserId = document.getElementById('adviserId').value;
+    if (!adviserId) {
+        showNotification('Please select a homeroom adviser.', 'error');
+        return;
+    }
+    
+    // Check for duplicates
+    if (!id) {
+        // Creating new class - check if exists
+        let query = supabase.from('classes').select('id').eq('grade_level', grade);
+        
+        if (isSHS) {
+            query = query.eq('strand', strand);
+        }
+        
+        const { data: existing } = await query;
+        
+        if (existing && existing.length > 0) {
+            if (isSHS) {
+                showNotification(`A class for ${grade} - ${strand} already exists.`, 'error');
+            } else {
+                showNotification(`A class for ${grade} already exists. Each grade level can only have one class.`, 'error');
+            }
+            return;
+        }
+    }
+    
+    const payload = {
+        grade_level: grade,
+        section_name: sectionName,
+        strand: isSHS ? strand : null,
+        adviser_id: adviserId,
+        school_year: '2025-2026'
+    };
+    
+    let error;
+    if (id) {
+        // Update existing
+        ({ error } = await supabase.from('classes').update(payload).eq('id', id));
+    } else {
+        // Insert new
+        ({ error } = await supabase.from('classes').insert([payload]));
+    }
+    
+    if (error) {
+        showNotification(error.message, 'error');
+    } else {
+        showNotification(id ? 'Class updated successfully!' : 'Class created successfully!', 'success');
+        closeClassModal();
+        loadClasses(selectedGrade);
+    }
+}
 function openAddSubjectModal() { document.getElementById('addSubjectModal').classList.remove('hidden'); }
 function closeAddSubjectModal() { document.getElementById('addSubjectModal').classList.add('hidden'); }
 function closeSubjectLoadModal() { document.getElementById('subjectLoadModal').classList.add('hidden'); }
