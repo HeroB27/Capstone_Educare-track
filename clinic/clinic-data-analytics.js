@@ -16,11 +16,18 @@ async function applyDateFilter() {
         showToast('Please select a valid date range.', 'warning');
         return;
     }
-
-    visitData = await fetchVisitsByDateRange(dateFrom, dateTo);
-    renderReasonsChart(visitData);
-    renderDailyTrendChart(visitData);
-    renderDetailedLogs(visitData);
+    
+    try {
+        visitData = await fetchVisitsByDateRange(dateFrom, dateTo);
+        
+        renderReasonsChart(visitData);
+        renderDailyTrendChart(visitData);
+        renderDetailedLogs(visitData);
+        
+        showToast(`Loaded ${visitData.length} visit records.`, 'success');
+    } catch (error) {
+        showToast('Error loading data. Please check console for details.', 'error');
+    }
 }
 
 function renderReasonsChart(visits) {
@@ -122,6 +129,13 @@ function setThisMonth() {
     applyDateFilter();
 }
 
+function setAllTime() {
+    // Set a wide date range to capture all data
+    document.getElementById('date-from').value = '2020-01-01';
+    document.getElementById('date-to').value = '2030-12-31';
+    applyDateFilter();
+}
+
 function exportData() {
     if (visitData.length === 0) {
         showToast('No data to export.', 'warning');
@@ -146,4 +160,5 @@ window.applyDateFilter = applyDateFilter;
 window.setToday = setToday;
 window.setThisWeek = setThisWeek;
 window.setThisMonth = setThisMonth;
+window.setAllTime = setAllTime;
 window.exportData = exportData;
