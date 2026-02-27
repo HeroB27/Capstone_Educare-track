@@ -55,29 +55,32 @@ async function loadExistingAnnouncements() {
         const { data: announcements, error } = await supabase
             .from('announcements')
             .select('*')
-            .eq('target_parents', true)
+            .eq('target_teachers', true) // UPDATED: Show announcements for teachers, not parents
             .order('created_at', { ascending: false })
             .limit(20);
         
-        if (error) {
+        if (error || !announcements) {
             console.error('Error loading announcements:', error);
             return;
         }
         
-        list.innerHTML = '';
-        
-        announcements?.forEach(ann => {
-            const div = document.createElement('div');
-            div.className = 'bg-white p-4 border rounded mb-3';
-            div.innerHTML = `
-                <h4 class="font-bold text-lg">${ann.title}</h4>
+        list.innerHTML = announcements.map(ann => `
+            <div class="bg-white p-6 border border-gray-100 rounded-2xl mb-4 shadow-sm hover:shadow-md transition-all">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-gray-800">${ann.title}</h4>
+                        <p class="text-xs text-gray-400 font-semibold">Posted: ${new Date(ann.created_at).toLocaleString()}</p>
+                    </div>
+                </div>
                 <p class="text-gray-600 mt-1">${ann.content}</p>
-                <p class="text-sm text-gray-400 mt-2">Posted: ${new Date(ann.created_at).toLocaleString()}</p>
-            `;
-            list.appendChild(div);
-        });
+            </div>
+        `).join('');
         
     } catch (err) {
         console.error('Error in loadExistingAnnouncements:', err);
+        list.innerHTML = '<p class="text-center text-red-500">Could not load announcements.</p>';
     }
 }

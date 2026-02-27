@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings Hub - Educare Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="admin-core.js" defer></script>
+    <script src="admin-settings.js" defer></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-btn.active { border-color: #8b5cf6; color: #8b5cf6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
+
+    <aside class="w-64 m-4 rounded-[32px] bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter uppercase">EDUCARE</span>
+        </div>
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="users" class="w-5 h-5"></i> User Management
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
+            </a>
+        </nav>
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Settings Hub</h2>
+            <div class="flex items-center gap-6">
+                <div class="text-right">
+                    <p id="admin-name" class="font-black text-gray-900 text-sm leading-none mb-1">Admin</p>
+                    <p class="text-[10px] text-violet-600 font-black tracking-widest uppercase">System Architect</p>
+                </div>
+                <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-violet-200">A</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            <div class="mb-10 border-b border-gray-200">
+                <nav class="-mb-px flex space-x-12">
+                    <button onclick="switchTab('gate-logic')" id="btn-gate-logic" class="tab-btn active px-2 py-4 border-b-4 text-xs font-black uppercase tracking-widest transition-all">Gate Logic</button>
+                    <button onclick="switchTab('auto-alerts')" id="btn-auto-alerts" class="tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase text-xs tracking-widest transition-all">Auto-Alerts</button>
+                    <button onclick="switchTab('password-resets')" id="btn-password-resets" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase text-xs tracking-widest transition-all">
+                        Password Resets
+                        <span id="password-reset-badge" class="absolute -top-1 -right-3 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center hidden">0</span>
+                    </button>
+                </nav>
+            </div>
+
+            <section id="section-gate-logic" class="settings-section space-y-10">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-black text-gray-800">Time Thresholds</h3>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Automatic Status Calculation Rules</p>
+                        </div>
+                        <button onclick="saveThresholds()" class="px-8 py-2.5 bg-violet-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Save Thresholds</button>
+                    </div>
+                    <div class="p-10 grid grid-cols-1 md:grid-cols-2 gap-10">
+                        <div class="space-y-6">
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Morning Gate Open</label>
+                                <input type="time" id="am_gate_open" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-violet-200 transition-all">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Late Arrival Cutoff</label>
+                                <input type="time" id="am_late_threshold" class="w-full border-2 border-amber-50 bg-amber-50/20 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-amber-200 transition-all">
+                            </div>
+                        </div>
+                        <div class="space-y-6">
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Standard Dismissal</label>
+                                <input type="time" id="pm_dismissal_time" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-violet-200 transition-all">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Early Exit Restrictions Before</label>
+                                <input type="time" id="pm_early_cutoff" class="w-full border-2 border-orange-50 bg-orange-50/20 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-orange-200 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-auto-alerts" class="settings-section hidden space-y-10">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                        <h3 class="font-black text-gray-800">Parent Push Notifications</h3>
+                        <button onclick="saveNotificationSettings()" class="px-8 py-2.5 bg-violet-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-violet-200">Save Toggles</button>
+                    </div>
+                    <div class="p-10 space-y-4 max-w-2xl">
+                        <label class="flex items-center justify-between p-6 bg-slate-50 border-2 border-transparent hover:border-violet-100 rounded-3xl cursor-pointer transition-all">
+                            <span class="font-bold text-gray-700">Alert Parent on Late Arrival</span>
+                            <input type="checkbox" id="notify_late" class="w-6 h-6 text-violet-600 rounded-lg">
+                        </label>
+                        <label class="flex items-center justify-between p-6 bg-slate-50 border-2 border-transparent hover:border-violet-100 rounded-3xl cursor-pointer transition-all">
+                            <span class="font-bold text-gray-700">Alert Parent on Absence</span>
+                            <input type="checkbox" id="notify_absent" class="w-6 h-6 text-violet-600 rounded-lg">
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <section id="section-password-resets" class="settings-section hidden">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center gap-4">
+                        <div>
+                            <h3 class="font-black text-gray-800">Password Reset Requests</h3>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Requests from users who forgot their password.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                                <input type="text" id="password-reset-search" oninput="loadPasswordResets()" placeholder="Search by username..." class="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:border-violet-400 focus:outline-none transition-all">
+                            </div>
+                            <button onclick="deleteAllResolved()" class="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all">Delete All Resolved</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <tbody id="password-reset-list" class="divide-y divide-gray-50">
+                                <!-- Requests will be loaded here by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+</body>
+</html>

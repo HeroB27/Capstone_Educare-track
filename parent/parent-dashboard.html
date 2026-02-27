@@ -56,7 +56,7 @@
         
             <!-- Welcome Section -->
             <div class="mb-6">
-                <h2 id="parent-name" class="text-xl font-bold text-gray-800 mb-4">Welcome Parent</h2>
+                <h2 id="parent-name" class="text-xl font-bold text-gray-800 mb-4">Welcome</h2>
                 
                 <!-- Instagram Stories Style Child Switcher -->
                 <div id="child-switcher" class="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -91,7 +91,7 @@
                                     <svg class="w-10 h-10 text-white mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
-                                    <span id="status-badge-text" class="text-white text-xs font-bold">INSIDE</span>
+                                    <span id="status-badge-text" class="text-white text-xs font-bold">--</span>
                                 </div>
                             </div>
                         </div>
@@ -148,7 +148,7 @@
                             <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                             </svg>
-                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">3</span>
+                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">0</span>
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Alerts</span>
                     </button>
@@ -449,15 +449,27 @@
                             notif.type === 'clinic' ? '🏥' : 
                             notif.type === 'attendance' ? '📋' : '📢';
                 const isUnread = !notif.is_read;
-                const iconColor = notif.type === 'clinic' ? 'bg-red-100' : notif.type === 'early_exit' ? 'bg-yellow-100' : 'bg-blue-100';
+                // UPDATED: Handle urgent announcements
+                let iconColor = 'bg-blue-100';
+                let titleColor = 'text-gray-800';
+                let containerClass = '';
+                if (notif.is_urgent) {
+                    iconColor = 'bg-red-100';
+                    titleColor = 'text-red-800';
+                    containerClass = 'border border-red-200';
+                } else if (notif.type === 'clinic') {
+                    iconColor = 'bg-red-100';
+                } else if (notif.type === 'early_exit') {
+                    iconColor = 'bg-yellow-100';
+                }
                 
                 return `
-                    <div class="flex items-start gap-3 ${isUnread ? 'bg-green-50' : ''} p-3 rounded-xl ${isUnread ? 'border border-green-200' : ''}">
+                    <div class="flex items-start gap-3 ${isUnread ? 'bg-green-50' : ''} p-3 rounded-xl ${containerClass} ${isUnread ? 'border border-green-200' : ''}">
                         <div class="w-10 h-10 ${iconColor} rounded-xl flex items-center justify-center text-lg flex-shrink-0">
                             ${icon}
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium ${isUnread ? 'text-gray-800' : 'text-gray-600'}">${notif.title}</p>
+                            <p class="text-sm font-medium ${titleColor}">${notif.title}</p>
                             <p class="text-xs text-gray-500 truncate mt-0.5">${notif.message}</p>
                             <p class="text-xs text-gray-400 mt-1">${getRelativeTime(notif.created_at)}</p>
                         </div>

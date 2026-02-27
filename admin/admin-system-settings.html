@@ -3,302 +3,150 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Settings - Educare Admin</title>
+    <title>School Calendar - Educare Admin</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="admin-core.js" defer></script>
     <script src="admin-system-settings.js" defer></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-                    colors: {
-                        violet: { 50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 800: '#5b21b6', 900: '#4c1d95' }
-                    }
-                }
-            }
-        }
-    </script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+        .category-btn.active { border-color: #7c3aed; background-color: #f5f3ff; color: #7c3aed; }
+    </style>
 </head>
-<body class="bg-gray-50 font-sans h-screen flex overflow-hidden">
+<body class="bg-slate-50 min-h-screen flex text-gray-800">
 
-    <!-- Floating Sidebar -->
-    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl">
-        <div class="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
-            <div class="w-8 h-8 bg-gradient-to-br from-violet-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-violet-500/30">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-            </div>
-            <span class="font-bold text-gray-800 text-lg tracking-tight">Educare</span>
+    <aside class="w-64 m-4 rounded-2xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-6 border-b border-white/10 flex items-center gap-3">
+            <div class="bg-white/10 p-2 rounded-lg"><i data-lucide="calendar" class="text-violet-300"></i></div>
+            <span class="font-bold tracking-tight">EDUCARE ADMIN</span>
         </div>
-        <nav class="flex-1 py-4 px-3 space-y-1">
-            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-                Dashboard
-            </a>
-            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                User Management
-            </a>
-            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                Classes
-            </a>
-            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Analytics
-            </a>
-            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
-                Announcements
-            </a>
-            <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-violet-50 text-violet-700 font-medium transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31-2.37 2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Settings
-            </a>
+        <nav class="flex-1 p-4 space-y-2">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard</a>
+            <a href="admin-system-settings.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800 text-white rounded-xl shadow-lg"><i data-lucide="calendar-days" class="w-5 h-5"></i> School Calendar</a>
         </nav>
-        <div class="p-3 border-t border-gray-100">
-            <button onclick="logout()" class="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                Logout
-            </button>
-        </div>
     </aside>
 
-    <main class="flex-1 flex flex-col relative overflow-hidden">
-        <!-- Gradient Header -->
-        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10">
-            <div>
-                <h2 class="text-2xl font-bold text-gray-800">System Settings</h2>
-                <p class="text-sm text-gray-500">Configure late thresholds and holiday schedules</p>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="text-right">
-                        <p id="admin-name" class="font-semibold text-gray-800 text-sm">Admin</p>
-                        <p class="text-xs text-gray-500">Administrator</p>
-                    </div>
-                    <div class="w-10 h-10 bg-gradient-to-br from-violet-400 to-violet-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-lg shadow-violet-500/30">A</div>
-                </div>
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <header class="h-[76px] bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0">
+            <h2 class="text-2xl font-black text-gray-900 tracking-tight">School Calendar</h2>
+            <div id="admin-profile" class="flex items-center gap-3">
+                <p id="admin-name" class="font-bold text-sm text-gray-700">Admin</p>
+                <div class="h-10 w-10 bg-violet-600 rounded-xl flex items-center justify-center text-white font-bold">A</div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-auto px-8 pb-8">
-            <!-- Settings Tabs -->
-            <div class="flex items-center gap-1 mb-6">
-                <button onclick="switchSettingsTab('thresholds')" class="px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 bg-white/80 backdrop-blur-sm border border-gray-200/50 text-violet-600 shadow-sm" id="tab-thresholds">
-                    <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Late Thresholds
-                </button>
-                <button onclick="switchSettingsTab('holidays')" class="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-white/50 transition-all duration-200" id="tab-holidays">
-                    <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                    Calendar & Holidays
-                </button>
-            </div>
-
-            <!-- Late Thresholds Tab -->
-            <div id="thresholdsTab" class="block">
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
-                    <div class="p-6 border-b border-gray-100">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800">Late Threshold Settings</h3>
-                                <p class="text-sm text-gray-500">Configure when students are marked as late per grade level</p>
-                            </div>
-                        </div>
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-gray-800">Suspension & Event Registry</h3>
+                        <p class="text-xs text-gray-500">Manage cancellations for calamities or scheduled school holidays.</p>
                     </div>
-                    <div class="p-6">
-                        <form id="thresholdsForm" class="space-y-6">
-                            <!-- Elementary -->
-                            <div class="bg-gradient-to-r from-violet-50 to-white rounded-2xl p-5 border border-violet-100">
-                                <div class="flex items-center gap-2 mb-4">
-                                    <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
-                                    <h4 class="font-semibold text-violet-800">Elementary (Kinder - Grade 6)</h4>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Kinder Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_kinder" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200" value="08:30">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                        <p class="text-xs text-gray-500 mt-1">Students arriving after this time are late</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Grades 1-3 Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_g1_g3" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200" value="08:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Grades 4-6 Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_g4_g6" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all duration-200" value="08:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Junior High -->
-                            <div class="bg-gradient-to-r from-blue-50 to-white rounded-2xl p-5 border border-blue-100">
-                                <div class="flex items-center gap-2 mb-4">
-                                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-                                    <h4 class="font-semibold text-blue-800">Junior High School (Grades 7-10)</h4>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Grades 7-8 Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_g7_g8" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" value="08:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Grades 9-10 Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_g9_g10" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" value="08:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Senior High -->
-                            <div class="bg-gradient-to-r from-green-50 to-white rounded-2xl p-5 border border-green-100">
-                                <div class="flex items-center gap-2 mb-4">
-                                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                                    <h4 class="font-semibold text-green-800">Senior High School (Grades 11-12)</h4>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">AM Session Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_shs_am" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" value="08:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                        <p class="text-xs text-gray-500 mt-1">For subjects before lunch</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">PM Session Late Threshold</label>
-                                        <div class="relative">
-                                            <input type="time" id="threshold_shs_pm" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" value="13:00">
-                                            <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        </div>
-                                        <p class="text-xs text-gray-500 mt-1">For subjects after lunch</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex justify-end">
-                                <button type="button" onclick="saveThresholds()" class="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-500 to-violet-600 text-white rounded-xl hover:from-violet-600 hover:to-violet-700 shadow-lg shadow-violet-500/30 transition-all duration-200 font-medium">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Save Thresholds
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                    <button onclick="openSuspensionModal()" class="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-violet-200">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Declare Suspension
+                    </button>
                 </div>
-            </div>
-
-            <!-- Holidays Tab -->
-            <div id="holidaysTab" class="hidden">
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 overflow-hidden">
-                    <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800">Calendar & Holiday Management</h3>
-                                <p class="text-sm text-gray-500">Mark dates as holidays or school suspensions</p>
-                            </div>
-                        </div>
-                        <button onclick="openAddHolidayModal()" class="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 shadow-lg shadow-green-500/30 transition-all duration-200 font-medium text-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                            Add Holiday
-                        </button>
+                
+                <div class="p-6">
+                    <div class="flex gap-3 mb-6">
+                        <select id="holidayMonth" onchange="loadSuspensions()" class="border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none w-40"></select>
+                        <select id="holidayYear" onchange="loadSuspensions()" class="border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none w-28"></select>
                     </div>
-                    <div class="p-6">
-                        <!-- Month/Year Selector -->
-                        <div class="flex gap-3 mb-6">
-                            <div class="relative flex-1">
-                                <select id="holidayMonth" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 appearance-none" onchange="loadHolidays()">
-                                    <option value="0">January</option>
-                                    <option value="1">February</option>
-                                    <option value="2">March</option>
-                                    <option value="3">April</option>
-                                    <option value="4">May</option>
-                                    <option value="5">June</option>
-                                    <option value="6">July</option>
-                                    <option value="7">August</option>
-                                    <option value="8">September</option>
-                                    <option value="9">October</option>
-                                    <option value="10">November</option>
-                                    <option value="11">December</option>
-                                </select>
-                                <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"/></svg>
-                            </div>
-                            <div class="relative w-32">
-                                <select id="holidayYear" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 appearance-none" onchange="loadHolidays()"></select>
-                                <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"/></svg>
-                            </div>
-                        </div>
 
-                        <!-- Holidays List -->
-                        <div id="holidaysList" class="space-y-3">
-                            <div class="text-center py-12">
-                                <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                <p class="text-gray-500">Loading holidays...</p>
-                            </div>
-                        </div>
-                    </div>
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b">
+                                <th class="px-6 py-4">Date</th>
+                                <th class="px-6 py-4">Reason / Notes</th>
+                                <th class="px-6 py-4">Target Levels</th>
+                                <th class="px-6 py-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suspensionList" class="divide-y divide-gray-50"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Add Holiday Modal -->
-    <div id="addHolidayModal" class="fixed inset-0 bg-black/20 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-2xl shadow-2xl w-[440px] max-h-[90vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-green-500 to-green-600 px-6 py-4">
-                <h3 class="text-white font-bold text-lg">Add Holiday or Suspension</h3>
-                <p class="text-green-100 text-sm">Mark special dates on the calendar</p>
+    <div id="suspensionModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4" onclick="closeSuspensionModal()">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+            
+            <div class="bg-violet-900 px-6 py-4 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-bold text-lg">Declare Suspension</h3>
+                <button onclick="closeSuspensionModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div class="p-6 max-h-[70vh] overflow-y-auto">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-                        <input type="date" id="holidayDate" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+
+            <div class="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase mb-2">Category</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="setCategory('Calamity')" id="cat-Calamity" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                            <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-[10px] font-bold">Calamity</span>
+                        </button>
+                        <button onclick="setCategory('Holiday')" id="cat-Holiday" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                            <i data-lucide="calendar" class="w-4 h-4"></i><span class="text-[10px] font-bold">Holiday</span>
+                        </button>
+                        <button onclick="setCategory('Others')" id="cat-Others" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                            <i data-lucide="more-horizontal" class="w-4 h-4"></i><span class="text-[10px] font-bold">Others</span>
+                        </button>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                        <input type="text" id="holidayDescription" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" placeholder="e.g., Christmas Vacation, National Holiday">
+                </div>
+
+                <div id="dynamicFields" class="space-y-4 hidden">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Date</label>
+                            <input type="date" id="eventDate" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Duration</label>
+                            <select id="scheduleType" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none">
+                                <option value="Full Day">Full Day</option>
+                                <option value="Half Day AM">Half Day AM</option>
+                                <option value="Half Day PM">Half Day PM</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" id="holidayIsSuspended" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500" checked>
-                            <div>
-                                <span class="text-sm font-medium text-amber-800">Mark as School Suspension</span>
-                                <p class="text-xs text-amber-600 mt-0.5">Students will not be marked absent on this date</p>
-                            </div>
-                        </label>
+
+                    <div id="typeSelection">
+                        <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Reason Type</label>
+                        <select id="eventType" onchange="handleTypeChange()" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"></select>
+                    </div>
+
+                    <div id="ruleInfo" class="p-3 bg-violet-50 border border-violet-100 rounded-xl hidden">
+                        <p class="text-[10px] font-black text-violet-900 uppercase" id="ruleTitle"></p>
+                        <p class="text-[10px] text-violet-700 mt-1 leading-tight" id="ruleDesc"></p>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Remarks</label>
+                        <textarea id="eventNotes" rows="2" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" placeholder="e.g. As per LGU Irisan announcement..."></textarea>
                     </div>
                 </div>
             </div>
-            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
-                <button onclick="closeAddHolidayModal()" class="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-all duration-200 font-medium">Cancel</button>
-                <button onclick="saveHoliday()" class="px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 shadow-lg shadow-green-500/30 transition-all duration-200 font-medium">Save Holiday</button>
+
+            <div class="px-6 py-4 border-t bg-gray-50 flex items-center justify-between shrink-0">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="autoAnnounce" checked class="w-3 h-3 rounded text-violet-600">
+                    <span class="text-[10px] font-bold text-gray-500 uppercase">Auto-Announce</span>
+                </label>
+                <div class="flex gap-2">
+                    <button onclick="closeSuspensionModal()" class="px-4 py-2 text-gray-500 text-xs font-bold uppercase">Cancel</button>
+                    <button onclick="saveLogicSuspension()" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold uppercase shadow-md">Save</button>
+                </div>
             </div>
         </div>
     </div>
-
 </body>
 </html>

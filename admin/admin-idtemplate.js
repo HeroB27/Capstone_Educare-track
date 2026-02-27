@@ -1,443 +1,144 @@
 // admin/admin-idtemplate.js
 
-// 1. Session Check
-// currentUser is now global in admin-core.js
-
-// Current template settings
-// UPDATED: Simplified to only support student templates for physical card printing
-let currentTemplateType = 'student';
 let templateSettings = {
-    student: {
-        primaryColor: '#4f46e5',
-        secondaryColor: '#f59e0b',
-        schoolName: 'Educare School',
-        schoolAddress: '123 Education Street, Manila',
-        layoutStyle: 'horizontal',
-        photoPosition: 'left',
-        fields: {
-            qr: true,
-            lrn: true,
-            contact: true,
-            address: false,
-            bloodType: false,
-            emergency: false
-        }
-    }
+    primaryColor: '#4c1d95',
+    secondaryColor: '#8b5cf6',
+    fields: { qr: true }
 };
 
-// 2. Initialize Page
-document.addEventListener('DOMContentLoaded', () => {
-    if (currentUser) {
-        document.getElementById('admin-name').innerText = currentUser.full_name || 'Admin';
-    }
-    
-    // Load saved student template
-    loadTemplate();
-    
-    // Initial preview
-    updatePreview();
-    
-    // Set up color input listeners
-    document.getElementById('primaryColor').addEventListener('input', (e) => {
-        document.getElementById('primaryColorText').value = e.target.value;
-        updateColor('primary');
-    });
-    
-    document.getElementById('secondaryColor').addEventListener('input', (e) => {
-        document.getElementById('secondaryColorText').value = e.target.value;
-        updateColor('secondary');
-    });
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!checkSession('admins')) return;
+    await loadSavedTemplate();
+    injectStyles();
 });
 
-// ============ TAB SWITCHING ============
-
-// 3. Switch Template Tab
-function switchTemplateTab(tabName) {
-    // Update tab styling
-    document.getElementById('tab-design').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-preview').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-saved').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-' + tabName).className = 'px-4 py-2 border-b-2 border-violet-500 text-violet-600 font-medium';
-    
-    // Show/hide content
-    document.getElementById('designTab').classList.add('hidden');
-    document.getElementById('previewTab').classList.add('hidden');
-    document.getElementById('savedTab').classList.add('hidden');
-    document.getElementById(tabName + 'Tab').classList.remove('hidden');
-    
-    // Re-render previews if switching to preview tab
-    if (tabName === 'preview') {
-        renderLivePreviews();
+async function loadSavedTemplate() {
+    const { data } = await supabase.from('id_templates').select('settings').eq('template_type', 'student').single();
+    if (data && data.settings) {
+        templateSettings = data.settings;
+        document.getElementById('primaryColor').value = templateSettings.primaryColor;
+        document.getElementById('secondaryColor').value = templateSettings.secondaryColor;
+        document.getElementById('field-qr').checked = templateSettings.fields.qr;
     }
-}
-
-// ============ TEMPLATE SELECTION ============
-
-// 4. Select Template Type
-// UPDATED: Simplified to only handle student template
-function selectTemplate(type) {
-    // Always use student type
-    currentTemplateType = 'student';
-    
-    // Update button styles - only highlight student
-    document.querySelectorAll('.template-btn').forEach(btn => {
-        btn.classList.remove('border-violet-500', 'bg-violet-50');
-        if (btn.dataset.type === 'student') {
-            btn.classList.add('border-violet-500', 'bg-violet-50');
-        }
-    });
-    
-    // Load settings for student template
-    const settings = templateSettings['student'];
-    document.getElementById('primaryColor').value = settings.primaryColor;
-    document.getElementById('primaryColorText').value = settings.primaryColor;
-    document.getElementById('secondaryColor').value = settings.secondaryColor;
-    document.getElementById('secondaryColorText').value = settings.secondaryColor;
-    document.getElementById('schoolName').value = settings.schoolName;
-    document.getElementById('schoolAddress').value = settings.schoolAddress;
-    document.getElementById('layoutStyle').value = settings.layoutStyle;
-    document.getElementById('photoPosition').value = settings.photoPosition;
-    
-    // Update field checkboxes
-    document.getElementById('fieldQR').checked = settings.fields.qr;
-    document.getElementById('fieldLRN').checked = settings.fields.lrn;
-    document.getElementById('fieldContact').checked = settings.fields.contact;
-    document.getElementById('fieldAddress').checked = settings.fields.address;
-    document.getElementById('fieldBloodType').checked = settings.fields.bloodType;
-    document.getElementById('fieldEmergency').checked = settings.fields.emergency;
-    
     updatePreview();
 }
 
-// ============ COLOR UPDATE ============
-
-// 5. Update Color from Text Input
-function updateColor(type) {
-    const textInput = type === 'primary' ? document.getElementById('primaryColorText') : document.getElementById('secondaryColorText');
-    const colorInput = type === 'primary' ? document.getElementById('primaryColor') : document.getElementById('secondaryColor');
-    
-    colorInput.value = textInput.value;
-    templateSettings[currentTemplateType][type + 'Color'] = textInput.value;
-    updatePreview();
-}
-
-// ============ PREVIEW ============
-
-// 6. Update Template Preview
 function updatePreview() {
-    const settings = templateSettings[currentTemplateType];
-    
-    // Update settings from form
-    settings.primaryColor = document.getElementById('primaryColor').value;
-    settings.secondaryColor = document.getElementById('secondaryColor').value;
-    settings.schoolName = document.getElementById('schoolName').value;
-    settings.schoolAddress = document.getElementById('schoolAddress').value;
-    settings.layoutStyle = document.getElementById('layoutStyle').value;
-    settings.photoPosition = document.getElementById('photoPosition').value;
-    
-    settings.fields.qr = document.getElementById('fieldQR').checked;
-    settings.fields.lrn = document.getElementById('fieldLRN').checked;
-    settings.fields.contact = document.getElementById('fieldContact').checked;
-    settings.fields.address = document.getElementById('fieldAddress').checked;
-    settings.fields.bloodType = document.getElementById('fieldBloodType').checked;
-    settings.fields.emergency = document.getElementById('fieldEmergency').checked;
-    
-    // Render preview
-    const previewEl = document.getElementById('templatePreview');
-    previewEl.innerHTML = generateIDCardHTML(currentTemplateType, settings, {
-        idText: 'PREVIEW-001',
-        fullName: 'Sample User',
-        secondaryInfo: 'Grade 7 - Section A',
-        lrn: '123456789012',
-        contact: '0912-345-6789',
-        address: '123 Sample Street, City',
-        bloodType: 'O+',
-        emergency: 'Mother: 0999-888-7777'
-    });
-    
-    // Generate QR code
-    const qrContainer = previewEl.querySelector('.qr-code-container');
-    if (qrContainer) {
-        qrContainer.innerHTML = '';
-        new QRCode(qrContainer, {
-            text: 'PREVIEW-001',
-            width: 60,
-            height: 60
-        });
-    }
-}
+    const container = document.getElementById('livePreviewContainer');
+    templateSettings.primaryColor = document.getElementById('primaryColor').value;
+    templateSettings.secondaryColor = document.getElementById('secondaryColor').value;
+    templateSettings.fields.qr = document.getElementById('field-qr').checked;
 
-// 7. Generate ID Card HTML
-function generateIDCardHTML(type, settings, data) {
-    const layoutStyle = settings.layoutStyle;
-    const photoPos = settings.photoPosition;
-    
-    // Type-specific styling
-    const typeConfig = {
-        student: { label: 'STUDENT ID', bgGradient: settings.primaryColor },
-        teacher: { label: 'FACULTY ID', bgGradient: '#2563eb' },
-        staff: { label: 'STAFF ID', bgGradient: '#059669' }
+    const mockUser = {
+        full_name: "JUAN DELA CRUZ",
+        student_id_text: "EDU-2026-0001",
+        address: "Purok 4, Irisan, Baguio City",
+        classes: { grade_level: 'Grade 10' },
+        parents: { full_name: "Maria Dela Cruz", contact_number: "09123456789" }
     };
-    
-    const config = typeConfig[type];
-    
-    if (layoutStyle === 'horizontal') {
-        return `
-            <div style="display: flex; height: 100%; background: linear-gradient(to right, ${settings.primaryColor} 35%, white 35%);">
-                <div style="width: 35%; background: ${settings.primaryColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.1in; color: white; text-align: center;">
-                    <div style="width: 0.7in; height: 0.7in; background: white; border-radius: 50%; margin-bottom: 0.08in; overflow: hidden;">
-                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.25in; font-weight: bold; color: ${settings.primaryColor};">${data.fullName.charAt(0)}</div>
-                    </div>
-                    <div class="qr-code-container" style="margin-top: 0.05in;"></div>
-                    <p style="font-size: 0.08in; margin-top: 0.05in;">SCAN FOR INFO</p>
-                </div>
-                <div style="width: 65%; padding: 0.1in; display: flex; flex-direction: column;">
-                    <div style="background: ${settings.secondaryColor}; color: white; padding: 0.03in 0.08in; font-size: 0.1in; font-weight: bold; position: absolute; top: 0.1in; right: 0.1in;">${config.label}</div>
-                    <p style="font-size: 0.07in; color: #666; margin-bottom: 0.02in;">${settings.schoolName}</p>
-                    <p style="font-size: 0.07in; color: #666; margin-bottom: 0.05in;">${settings.schoolAddress}</p>
-                    <p style="font-size: 0.13in; font-weight: bold; margin-bottom: 0.02in; line-height: 1.1;">${data.fullName}</p>
-                    <p style="font-size: 0.09in; color: #666; margin-bottom: 0.03in;">${data.secondaryInfo}</p>
-                    <p style="font-size: 0.08in; font-weight: bold; color: ${settings.primaryColor};">${data.idText}</p>
-                    ${settings.fields.lrn && data.lrn ? `<p style="font-size: 0.07in; color: #666;">LRN: ${data.lrn}</p>` : ''}
-                    ${settings.fields.contact && data.contact ? `<p style="font-size: 0.07in; color: #666;">📞 ${data.contact}</p>` : ''}
-                    ${settings.fields.bloodType && data.bloodType ? `<p style="font-size: 0.07in; color: #666;">🩸 ${data.bloodType}</p>` : ''}
-                    <p style="font-size: 0.06in; color: #999; margin-top: auto;">Valid until: ${new Date().getFullYear() + 1}</p>
-                </div>
-            </div>
-        `;
-    } else if (layoutStyle === 'vertical') {
-        return `
-            <div style="height: 100%; background: white; display: flex; flex-direction: column;">
-                <div style="background: linear-gradient(135deg, ${settings.primaryColor}, ${settings.secondaryColor}); padding: 0.1in; text-align: center; color: white;">
-                    <p style="font-size: 0.07in; margin-bottom: 0.02in;">${settings.schoolName}</p>
-                    <p style="font-size: 0.1in; font-weight: bold;">${config.label}</p>
-                </div>
-                <div style="flex: 1; padding: 0.1in; text-align: center;">
-                    <div style="width: 0.8in; height: 0.8in; background: #f0f0f0; border-radius: 50%; margin: 0 auto 0.08in; overflow: hidden;">
-                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.3in; font-weight: bold; color: ${settings.primaryColor};">${data.fullName.charAt(0)}</div>
-                    </div>
-                    <div class="qr-code-container" style="margin: 0 auto;"></div>
-                    <p style="font-size: 0.12in; font-weight: bold; margin-bottom: 0.02in;">${data.fullName}</p>
-                    <p style="font-size: 0.09in; color: #666; margin-bottom: 0.05in;">${data.secondaryInfo}</p>
-                    <p style="font-size: 0.1in; font-weight: bold; color: ${settings.primaryColor};">${data.idText}</p>
-                </div>
-            </div>
-        `;
-    } else {
-        // Compact layout
-        return `
-            <div style="height: 100%; background: white; display: flex; border: 2px solid ${settings.primaryColor};">
-                <div style="width: 30%; background: ${settings.primaryColor}; display: flex; align-items: center; justify-content: center; padding: 0.05in;">
-                    <div style="width: 0.5in; height: 0.5in; background: white; border-radius: 50%; overflow: hidden;">
-                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.18in; font-weight: bold; color: ${settings.primaryColor};">${data.fullName.charAt(0)}</div>
-                    </div>
-                </div>
-                <div style="width: 70%; padding: 0.05in; display: flex; flex-direction: column; justify-content: center;">
-                    <p style="font-size: 0.1in; font-weight: bold;">${data.fullName}</p>
-                    <p style="font-size: 0.08in; color: #666;">${data.secondaryInfo}</p>
-                    <p style="font-size: 0.09in; font-weight: bold; color: ${settings.primaryColor};">${data.idText}</p>
-                    <div class="qr-code-container" style="position: absolute; bottom: 0.05in; right: 0.05in; width: 0.35in; height: 0.35in;"></div>
-                </div>
-            </div>
-        `;
-    }
+
+    container.innerHTML = generatePortraitIDHTML(mockUser, templateSettings);
+    if (window.lucide) lucide.createIcons();
 }
 
-// ============ LIVE PREVIEWS ============
-
-// 8. Render Live Previews
-function renderLivePreviews() {
-    const sampleData = {
-        student: {
-            idText: 'EDU-2025-9012-ABCD',
-            fullName: 'Juan Dela Cruz',
-            secondaryInfo: 'Grade 7 - Section Rose',
-            lrn: '123456789012',
-            contact: '0912-345-6789',
-            address: '123 Main St, Manila',
-            bloodType: 'O+',
-            emergency: 'Mother: 0999-888-7777'
-        },
-        teacher: {
-            idText: 'TCH-2025-6789-WXYZ',
-            fullName: 'Maria Santos',
-            secondaryInfo: 'Mathematics Department',
-            lrn: '',
-            contact: '0912-345-1111',
-            address: '456 School Rd, QC',
-            bloodType: 'A+',
-            emergency: '0912-345-2222'
-        },
-        staff: {
-            idText: 'ADM-2025-3333-QQRS',
-            fullName: 'Robert Lee',
-            secondaryInfo: 'Administrative Staff',
-            lrn: '',
-            contact: '0912-345-3333',
-            address: '789 Office Ave, Makati',
-            bloodType: 'B+',
-            emergency: '0912-345-4444'
-        }
-    };
-    
-    // Render student preview
-    const studentPreview = document.getElementById('studentPreview');
-    studentPreview.innerHTML = generateIDCardHTML('student', templateSettings.student, sampleData.student);
-    const studentQR = studentPreview.querySelector('.qr-code-container');
-    if (studentQR) {
-        new QRCode(studentQR, { text: sampleData.student.idText, width: 60, height: 60 });
-    }
-    
-    // Render teacher preview
-    const teacherPreview = document.getElementById('teacherPreview');
-    teacherPreview.innerHTML = generateIDCardHTML('teacher', templateSettings.teacher, sampleData.teacher);
-    const teacherQR = teacherPreview.querySelector('.qr-code-container');
-    if (teacherQR) {
-        new QRCode(teacherQR, { text: sampleData.teacher.idText, width: 60, height: 60 });
-    }
-    
-    // Render staff preview
-    const staffPreview = document.getElementById('staffPreview');
-    staffPreview.innerHTML = generateIDCardHTML('staff', templateSettings.staff, sampleData.staff);
-    const staffQR = staffPreview.querySelector('.qr-code-container');
-    if (staffQR) {
-        new QRCode(staffQR, { text: sampleData.staff.idText, width: 60, height: 60 });
-    }
-}
-
-// ============ SAVE/LOAD TEMPLATES ============
-
-// 9. Save Template
 async function saveTemplate() {
-    const settings = templateSettings[currentTemplateType];
+    const { error } = await supabase.from('id_templates').upsert({
+        template_type: 'student',
+        settings: templateSettings,
+        updated_at: new Date()
+    }, { onConflict: 'template_type' });
+
+    if (!error) showNotification('Portrait Template Saved Globally!', 'success');
+}
+
+// MASTER RENDERING ENGINE (Portrait 2x3)
+function generatePortraitIDHTML(u, config) {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${u.student_id_text}`;
     
-    try {
-        const { error } = await supabase
-            .from('id_templates')
-            .upsert({
-                template_type: currentTemplateType,
-                settings: settings,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'template_type' });
-        
-        if (error) throw error;
-        
-        alert('Template saved successfully!');
-        loadSavedTemplates();
-        
-    } catch (error) {
-        console.error('Error saving template:', error);
-        alert('Error saving template: ' + error.message);
+    // UI Scaling for 2x3 Portrait
+    const front = `
+        <div class="w-[2in] h-[3in] bg-white shadow-2xl rounded-xl overflow-hidden border border-gray-200 flex flex-col font-sans shrink-0">
+            <div style="background: linear-gradient(135deg, ${config.primaryColor}, ${config.secondaryColor})" class="h-12 p-2 flex items-center gap-2">
+                <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center shrink-0">
+                    <i data-lucide="graduation-cap" class="w-4 h-4 text-violet-900"></i>
+                </div>
+                <div class="text-white overflow-hidden leading-none">
+                    <h4 class="text-[7px] font-black uppercase">Educare Colleges Inc</h4>
+                    <p class="text-[5px] opacity-80 uppercase tracking-tighter">Purok 4 Irisan Baguio City</p>
+                </div>
+            </div>
+            <div class="flex-1 flex flex-col items-center pt-4 px-3 text-center">
+                <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden">
+                    <img src="https://ui-avatars.com/api/?name=${u.full_name}&background=f3f4f6&color=4b5563" class="w-full h-full object-cover rounded-lg">
+                </div>
+                <h2 class="text-[9px] font-black text-gray-900 uppercase leading-tight mt-2">${u.full_name}</h2>
+                <div class="w-full text-left mt-4 space-y-2 border-t pt-3 border-gray-50">
+                    <div>
+                        <p class="text-[5px] text-gray-400 font-bold uppercase leading-none">Address</p>
+                        <p class="text-[6px] font-medium text-gray-700 leading-tight">${u.address}</p>
+                    </div>
+                    <div>
+                        <p class="text-[5px] text-gray-400 font-bold uppercase leading-none">Class</p>
+                        <p class="text-[6px] font-bold text-violet-700">${u.classes?.grade_level || 'N/A'}</p>
+                    </div>
+                </div>
+            </div>
+            <div style="background: ${config.primaryColor}" class="h-1.5 w-full mt-auto"></div>
+        </div>`;
+
+    const back = `
+        <div class="w-[2in] h-[3in] bg-white shadow-2xl rounded-xl overflow-hidden border border-gray-200 flex flex-col font-sans shrink-0">
+            <div class="p-4 flex flex-col items-center justify-center flex-1 text-center">
+                ${config.fields.qr ? `<img src="${qrUrl}" class="w-16 h-16 border p-1 rounded-lg mb-2 shadow-sm">` : ''}
+                <p class="text-[8px] font-mono font-bold text-gray-900 mb-6 uppercase tracking-wider">${u.student_id_text}</p>
+                <div class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-4 text-left">
+                    <p class="text-[5px] text-gray-400 font-bold uppercase mb-1">Guardian / Contact</p>
+                    <p class="text-[7px] font-black text-gray-800">${u.parents?.full_name || 'N/A'}</p>
+                    <p class="text-[7px] font-bold text-violet-700">${u.parents?.contact_number || 'N/A'}</p>
+                </div>
+                <p class="text-[5px] text-gray-400 italic px-2">If lost, return to the admin office at Purok 4 Irisan Baguio City.</p>
+            </div>
+            <div style="background: ${config.primaryColor}" class="h-1.5 w-full mt-auto"></div>
+        </div>`;
+
+    return front + back;
+}
+
+function injectStyles() {
+    const style = document.createElement('style');
+    style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
+    document.head.appendChild(style);
+}
+
+function showNotification(msg, type='info', callback=null) {
+    const existing = document.getElementById('notification-modal');
+    if(existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'notification-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
+    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
+    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
+    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
+
+    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
+    if (!dndEnabled) {
+        // Feedback: Vibrate (Mobile) & Sound (Desktop)
+        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = type === 'error' ? 220 : 550;
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start(); osc.stop(ctx.currentTime + 0.2);
+        } catch(e){}
     }
-}
 
-// 10. Load Saved Template
-// UPDATED: Simplified to only load student template
-async function loadTemplate() {
-    try {
-        const { data, error } = await supabase
-            .from('id_templates')
-            .select('*')
-            .eq('template_type', 'student')
-            .single();
-
-        if (data && data.settings) {
-            templateSettings.student = { ...templateSettings.student, ...data.settings };
-        }
-        
-        // Apply settings to UI
-        const settings = templateSettings.student;
-        document.getElementById('primaryColor').value = settings.primaryColor;
-        document.getElementById('primaryColorText').value = settings.primaryColor;
-        document.getElementById('secondaryColor').value = settings.secondaryColor;
-        document.getElementById('secondaryColorText').value = settings.secondaryColor;
-        document.getElementById('schoolName').value = settings.schoolName;
-        document.getElementById('schoolAddress').value = settings.schoolAddress;
-        document.getElementById('layoutStyle').value = settings.layoutStyle;
-        document.getElementById('photoPosition').value = settings.photoPosition;
-        
-        document.getElementById('fieldQR').checked = settings.fields.qr;
-        document.getElementById('fieldLRN').checked = settings.fields.lrn;
-        document.getElementById('fieldContact').checked = settings.fields.contact;
-        document.getElementById('fieldAddress').checked = settings.fields.address;
-        document.getElementById('fieldBloodType').checked = settings.fields.bloodType;
-        document.getElementById('fieldEmergency').checked = settings.fields.emergency;
-        
-        updatePreview();
-        
-    } catch (error) {
-        console.log('No saved template found, using defaults');
-    }
-}
-
-// 11. Generate Preview Thumbnail
-function generatePreviewThumbnail(template) {
-    const sampleData = {
-        idText: 'SAMPLE-001',
-        fullName: 'User Name',
-        secondaryInfo: 'Sample User',
-        lrn: '123456789012',
-        contact: '0912-345-6789',
-        address: 'Sample Address',
-        bloodType: 'A+',
-        emergency: 'Emergency Contact'
-    };
-    
-    return generateIDCardHTML(template.template_type, template.settings, sampleData);
-}
-
-// 12. Load Template (from saved templates list)
-// UPDATED: Simplified to only load student template
-function loadTemplateFromList(type) {
-    selectTemplate('student');
-    alert('Loaded student template');
-    switchTemplateTab('design');
-}
-
-// 13. Delete Template
-// UPDATED: Simplified to only delete student template
-async function deleteTemplate(type) {
-    if (!confirm('Are you sure you want to delete the student template?')) {
-        return;
-    }
-    
-    try {
-        const { error } = await supabase
-            .from('id_templates')
-            .delete()
-            .eq('template_type', 'student');
-        
-        if (error) throw error;
-        
-        alert('Template deleted');
-        // Reload defaults
-        templateSettings.student = {
-            primaryColor: '#4f46e5',
-            secondaryColor: '#f59e0b',
-            schoolName: 'Educare School',
-            schoolAddress: '123 Education Street, Manila',
-            layoutStyle: 'horizontal',
-            photoPosition: 'left',
-            fields: {
-                qr: true,
-                lrn: true,
-                contact: true,
-                address: false,
-                bloodType: false,
-                emergency: false
-            }
-        };
-        updatePreview();
-        
-    } catch (error) {
-        console.error('Error deleting template:', error);
-        alert('Error deleting template: ' + error.message);
-    }
-}
-
-// 14. Reset Template
-function resetTemplate() {
-    selectTemplate('student');
-    alert('Template reset to defaults');
-    updatePreview();
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
+    document.body.appendChild(modal);
+    document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
+    if(window.lucide) lucide.createIcons();
 }

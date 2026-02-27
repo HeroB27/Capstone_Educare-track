@@ -4,5 +4,10 @@
 const SUPABASE_URL = 'https://nfocaznjnyslkoejjoaa.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5mb2Nhem5qbnlzbGtvZWpqb2FhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4NTI0NzgsImV4cCI6MjA4NjQyODQ3OH0.x-jN27puW2W7HWG4uGiodPkenThqGXR_U8r_JgkajD0';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Guard: Prevent re-declaration if already initialized (e.g., by CDN or cached script)
+if (typeof window.supabaseClient === 'undefined') {
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+// THE FIX: Use 'var' instead of 'const' to prevent global scope crashes
+var supabase = window.supabaseClient;
 window.supabase = supabase;

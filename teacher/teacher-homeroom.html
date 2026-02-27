@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -26,7 +27,7 @@
 <body class="bg-gray-50 font-sans flex h-screen overflow-hidden">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl">
+    <aside class="w-64 bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col shadow-xl z-20 m-3 rounded-2xl non-printable">
         <div class="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
             <div class="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,7 +75,7 @@
     <!-- Main Content -->
     <main class="flex-1 flex flex-col overflow-hidden">
         <!-- Header -->
-        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10">
+        <header class="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 flex items-center justify-between px-8 z-10 non-printable">
             <div>
                 <h2 class="text-2xl font-bold text-gray-800">Homeroom Class</h2>
                 <p class="text-sm text-gray-500">View and manage your advisory class students</p>
@@ -84,14 +85,17 @@
                     <span id="teacher-name" class="font-semibold text-gray-800">Loading...</span>
                     <span class="text-xs text-gray-500">Teacher</span>
                 </div>
+                <button onclick="window.location.href='teacher-settings.html'" class="p-2 text-gray-500 hover:bg-gray-200 rounded-xl transition-colors" title="Change Password">
+                    <i data-lucide="lock" class="w-5 h-5"></i>
+                </button>
                 <div class="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-lg shadow-blue-500/30">T</div>
             </div>
         </header>
 
         <!-- Content -->
-        <div class="flex-1 overflow-auto p-8">
+        <div class="flex-1 overflow-auto p-8 printable-area">
             <!-- Class Info Card -->
-            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 shadow-sm mb-8">
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 shadow-sm mb-8 ">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -104,10 +108,27 @@
                             <p class="text-sm text-gray-500 mt-1">View and manage your advisory students</p>
                         </div>
                     </div>
-                    <button onclick="refreshHomeroomList()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all duration-200 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                        <span class="text-sm font-medium">Refresh</span>
-                    </button>
+                    <div class="flex items-center gap-3 non-printable">
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                            <input type="text" id="student-search" oninput="loadHomeroomStudents()" placeholder="Search by name or ID..." class="w-full pl-12 pr-4 py-3 bg-gray-100 border-0 rounded-xl focus:ring-2 focus:ring-primary-500 transition-all">
+                        </div>
+                        <button onclick="printHomeroomList()" class="px-5 py-3 bg-gray-700 hover:bg-gray-800 text-white rounded-xl transition-all flex items-center gap-2">
+                            <i data-lucide="printer" class="w-5 h-5"></i>
+                            <span>Print</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Rate Card -->
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-green-200/50 shadow-sm mb-8">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center"><i data-lucide="trending-up" class="w-6 h-6 text-green-600"></i></div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">Today's Attendance Rate</h3>
+                        <p id="attendance-rate" class="text-3xl font-bold text-green-600 mt-1">--%</p>
+                    </div>
                 </div>
             </div>
 

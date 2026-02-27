@@ -18,17 +18,27 @@
         </div>
 
         <div class="space-y-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">I am a...</label>
-            <select id="role" class="w-full border border-gray-300 rounded px-3 py-2">
-                <option value="admins">Admin</option>
-                <option value="teachers">Teacher</option>
-                <option value="clinic_staff">Clinic Staff</option>
-                <option value="guards">Guard</option>
-                <option value="parents">Parent</option>
-            </select>
-
             <input type="text" id="username" placeholder="Username" class="w-full border border-gray-300 rounded px-3 py-2">
-            <input type="password" id="password" placeholder="Password" class="w-full border border-gray-300 rounded px-3 py-2">
+            <div class="relative">
+                <input type="password" id="password" placeholder="Password" class="w-full border border-gray-300 rounded px-3 py-2 pr-10">
+                <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                    <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="remember-me" class="mr-2 rounded border-gray-300 text-violet-600 focus:ring-violet-500">
+                    <span class="text-sm text-gray-600">Remember Me</span>
+                </label>
+                <button onclick="handleForgotPassword()" class="text-sm text-violet-600 hover:underline">Forgot Password?</button>
+            </div>
 
             <button onclick="handleLogin()" class="w-full bg-violet-600 text-white font-bold py-2 rounded hover:bg-violet-700 transition">
                 Login
@@ -39,7 +49,7 @@
 
     <script>
         // Auto-redirect if session exists
-        const existingSession = localStorage.getItem('educare_user');
+        const existingSession = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
         if (existingSession) {
             const user = JSON.parse(existingSession);
             if (user.role === 'admins') window.location.href = 'admin/admin-dashboard.html';
@@ -50,37 +60,74 @@
         }
 
         async function handleLogin() {
-            const roleTable = document.getElementById('role').value;
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const rememberMe = document.getElementById('remember-me').checked;
             const errorMsg = document.getElementById('error-msg');
+            const roles = ['admins', 'teachers', 'clinic_staff', 'guards', 'parents'];
 
             errorMsg.classList.add('hidden');
 
             try {
-                const { data, error } = await supabase
-                    .from(roleTable)
-                    .select('*')
-                    .eq('username', username)
-                    .eq('password', password)
-                    .single();
+                let user = null;
+                let role = '';
 
-                if (error || !data) throw new Error("Invalid credentials");
+                for (const r of roles) {
+                    const { data, error } = await supabase.from(r).select('*').eq('username', username).eq('password', password).maybeSingle();
+                    if (data) { user = data; role = r; break; }
+                }
+
+                if (!user) throw new Error("Invalid credentials");
 
                 // Save Session
-                const userSession = { ...data, role: roleTable };
-                localStorage.setItem('educare_user', JSON.stringify(userSession));
+                const userSession = { ...user, role: role };
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem('educare_user', JSON.stringify(userSession));
 
                 // REDIRECT LOGIC (Updated to your naming convention)
-                if (roleTable === 'admins') window.location.href = 'admin/admin-dashboard.html';
-                else if (roleTable === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
-                else if (roleTable === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
-                else if (roleTable === 'guards') window.location.href = 'guard/guard-dashboard.html';
-                else if (roleTable === 'parents') window.location.href = 'parent/parent-dashboard.html';
+                if (role === 'admins') window.location.href = 'admin/admin-dashboard.html';
+                else if (role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
+                else if (role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
+                else if (role === 'guards') window.location.href = 'guard/guard-dashboard.html';
+                else if (role === 'parents') window.location.href = 'parent/parent-dashboard.html';
 
             } catch (err) {
                 errorMsg.innerText = err.message;
                 errorMsg.classList.remove('hidden');
+            }
+        }
+
+        async function handleForgotPassword() {
+            const username = prompt("Please enter your username to request a password reset:");
+            if (!username) return;
+
+            try {
+                await supabase.from('notifications').insert({
+                    recipient_role: 'admins',
+                    title: 'Password Reset Request',
+                    message: `User '${username}' has requested a password reset.`,
+                    type: 'system_alert',
+                    is_read: false
+                });
+                alert("Admin has been notified of your request.");
+            } catch (e) {
+                alert("Request failed: " + e.message);
+            }
+        }
+
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eye-icon');
+            const eyeOffIcon = document.getElementById('eye-off-icon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.classList.add('hidden');
+                eyeOffIcon.classList.remove('hidden');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.classList.remove('hidden');
+                eyeOffIcon.classList.add('hidden');
             }
         }
     </script>

@@ -1,139 +1,87 @@
-// UPDATED: Admin Dashboard Stats with real Supabase queries
-// Queries attendance_logs and clinic_visits tables for live data
+// admin/admin-core.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const user = checkSession('admins');
+    if (!user) return;
+    
+    // UI Branding
+    const adminNameEl = document.getElementById('admin-name');
+    if (adminNameEl) adminNameEl.innerText = user.full_name || 'Admin';
+    
+    // Auto-run if elements exist
+    if (document.getElementById('stat-present')) {
+        loadDashboardStats(); // Initial load
+        
+        // Real-time subscription for dashboard stats
+        supabase.channel('dashboard-stats-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => loadDashboardStats())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_visits' }, () => loadDashboardStats())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => loadDashboardStats())
+            .subscribe();
+    }
+    if (document.getElementById('recent-announcements-list')) loadRecentAnnouncements();
+    
+    lucide.createIcons();
+});
 
 async function loadDashboardStats() {
-    console.log("Fetching live dashboard data...");
     const today = new Date().toISOString().split('T')[0];
-
     try {
-        // 1. Fetch Present Count (includes both Present and On Time)
-        const { count: presentCount, error: pError } = await supabase
-            .from('attendance_logs')
-            .select('*', { count: 'exact', head: true })
-            .eq('log_date', today)
-            .in('status', ['Present', 'On Time']);
+        // Parallel execution for maximum speed
+        const [students, present, late, absent, clinic] = await Promise.all([
+            supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Enrolled'),
+            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Present'),
+            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Late'),
+            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Absent'),
+            supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null)
+        ]);
 
-        // 2. Fetch Late Count
-        const { count: lateCount, error: lError } = await supabase
-            .from('attendance_logs')
-            .select('*', { count: 'exact', head: true })
-            .eq('log_date', today)
-            .eq('status', 'Late');
-
-        // 3. Fetch Clinic Visits (Today)
-        const { count: clinicCount, error: cError } = await supabase
-            .from('clinic_visits')
-            .select('*', { count: 'exact', head: true })
-            .gte('time_in', `${today}T00:00:00`)
-            .lte('time_in', `${today}T23:59:59`);
-
-        // Update UI
-        if (!pError) document.getElementById('stat-present').innerText = presentCount || 0;
-        if (!lError) document.getElementById('stat-late').innerText = lateCount || 0;
-        if (!cError) document.getElementById('stat-clinic').innerText = clinicCount || 0;
-
+        document.getElementById('stat-total-students').innerText = students.count || 0;
+        document.getElementById('stat-present').innerText = present.count || 0;
+        document.getElementById('stat-late').innerText = late.count || 0;
+        document.getElementById('stat-absent').innerText = absent.count || 0;
+        document.getElementById('stat-clinic').innerText = clinic.count || 0;
     } catch (err) {
-        console.error("Dashboard error:", err);
+        console.error("Dashboard Stats Error:", err);
     }
 }
 
-// UPDATED: Load Recent Activity with clinic visits support
-// Fetches from both attendance_logs and clinic_visits tables based on filter
-async function loadRecentActivity(filter = 'all') {
-    const list = document.getElementById('recent-activity-list');
+async function loadRecentAnnouncements() {
+    const list = document.getElementById('recent-announcements-list');
     if (!list) return;
 
-    list.innerHTML = '<div class="p-4 text-center text-gray-500">Loading activity...</div>';
+    const fetchAndRender = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('announcements')
+                .select('title, content, created_at')
+                .order('created_at', { ascending: false })
+                .limit(5);
 
-    try {
-        let logs = [];
+            if (error || !data?.length) {
+                list.innerHTML = '<tr><td class="px-8 py-12 text-center text-gray-400 font-medium italic">No announcements found.</td></tr>';
+                return;
+            }
 
-        // 1. Fetch Gate Attendance Logs
-        if (filter === 'all' || filter === 'entry' || filter === 'exit') {
-            const { data: attendanceData, error: attError } = await supabase
-                .from('attendance_logs')
-                .select(`
-                    id, time_in, time_out, status, log_date,
-                    students (full_name, classes(grade_level, section_name))
-                `)
-                .eq('log_date', today)
-                .order('time_in', { ascending: false })
-                .limit(15);
+            list.innerHTML = data.map(log => `
+                <tr class="hover:bg-violet-50/50 transition-colors">
+                    <td class="px-8 py-5">
+                        <p class="font-bold text-gray-800 text-sm">${log.title}</p>
+                        <p class="text-xs text-gray-500 truncate max-w-md">${log.content}</p>
+                    </td>
+                    <td class="px-8 py-5 text-right text-xs font-medium text-gray-400">
+                        ${new Date(log.created_at).toLocaleDateString()}
+                    </td>
+                </tr>`).join('');
+            lucide.createIcons();
+        } catch (e) { console.error(e); }
+    };
 
-            if (attError) throw attError;
+    await fetchAndRender();
 
-            const attendanceActivities = (attendanceData || []).map(log => {
-                const isExit = log.time_out !== null && filter === 'exit';
-                const timeStr = isExit ? log.time_out : log.time_in;
-                
-                return {
-                    type: isExit ? 'exit' : 'entry',
-                    time: timeStr ? new Date(timeStr) : new Date(log.log_date),
-                    student: log.students?.full_name || 'Unknown Student',
-                    details: `${log.students?.classes?.grade_level || 'N/A'} - ${log.status}`,
-                    status: log.status,
-                    icon: '🚶',
-                    color: log.status === 'Late' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                };
-            });
-
-            logs = [...logs, ...attendanceActivities.filter(a => filter === 'all' || a.type === filter)];
-        }
-
-        // 2. Fetch Clinic Visits
-        if (filter === 'all' || filter === 'clinic') {
-            const { data: clinicData, error: clinicError } = await supabase
-                .from('clinic_visits')
-                .select(`
-                    id, time_in, reason, status,
-                    students (full_name, classes(grade_level))
-                `)
-                .order('time_in', { ascending: false })
-                .limit(20);
-
-            if (clinicError) throw clinicError;
-
-            const clinicActivities = (clinicData || []).map(visit => ({
-                type: 'clinic',
-                time: new Date(visit.time_in),
-                student: visit.students?.full_name || 'Unknown',
-                details: `Clinic: ${visit.reason}`,
-                status: visit.status,
-                icon: '🏥',
-                color: 'bg-red-100 text-red-700'
-            }));
-
-            logs = [...logs, ...clinicActivities];
-        }
-
-        // 3. Sort combined logs by time (newest first) and render
-        logs.sort((a, b) => b.time - a.time);
-        
-        if (logs.length === 0) {
-            list.innerHTML = '<div class="p-4 text-center text-gray-500">No recent activity found.</div>';
-            return;
-        }
-
-        list.innerHTML = logs.slice(0, 15).map(log => `
-            <div class="flex items-start gap-4 p-3 hover:bg-gray-50 rounded-lg transition border-b border-gray-100 last:border-0">
-                <div class="h-10 w-10 rounded-full flex items-center justify-center text-xl shrink-0 ${log.color.split(' ')[0]}">
-                    ${log.icon}
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-bold text-gray-800 truncate">${log.student}</p>
-                    <p class="text-xs text-gray-500 truncate">${log.details}</p>
-                </div>
-                <div class="text-right shrink-0">
-                    <p class="text-xs text-gray-400">${log.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                    <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${log.color}">
-                        ${log.status}
-                    </span>
-                </div>
-            </div>
-        `).join('');
-
-    } catch (error) {
-        console.error('Error loading activity:', error);
-        list.innerHTML = '<div class="p-4 text-center text-red-500">Failed to load activity.</div>';
-    }
+    supabase.channel('public-announcements-dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, payload => {
+            fetchAndRender();
+        })
+        .subscribe();
 }

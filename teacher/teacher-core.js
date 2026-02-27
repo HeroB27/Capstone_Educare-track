@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Load appropriate data based on current page
     await initTeacherPage();
+    injectStyles();
 });
 
 // 3a. Initialize Teacher Portal - Identity handshake between Adviser and Subject Teacher
@@ -78,7 +79,7 @@ async function initializeTeacherPortal() {
         // Hard-Block: Prevent unauthorized access to gatekeeper page
         const currentPage = window.location.pathname;
         if (currentPage.includes('teacher-gatekeeper-mode.html') && !teacher.is_gatekeeper) {
-            alert("Unauthorized Access: You do not have Gatekeeper privileges.");
+            showNotification("Unauthorized Access: You do not have Gatekeeper privileges.", "error");
             window.location.href = 'teacher-dashboard.html';
             return;
         }
@@ -151,53 +152,13 @@ async function loadTeacherSchedule(teacherId) {
     }
 }
 
-// 3f. Handle Session Error
+// 3e. Handle Session Error
 function handleSessionError() {
-    alert('Session error. Please login again.');
+    showNotification('Session error. Please login again.', "error");
     window.location.href = '../index.html';
 }
 
-// 3a. Load Teacher Identity - Fetches Homeroom Class and Subject Loads
-async function loadTeacherIdentity() {
-    try {
-        // 1. Fetch the class where this teacher is the adviser
-        const { data: classData, error: classError } = await supabase
-            .from('classes')
-            .select('id, grade_level, section_name')
-            .eq('adviser_id', currentUser.id)
-            .single();
-
-        if (classData) {
-            homeroomClass = classData;
-            console.log("Homeroom Class:", homeroomClass);
-            
-            // Update dashboard with homeroom info if element exists
-            const homeroomInfo = document.getElementById('homeroom-class-info');
-            if (homeroomInfo) {
-                homeroomInfo.innerText = `${classData.grade_level} - ${classData.section_name}`;
-            }
-        }
-
-        // 2. Fetch all subjects this teacher is assigned to
-        const { data: loads, error: loadError } = await supabase
-            .from('subject_loads')
-            .select('*, classes(grade_level, section_name)')
-            .eq('teacher_id', currentUser.id);
-
-        if (loads) {
-            mySubjectLoads = loads;
-            console.log("Subject Loads:", mySubjectLoads);
-            
-            // Render schedule on dashboard
-            renderScheduleOnDashboard();
-        }
-        
-    } catch (err) {
-        console.error("Error loading teacher identity:", err);
-    }
-}
-
-// 3b. Render Schedule on Dashboard - Shows cards with Take Attendance buttons
+// 3f. Render Schedule on Dashboard - Shows cards with Take Attendance buttons
 function renderScheduleOnDashboard() {
     const container = document.getElementById('schedule-list');
     if (!container) return;
@@ -208,20 +169,25 @@ function renderScheduleOnDashboard() {
     }
 
     container.innerHTML = mySubjectLoads.map(load => `
-        <div class="p-4 border-l-4 border-blue-600 bg-gray-50 rounded-r-lg shadow-sm flex justify-between items-center mb-2">
+        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group mb-4 flex justify-between items-center">
             <div>
-                <h4 class="font-bold text-blue-900">${load.subject_name}</h4>
-                <p class="text-sm text-gray-600">${load.classes?.grade_level} - ${load.classes?.section_name}</p>
-                <p class="text-xs text-gray-400 mt-1">🕒 ${load.schedule_time_start?.substring(0, 5) || ''} - ${load.schedule_time_end?.substring(0, 5) || ''}</p>
+                <h4 class="font-bold text-gray-800 text-lg leading-tight">${load.subject_name}</h4>
+                <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">${load.classes?.grade_level} - ${load.classes?.section_name}</p>
+                <div class="flex items-center gap-2 mt-3 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
+                    <i data-lucide="clock" class="w-3 h-3"></i>
+                    ${load.schedule_time_start?.substring(0, 5) || ''} - ${load.schedule_time_end?.substring(0, 5) || ''}
+                </div>
             </div>
-            <button onclick="navigateToAttendance('${load.id}')" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition">
+            <button onclick="navigateToAttendance('${load.id}')" class="px-5 py-2.5 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm hover:shadow-blue-200">
                 Take Attendance
             </button>
         </div>
     `).join('');
+    
+    if(window.lucide) lucide.createIcons();
 }
 
-// 3c. Navigate to Subject Attendance page with selected subject
+// 3g. Navigate to Subject Attendance page with selected subject
 function navigateToAttendance(subjectLoadId) {
     // Store selected subject for attendance page
     sessionStorage.setItem('selectedSubjectLoadId', subjectLoadId);
@@ -256,7 +222,9 @@ async function initTeacherPage() {
     } else if (path.includes('teacher-data-analytics')) {
         await loadAnalytics();
     } else if (path.includes('teacher-announcements-board')) {
-        await loadAnnouncementsBoard();
+        await setupAnnouncementPage();
+    } else if (path.includes('teacher-settings')) {
+        initializeTeacherSettingsPage();
     } else {
         // Default dashboard - load schedule
         await loadSchedule();
@@ -297,12 +265,12 @@ async function loadSchedule() {
             const sectionName = load.classes?.section_name || '';
             
             const row = document.createElement('tr');
-            row.className = 'border-b hover:bg-gray-50';
+            row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
             row.innerHTML = `
-                <td class="p-4">${timeStart} - ${timeEnd}</td>
-                <td class="p-4 font-bold text-blue-800">${load.subject_name}</td>
-                <td class="p-4">${gradeLevel} - ${sectionName}</td>
-                <td class="p-4"><span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">Scheduled</span></td>
+                <td class="px-6 py-4 text-xs font-bold text-gray-500 font-mono">${timeStart} - ${timeEnd}</td>
+                <td class="px-6 py-4 font-bold text-gray-800 text-sm">${load.subject_name}</td>
+                <td class="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wide">${gradeLevel} - ${sectionName}</td>
+                <td class="px-6 py-4"><span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-md text-[10px] font-black uppercase tracking-widest border border-gray-200">Scheduled</span></td>
             `;
             scheduleList.appendChild(row);
         });
@@ -312,82 +280,121 @@ async function loadSchedule() {
     }
 }
 
-// 6. Load Homeroom Students with Attendance Status
+// 6. Load Homeroom Students with Real-time Gate Status (from teacher-homeroom.js)
 async function loadHomeroomStudents() {
     const studentList = document.getElementById('homeroom-student-list');
+    const searchInput = document.getElementById('student-search');
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+
     if (!studentList) return;
     
     try {
+        const today = new Date().toISOString().split('T')[0];
+
         // Get teacher's homeroom class
         const { data: teacherClass, error: classError } = await supabase
             .from('classes')
             .select('id, grade_level, section_name')
             .eq('adviser_id', currentUser.id)
             .single();
-        
+
         if (classError || !teacherClass) {
-            studentList.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">You are not assigned as an adviser</td></tr>';
+            studentList.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No advisory class assigned.</td></tr>';
             return;
         }
-        
+
         // Update header with class info
         const classInfoEl = document.getElementById('homeroom-class-info');
         if (classInfoEl) {
             classInfoEl.innerText = `${teacherClass.grade_level} - ${teacherClass.section_name}`;
         }
-        
-        // Get students in this class
+
+        // Fetch Students + Today's Gate Logs (JOIN-style query)
         const { data: students, error: studentError } = await supabase
             .from('students')
-            .select('id, lrn, student_id_text, full_name')
+            .select(`
+                id, lrn, student_id_text, full_name,
+                attendance_logs(time_in, time_out, status, log_date)
+            `)
             .eq('class_id', teacherClass.id)
             .order('full_name');
-        
+
         if (studentError) {
             console.error('Error loading students:', studentError);
             return;
         }
+
+        const allClassStudents = students || [];
+
+        // NEW: Filter students based on search query
+        const filteredStudents = allClassStudents.filter(student => 
+            student.full_name.toLowerCase().includes(searchQuery) || 
+            student.student_id_text.toLowerCase().includes(searchQuery)
+        );
+
+        // NEW: Calculate attendance rate based on the *entire class*
+        const presentCount = allClassStudents.filter(s => {
+            const log = s.attendance_logs.find(l => l.log_date === today);
+            return log && log.status !== 'Absent'; // On Time, Late, Excused are all "present" for rate
+        }).length;
+        const totalStudents = allClassStudents.length;
+        const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
         
-        // Get today's attendance logs
-        const today = new Date().toISOString().split('T')[0];
-        const { data: attendanceLogs } = await supabase
-            .from('attendance_logs')
-            .select('student_id, status, time_in')
-            .eq('log_date', today);
-        
+        const rateEl = document.getElementById('attendance-rate');
+        if (rateEl) rateEl.innerText = `${rate}%`;
+
+        // Populate homeroom student IDs for real-time filtering
+        if (typeof myHomeroomStudentIds !== 'undefined') {
+            myHomeroomStudentIds = students.map(student => student.id);
+        }
+
         studentList.innerHTML = '';
-        
-        students.forEach(student => {
-            const log = attendanceLogs?.find(l => l.student_id === student.id);
-            const status = log?.status || 'Not Marked';
-            const timeIn = log?.time_in ? new Date(log.time_in).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+        if (filteredStudents.length === 0) {
+            studentList.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-500">No students found.</td></tr>';
+            return;
+        }
+
+        // Render the filtered list
+        filteredStudents.forEach(student => {
+            // Get the first log entry for today if it exists
+            const log = student.attendance_logs.find(l => l.log_date === today);
+            const timeIn = log && log.time_in ? formatTime(log.time_in) : '--:--';
             
-            let statusBadge = '';
-            switch (status) {
-                case 'On Time': statusBadge = '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">On Time</span>'; break;
-                case 'Late': statusBadge = '<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">Late</span>'; break;
-                case 'Absent': statusBadge = '<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">Absent</span>'; break;
-                case 'Excused': statusBadge = '<span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">Excused</span>'; break;
-                case 'Out': statusBadge = '<span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Out</span>'; break;
-                default: statusBadge = '<span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">Not Marked</span>';
+            let status = log ? log.status : 'Absent';
+            const statusBadge = getStatusBadge(status);
+            
+            let gateStatus = '';
+            if (log && log.time_in) {
+                gateStatus = log.time_out ? 'Outside' : 'Inside';
             }
-            
+
             const row = document.createElement('tr');
-            row.className = 'border-b hover:bg-gray-50';
+            row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
             row.innerHTML = `
-                <td class="p-4">${student.student_id_text}</td>
-                <td class="p-4 font-medium">${student.full_name}</td>
-                <td class="p-4">${student.lrn}</td>
-                <td class="p-4">${timeIn}</td>
-                <td class="p-4">${statusBadge}</td>
-                <td class="p-4">
-                    <button onclick="markAttendance('${student.id}', 'On Time')" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs mr-1">Present</button>
-                    <button onclick="markAttendance('${student.id}', 'Absent')" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">Absent</button>
+                <td class="px-6 py-4 text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${student.student_id_text}</td>
+                <td class="px-6 py-4 font-bold text-gray-800 text-sm">${student.full_name}</td>
+                <td class="px-6 py-4 text-xs text-gray-500 font-mono">${student.lrn}</td>
+                <td class="px-6 py-4 text-xs font-bold text-gray-600">${timeIn}</td>
+                <td class="px-6 py-4">
+                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">
+                        ${status}
+                    </span>
+                    ${gateStatus ? `<span class="ml-1 text-[10px] font-bold text-gray-400 uppercase">(${gateStatus})</span>` : ''}
+                </td>
+                <td class="px-6 py-4">
+                    <select onchange="markAttendance('${student.id}', this.value)" 
+                        class="text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm">
+                        <option value="">Action...</option>
+                        <option value="On Time">Present (On Time)</option>
+                        <option value="Late">Late</option>
+                        <option value="Absent">Absent</option>
+                        <option value="Excused">Excused</option>
+                    </select>
                 </td>
             `;
             studentList.appendChild(row);
         });
-        
     } catch (err) {
         console.error('Error in loadHomeroomStudents:', err);
     }
@@ -395,54 +402,66 @@ async function loadHomeroomStudents() {
 
 // 7. Mark Attendance for Homeroom
 async function markAttendance(studentId, status) {
+    if (!status) return; // No change selected
+    
     try {
         const today = new Date().toISOString().split('T')[0];
         const now = new Date().toISOString();
         
-        // Check if log exists for today
+        let displayStatus = status;
+        if (status === 'Present') displayStatus = 'On Time';
+        
+        // 1. FETCH FIRST to protect the Guard's data
         const { data: existingLog } = await supabase
             .from('attendance_logs')
-            .select('id')
+            .select('time_in, remarks')
             .eq('student_id', studentId)
             .eq('log_date', today)
             .single();
-        
-        if (existingLog) {
-            // Update existing log
-            await supabase
-                .from('attendance_logs')
-                .update({ 
-                    status: status,
-                    time_in: status === 'Absent' ? null : now,
-                    remarks: 'Manually updated by Teacher'
-                })
-                .eq('id', existingLog.id);
-        } else {
-            // Insert new log
-            await supabase
-                .from('attendance_logs')
-                .insert({
-                    student_id: studentId,
-                    log_date: today,
-                    time_in: status === 'Absent' ? null : now,
-                    status: status,
-                    remarks: 'Manually updated by Teacher'
-                });
+            
+        // 2. Determine safe time_in (Keep existing, use 'now' if blank, null if Absent)
+        let safeTimeIn = null;
+        if (status !== 'Absent') {
+            safeTimeIn = existingLog?.time_in ? existingLog.time_in : now;
         }
+
+        // 3. Append remarks cleanly
+        let safeRemarks = existingLog?.remarks || '';
+        if (!safeRemarks.includes('Manual override')) {
+            safeRemarks = safeRemarks ? `${safeRemarks} | Manual override by Teacher` : 'Manual override by Teacher';
+        }
+
+        // 4. Safely Upsert with protected time_in
+        const { error } = await supabase
+            .from('attendance_logs')
+            .upsert({
+                student_id: studentId,
+                log_date: today,
+                time_in: safeTimeIn, // Protected!
+                status: displayStatus,
+                remarks: safeRemarks
+            }, {
+                onConflict: 'student_id, log_date'
+            });
         
+        if (error) {
+            console.error('Error marking attendance:', error);
+            showNotification('Error marking attendance. Please try again.', "error");
+            return;
+        }
+
         // Refresh the list
         await loadHomeroomStudents();
         
     } catch (err) {
-        console.error('Error marking attendance:', err);
-        alert('Error marking attendance. Please try again.');
+        console.error('Exception marking attendance:', err);
+        showNotification('Error marking attendance. Please try again.', "error");
     }
 }
 
 // 8. Load Subject Loads for Subject Attendance Page
 async function loadSubjectLoads() {
     const subjectSelect = document.getElementById('subject-select');
-    const subjectList = document.getElementById('subject-attendance-list');
     if (!subjectSelect) return;
     
     try {
@@ -482,7 +501,7 @@ async function loadSubjectLoads() {
 async function loadSubjectStudents(subjectLoadId) {
     const studentList = document.getElementById('subject-student-list');
     if (!studentList || !subjectLoadId) {
-        studentList.innerHTML = '';
+        if (studentList) studentList.innerHTML = '';
         return;
     }
     
@@ -518,16 +537,16 @@ async function loadSubjectStudents(subjectLoadId) {
         
         students.forEach(student => {
             const row = document.createElement('div');
-            row.className = 'flex items-center justify-between p-3 border-b hover:bg-gray-50';
+            row.className = 'flex items-center justify-between p-4 border-b border-gray-50 hover:bg-blue-50/50 transition-all group';
             row.innerHTML = `
                 <div>
-                    <span class="font-medium">${student.student_id_text}</span>
-                    <span class="ml-2">${student.full_name}</span>
+                    <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${student.student_id_text}</span>
+                    <span class="ml-2 font-bold text-gray-800 text-sm">${student.full_name}</span>
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="markSubjectAttendance('${student.id}', 'Present')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">Present</button>
-                    <button onclick="markSubjectAttendance('${student.id}', 'Absent')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Absent</button>
-                    <button onclick="markSubjectAttendance('${student.id}', 'Excused')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">Excused</button>
+                <div class="flex gap-2 opacity-60 group-hover:opacity-100 transition-all">
+                    <button onclick="markSubjectAttendance('${student.id}', 'Present')" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all">Present</button>
+                    <button onclick="markSubjectAttendance('${student.id}', 'Absent')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Absent</button>
+                    <button onclick="markSubjectAttendance('${student.id}', 'Excused')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Excused</button>
                 </div>
             `;
             studentList.appendChild(row);
@@ -563,7 +582,7 @@ async function markSubjectAttendance(studentId, status) {
         
     } catch (err) {
         console.error('Error marking subject attendance:', err);
-        alert('Error marking attendance. Please try again.');
+        showNotification('Error marking attendance. Please try again.', "error");
     }
 }
 
@@ -614,7 +633,7 @@ async function issueClinicPass() {
     const reason = document.getElementById('clinic-reason').value;
     
     if (!studentId || !reason) {
-        alert('Please select a student and enter a reason.');
+        showNotification('Please select a student and enter a reason.', "error");
         return;
     }
     
@@ -629,17 +648,17 @@ async function issueClinicPass() {
             });
         
         if (error) {
-            alert('Error issuing clinic pass: ' + error.message);
+            showNotification('Error issuing clinic pass: ' + error.message, "error");
             return;
         }
         
-        alert('Clinic pass issued successfully!');
+        showNotification('Clinic pass issued successfully!', "success");
         document.getElementById('clinic-reason').value = '';
         await loadRecentClinicPasses();
         
     } catch (err) {
         console.error('Error issuing clinic pass:', err);
-        alert('Error issuing clinic pass. Please try again.');
+        showNotification('Error issuing clinic pass. Please try again.', "error");
     }
 }
 
@@ -667,30 +686,32 @@ async function loadRecentClinicPasses() {
         passList.innerHTML = '';
         
         passes?.forEach(pass => {
-            const statusBadge = pass.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                               pass.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+            const statusBadge = pass.status === 'Pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 
+                               pass.status === 'Completed' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200';
             
             const div = document.createElement('div');
-            div.className = 'p-3 border-b';
+            div.className = 'p-4 border-b border-gray-50 hover:bg-gray-50 transition-all rounded-xl';
             div.innerHTML = `
                 <div class="flex justify-between items-center">
                     <div>
-                        <span class="font-medium">${pass.students?.full_name}</span>
-                        <span class="text-sm text-gray-500 ml-2">${pass.students?.student_id_text}</span>
+                        <span class="font-bold text-gray-800 text-sm">${pass.students?.full_name}</span>
+                        <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest ml-2">${pass.students?.student_id_text}</span>
                     </div>
-                    <span class="px-2 py-1 rounded text-xs ${statusBadge}">${pass.status}</span>
+                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${pass.status}</span>
                 </div>
-                <p class="text-sm text-gray-600 mt-1">${pass.reason}</p>
-                ${pass.nurse_notes ? `<p class="text-sm text-blue-600 mt-1"><strong>Nurse:</strong> ${pass.nurse_notes}</p>` : ''}
+                <p class="text-xs text-gray-600 mt-2 font-medium bg-gray-50 p-2 rounded-lg border border-gray-100">${pass.reason}</p>
+                ${pass.nurse_notes ? `<p class="text-xs text-blue-600 mt-2 font-bold bg-blue-50 p-2 rounded-lg border border-blue-100"><i data-lucide="activity" class="w-3 h-3 inline mr-1"></i> Nurse: ${pass.nurse_notes}</p>` : ''}
                 ${pass.nurse_notes && !pass.parent_notified ? `
                     <button onclick="forwardToParent('${pass.id}', '${pass.students?.full_name}')" 
-                        class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                        class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm">
                         Forward to Parent
                     </button>
                 ` : ''}
             `;
             passList.appendChild(div);
         });
+        
+        if(window.lucide) lucide.createIcons();
         
     } catch (err) {
         console.error('Error in loadRecentClinicPasses:', err);
@@ -717,7 +738,7 @@ async function forwardToParent(clinicVisitId, studentName) {
             .single();
         
         if (!student?.parent_id) {
-            alert('No parent linked to this student.');
+            showNotification('No parent linked to this student.', "error");
             return;
         }
         
@@ -736,12 +757,12 @@ async function forwardToParent(clinicVisitId, studentName) {
             .update({ parent_notified: true })
             .eq('id', clinicVisitId);
         
-        alert('Findings forwarded to parent successfully!');
+        showNotification('Findings forwarded to parent successfully!', "success");
         await loadRecentClinicPasses();
         
     } catch (err) {
         console.error('Error forwarding to parent:', err);
-        alert('Error forwarding findings. Please try again.');
+        showNotification('Error forwarding findings. Please try again.', "error");
     }
 }
 
@@ -794,34 +815,35 @@ async function loadExcuseLetters() {
         letterList.innerHTML = '';
         
         letters?.forEach(letter => {
-            const statusBadge = letter.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                               letter.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const statusBadge = letter.status === 'Pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                               letter.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200';
             
             const div = document.createElement('div');
-            div.className = 'bg-white p-4 border rounded mb-4';
+            div.className = 'bg-white p-6 border border-gray-100 rounded-2xl shadow-sm mb-4';
             div.innerHTML = `
                 <div class="flex justify-between items-start mb-2">
                     <div>
-                        <span class="font-bold">${letter.students?.full_name}</span>
-                        <span class="text-sm text-gray-500 ml-2">${letter.students?.student_id_text}</span>
+                        <span class="font-bold text-gray-800 text-sm">${letter.students?.full_name}</span>
+                        <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest ml-2">${letter.students?.student_id_text}</span>
                     </div>
-                    <span class="px-2 py-1 rounded text-xs ${statusBadge}">${letter.status}</span>
+                    <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${letter.status}</span>
                 </div>
-                <p class="text-sm"><strong>Date Absent:</strong> ${letter.date_absent}</p>
-                <p class="text-sm"><strong>Reason:</strong> ${letter.reason}</p>
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Date Absent: ${letter.date_absent}</p>
+                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 mb-3">${letter.reason}</p>
                 ${letter.image_proof_url ? `
-                    <a href="${letter.image_proof_url}" target="_blank" class="text-blue-500 text-sm hover:underline">View Proof</a>
+                    <a href="${letter.image_proof_url}" target="_blank" class="inline-flex items-center gap-2 text-blue-600 text-xs font-bold hover:underline mb-3"><i data-lucide="image" class="w-4 h-4"></i> View Proof Attachment</a>
                 ` : ''}
                 ${letter.status === 'Pending' ? `
                     <div class="flex gap-2 mt-3">
                         <button onclick="approveExcuseLetter('${letter.id}', '${letter.student_id}', '${letter.date_absent}')" 
-                            class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm">Approve</button>
+                            class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm shadow-emerald-200">Approve</button>
                         <button onclick="rejectExcuseLetter('${letter.id}')" 
-                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm">Reject</button>
+                            class="flex-1 bg-white border border-red-200 text-red-500 hover:bg-red-50 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">Reject</button>
                     </div>
                 ` : ''}
             `;
             letterList.appendChild(div);
+            if(window.lucide) lucide.createIcons();
         });
         
     } catch (err) {
@@ -850,12 +872,12 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
                 onConflict: 'student_id, log_date'
             });
         
-        alert('Excuse letter approved and attendance marked as Excused.');
+        showNotification('Excuse letter approved and attendance marked as Excused.', "success");
         await loadExcuseLetters();
         
     } catch (err) {
         console.error('Error approving excuse letter:', err);
-        alert('Error approving excuse letter. Please try again.');
+        showNotification('Error approving excuse letter. Please try again.', "error");
     }
 }
 
@@ -873,12 +895,12 @@ async function rejectExcuseLetter(letterId) {
             })
             .eq('id', letterId);
         
-        alert('Excuse letter rejected.');
+        showNotification('Excuse letter rejected.', "success");
         await loadExcuseLetters();
         
     } catch (err) {
         console.error('Error rejecting excuse letter:', err);
-        alert('Error rejecting excuse letter. Please try again.');
+        showNotification('Error rejecting excuse letter. Please try again.', "error");
     }
 }
 
@@ -1023,49 +1045,135 @@ async function loadAnnouncementsBoard() {
     await loadExistingAnnouncements();
 }
 
-// 22. Post Announcement to Parents
+// 22. Post Announcement to Parents (with Confirmation)
 async function postAnnouncement() {
     const title = document.getElementById('announcement-title').value;
     const content = document.getElementById('announcement-content').value;
-    
+    const scheduleDate = document.getElementById('announcement-date').value;
+    const scheduleTime = document.getElementById('announcement-time').value;
+    const isUrgent = document.getElementById('announcement-urgent').checked;
+    const maxLength = 500;
+
     if (!title || !content) {
-        alert('Please fill in both title and content.');
-        return;
+        return showNotification('Please fill in both title and content.', "error");
     }
-    
-    try {
-        const { error } = await supabase
-            .from('announcements')
-            .insert({
-                title: title,
-                content: content,
-                posted_by_admin_id: currentUser.id,
-                target_parents: true,
-                target_teachers: false,
-                target_guards: false,
-                target_clinic: false
-            });
-        
-        if (error) {
-            alert('Error posting announcement: ' + error.message);
-            return;
+    if (content.length > maxLength) {
+        return showNotification(`Content cannot exceed ${maxLength} characters.`, "error");
+    }
+
+    let scheduled_at = new Date();
+    let isScheduled = false;
+    if (scheduleDate && scheduleTime) {
+        scheduled_at = new Date(`${scheduleDate}T${scheduleTime}`);
+        isScheduled = true;
+        if (scheduled_at < new Date()) {
+            return showNotification("Scheduled time cannot be in the past.", "error");
         }
-        
-        alert('Announcement posted successfully!');
-        document.getElementById('announcement-title').value = '';
-        document.getElementById('announcement-content').value = '';
-        await loadExistingAnnouncements();
-        
-    } catch (err) {
-        console.error('Error posting announcement:', err);
-        alert('Error posting announcement. Please try again.');
     }
+
+    const confirmationMessage = `
+        <div class="text-left space-y-4 p-2">
+            <div>
+                <p class="text-xs font-bold text-gray-400 uppercase">Title</p>
+                <p class="font-semibold text-gray-800">${title}</p>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-gray-400 uppercase">Content</p>
+                <p class="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">${content}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 pt-2 border-t">
+                <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase">Urgency</p>
+                    <p class="font-semibold ${isUrgent ? 'text-red-600' : 'text-gray-700'}">${isUrgent ? 'URGENT' : 'Normal'}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-gray-400 uppercase">Send Time</p>
+                    <p class="font-semibold text-gray-700">${isScheduled ? scheduled_at.toLocaleString() : 'Immediately'}</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    showConfirmationModal('Confirm Announcement', confirmationMessage, async () => {
+        try {
+            // 1. Get teacher's homeroom class ID
+            const batchId = crypto.randomUUID(); // Generate a unique ID for this batch
+            const { data: teacherClass, error: classError } = await supabase
+                .from('classes')
+                .select('id')
+                .eq('adviser_id', currentUser.id)
+                .single();
+
+            if (classError || !teacherClass) {
+                throw new Error("You are not an adviser and cannot post class announcements.");
+            }
+
+            // 2. Get all students in that class
+            const { data: students, error: studentError } = await supabase
+                .from('students')
+                .select('parent_id')
+                .eq('class_id', teacherClass.id)
+                .not('parent_id', 'is', null);
+
+            if (studentError) throw studentError;
+
+            // 3. Create a unique list of parent IDs
+            const parentIds = [...new Set(students.map(s => s.parent_id))];
+
+            if (parentIds.length === 0) {
+                throw new Error("No parents found for your homeroom students.");
+            }
+
+            // 4. Create a notification payload for each parent
+            const notifications = parentIds.map(parentId => ({
+                recipient_id: parentId,
+                recipient_role: 'parent',
+                title: `Announcement: ${title}`,
+                message: content,
+                type: 'announcement',
+                is_urgent: isUrgent,
+                scheduled_at: scheduled_at.toISOString(),
+                sender_id: currentUser.id,
+                batch_id: batchId
+            }));
+
+            // 5. Bulk insert notifications
+            const { error: notifError } = await supabase.from('notifications').insert(notifications);
+
+            if (notifError) throw notifError;
+
+            const successMessage = isScheduled 
+                ? `Announcement scheduled for ${scheduled_at.toLocaleDateString()} at ${scheduled_at.toLocaleTimeString()}.`
+                : `Announcement sent to ${parentIds.length} parents.`;
+            
+            showNotification(successMessage, "success");
+            
+            // Reset form
+            document.getElementById('announcement-title').value = '';
+            document.getElementById('announcement-content').value = '';
+            document.getElementById('announcement-date').value = '';
+            document.getElementById('announcement-time').value = '';
+            document.getElementById('announcement-urgent').checked = false;
+            const charCounter = document.getElementById('char-counter');
+            if (charCounter) charCounter.textContent = '0';
+            loadScheduledAnnouncements(); // Refresh the scheduled list
+        } catch (err) {
+            console.error('Error posting class announcement:', err);
+            showNotification(err.message, "error");
+        }
+    });
+}
+
+// 23. Load Existing Announcements (placeholder)
+async function loadExistingAnnouncements() {
+    // This is a placeholder - actual implementation would load existing announcements
+    console.log('Loading existing announcements...');
 }
 
 // 24. Toggle Gatekeeper Mode
 function toggleGatekeeperMode() {
     if (isGatekeeperMode) {
-        window.location.href = '../guard/guard-dashboard.html';
+        window.location.href = 'teacher-gatekeeper-mode.html';
     }
 }
 
@@ -1083,5 +1191,381 @@ function navigateTo(section) {
     
     if (routes[section]) {
         window.location.href = routes[section];
+    }
+}
+
+// 26. Setup Announcement Page
+async function setupAnnouncementPage() {
+    await loadAnnouncementsBoard();
+    await loadScheduledAnnouncements();
+    await loadSentAnnouncements();
+
+    const contentArea = document.getElementById('announcement-content');
+    const charCounter = document.getElementById('char-counter');
+    const maxLength = 500;
+
+    if (contentArea && charCounter) {
+        contentArea.addEventListener('input', () => {
+            const currentLength = contentArea.value.length;
+            charCounter.textContent = currentLength;
+            charCounter.parentElement.classList.toggle('text-red-500', currentLength > maxLength);
+        });
+    }
+}
+
+// 27. Load Sent Announcements
+async function loadSentAnnouncements() {
+    const list = document.getElementById('sent-announcements-list');
+    if (!list) return;
+
+    try {
+        const { data, error } = await supabase.rpc('get_teacher_announcements', { teacher_id_param: currentUser.id });
+
+        if (error) throw error;
+
+        if (data.length === 0) {
+            list.innerHTML = '<p class="text-center text-gray-400 italic">You have not sent any announcements.</p>';
+            return;
+        }
+
+        list.innerHTML = data.map(ann => `
+            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-bold text-gray-800">${ann.title.replace('Announcement: ', '')}</p>
+                        <p class="text-xs text-gray-500 truncate max-w-xs">${ann.message}</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="px-2 py-1 rounded-lg text-xs font-bold ${ann.read_count / ann.total_count > 0.5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+                            ${ann.read_count} / ${ann.total_count} Seen
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (err) {
+        console.error("Error loading sent announcements:", err);
+        list.innerHTML = '<p class="text-center text-red-500">Could not load sent announcements.</p>';
+    }
+}
+
+// 28. Open Edit Announcement Modal
+async function openEditAnnouncementModal(ann) {
+    const scheduledDate = new Date(ann.scheduled_at);
+    
+    const confirmationMessage = `
+        <div class="text-left space-y-4 p-2">
+            <input type="hidden" id="edit-batch-id" value="${ann.batch_id}">
+            <div>
+                <label class="text-xs font-bold text-gray-400 uppercase">Title</label>
+                <input id="edit-title" class="w-full mt-1 p-2 border rounded-lg" value="${ann.title.replace('Announcement: ', '')}">
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-400 uppercase">Content</label>
+                <textarea id="edit-content" class="w-full mt-1 p-2 border rounded-lg" rows="4">${ann.message}</textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4 pt-2 border-t">
+                <div>
+                    <label class="text-xs font-bold text-gray-400 uppercase">Schedule Date</label>
+                    <input type="date" id="edit-date" class="w-full mt-1 p-2 border rounded-lg" value="${scheduledDate.toISOString().split('T')[0]}">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-400 uppercase">Schedule Time</label>
+                    <input type="time" id="edit-time" class="w-full mt-1 p-2 border rounded-lg" value="${scheduledDate.toTimeString().substring(0,5)}">
+                </div>
+            </div>
+        </div>
+    `;
+
+    showConfirmationModal('Edit Scheduled Announcement', confirmationMessage, submitAnnouncementEdit, 'Save Changes');
+}
+
+// 29. Submit Announcement Edit
+async function submitAnnouncementEdit() {
+    const batchId = document.getElementById('edit-batch-id').value;
+    const title = document.getElementById('edit-title').value;
+    const content = document.getElementById('edit-content').value;
+    const date = document.getElementById('edit-date').value;
+    const time = document.getElementById('edit-time').value;
+    const scheduled_at = new Date(`${date}T${time}`);
+
+    try {
+        const { error } = await supabase.from('notifications')
+            .update({
+                title: `Announcement: ${title}`,
+                message: content,
+                scheduled_at: scheduled_at.toISOString()
+            })
+            .eq('batch_id', batchId);
+
+        if (error) throw error;
+        showNotification("Scheduled announcement updated!", "success");
+        loadScheduledAnnouncements();
+    } catch (err) {
+        showNotification("Failed to update announcement.", "error");
+    }
+}
+
+// 30. Load Scheduled Announcements
+async function loadScheduledAnnouncements() {
+    const list = document.getElementById('scheduled-announcements-list');
+    if (!list) return;
+
+    try {
+        const now = new Date().toISOString();
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, message, scheduled_at, is_urgent, batch_id')
+            .eq('sender_id', currentUser.id)
+            .gt('scheduled_at', now)
+            .order('scheduled_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (data.length === 0) {
+            list.innerHTML = '<p class="text-center text-gray-400 italic">No announcements scheduled.</p>';
+            return;
+        }
+
+        list.innerHTML = data.map(ann => `
+            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                    <p class="font-semibold text-gray-700">${ann.title}</p>
+                    <p class="text-xs text-blue-600">Scheduled for: ${new Date(ann.scheduled_at).toLocaleString()}</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick='openEditAnnouncementModal(${JSON.stringify(ann)})' class="p-2 text-gray-500 hover:bg-gray-100 rounded-lg" title="Edit"><i data-lucide="edit" class="w-5 h-5"></i></button>
+                    <button onclick="cancelScheduledAnnouncement('${ann.batch_id}')" class="p-2 text-red-500 hover:bg-red-100 rounded-lg" title="Cancel">
+                        <i data-lucide="x-circle" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+        if(window.lucide) lucide.createIcons();
+
+    } catch (err) {
+        console.error("Error loading scheduled announcements:", err);
+        list.innerHTML = '<p class="text-center text-red-500">Could not load scheduled items.</p>';
+    }
+}
+
+// 31. Cancel Scheduled Announcement
+async function cancelScheduledAnnouncement(batchId) {
+    if (!confirm("Are you sure you want to cancel this scheduled announcement? This will delete it for all recipients.")) return;
+    try {
+        const { error } = await supabase.from('notifications').delete().eq('batch_id', batchId);
+        if (error) throw error;
+        showNotification("Scheduled announcement cancelled.", "success");
+        loadScheduledAnnouncements(); // Refresh the list
+    } catch (err) {
+        showNotification("Failed to cancel announcement.", "error");
+    }
+}
+
+// 32. Initialize Teacher Settings Page
+function initializeTeacherSettingsPage() {
+    injectPasswordChangeUI();
+}
+
+// 33. Inject Styles
+function injectStyles() {
+    const style = document.createElement('style');
+    style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
+    document.head.appendChild(style);
+}
+
+// 34. Show Notification
+function showNotification(msg, type='info', callback=null) {
+    const existing = document.getElementById('notification-modal');
+    if(existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'notification-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
+    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-blue-600';
+    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-blue-50';
+    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
+
+    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
+    if (!dndEnabled) {
+        // Feedback: Vibrate (Mobile) & Sound (Desktop)
+        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = type === 'error' ? 220 : 550;
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start(); osc.stop(ctx.currentTime + 0.2);
+        } catch(e){}
+    }
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
+    document.body.appendChild(modal);
+    document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
+    if(window.lucide) lucide.createIcons();
+}
+
+// 35. Show Confirmation Modal
+function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm & Send') {
+    const existing = document.getElementById('confirmation-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in p-4';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
+            <div class="p-6 border-b">
+                <h3 class="text-xl font-bold text-gray-800">${title}</h3>
+            </div>
+            <div class="p-6 max-h-[60vh] overflow-y-auto">${message}</div>
+            <div class="p-4 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
+                <button id="confirm-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-300 transition-all">Cancel</button>
+                <button id="confirm-action-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-all">${confirmText}</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
+    document.getElementById('confirm-action-btn').onclick = () => {
+        onConfirm();
+        modal.remove();
+    };
+    if(window.lucide) lucide.createIcons();
+}
+
+// 36. Print Homeroom List
+function printHomeroomList() {
+    const printStyles = `
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .printable-area, .printable-area * {
+                visibility: visible;
+            }
+            .printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                padding: 2rem;
+            }
+            .non-printable {
+                display: none !important;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+            }
+            th {
+                background-color: #f2f2f2;
+            }
+        }
+    `;
+    const styleSheet = document.createElement("style");
+    styleSheet.type = "text/css";
+    styleSheet.innerText = printStyles;
+    document.head.appendChild(styleSheet);
+    window.print();
+    // Use a timeout to ensure the print dialog is closed before removing the stylesheet
+    setTimeout(() => {
+        document.head.removeChild(styleSheet);
+    }, 500);
+}
+
+// 37. Get Status Badge Class
+function getStatusBadge(status) {
+    switch (status) {
+        case 'On Time':
+        case 'Present':
+            return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+        case 'Late':
+            return 'bg-amber-100 text-amber-700 border border-amber-200';
+        case 'Absent':
+            return 'bg-red-100 text-red-700 border border-red-200';
+        case 'Excused':
+            return 'bg-blue-100 text-blue-700 border border-blue-200';
+        default:
+            return 'bg-gray-100 text-gray-500 border border-gray-200';
+    }
+}
+
+// 38. Format Time
+function formatTime(dateStr) {
+    if (!dateStr) return '--:--';
+    return new Date(dateStr).toLocaleTimeString('en-PH', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+    });
+}
+
+// 39. Inject Password Change UI
+function injectPasswordChangeUI() {
+    const container = document.getElementById('settings-container');
+    if (!container) return;
+
+    const html = `
+        <div class="bg-white rounded-2xl shadow-lg p-6 mt-8">
+            <h3 class="font-bold text-xl text-gray-800 mb-4">Change Password</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Current Password</label>
+                    <input type="password" id="cp-current" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">New Password</label>
+                    <input type="password" id="cp-new" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-500 mb-1">Confirm New Password</label>
+                    <input type="password" id="cp-confirm" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="submitPasswordChange()" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Update Password</button>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+// 40. Submit Password Change
+async function submitPasswordChange() {
+    const current = document.getElementById('cp-current').value;
+    const newPass = document.getElementById('cp-new').value;
+    const confirmPass = document.getElementById('cp-confirm').value;
+
+    if(!current || !newPass || !confirmPass) return showNotification("All password fields are required.", "error");
+    if(newPass !== confirmPass) return showNotification("New passwords do not match.", "error");
+    if(newPass.length < 6) return showNotification("Password must be at least 6 characters.", "error");
+
+    const user = checkSession('teachers');
+    if(!user) return;
+
+    const { data, error } = await supabase.from('teachers').select('id').eq('id', user.id).eq('password', current).single();
+    if(error || !data) return showNotification("Incorrect current password.", "error");
+
+    const { error: updateErr } = await supabase.from('teachers').update({ password: newPass }).eq('id', user.id);
+    if(updateErr) showNotification(updateErr.message, "error");
+    else { 
+        showNotification("Password updated successfully!", "success"); 
+        ['cp-current', 'cp-new', 'cp-confirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.value = '';
+        });
     }
 }

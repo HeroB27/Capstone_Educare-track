@@ -1,318 +1,165 @@
 // admin/admin-attendance-settings.js
 
-// 1. Session Check
-// currentUser is now global in admin-core.js
-
-// 2. Initialize Page
-document.addEventListener('DOMContentLoaded', () => {
-    if (currentUser) {
-        document.getElementById('admin-name').innerText = currentUser.full_name || 'Admin';
+// 1. Initialize Page
+document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof checkSession === 'function') {
+        if (!checkSession('admins')) return;
     }
     
-    // Load all settings
-    loadThresholdSettings();
-    loadAttendanceRules();
-    loadNotificationSettings();
+    // Load all settings from the database into the inputs
+    await loadAllSettings();
+    injectStyles();
 });
 
-// ============ TAB SWITCHING ============
-
-// 3. Switch Settings Tab
-function switchTab(tabName) {
-    // Update tab styling
-    document.getElementById('tab-thresholds').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-attendance-rules').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-notifications').className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700';
-    document.getElementById('tab-' + tabName).className = 'px-4 py-2 border-b-2 border-violet-500 text-violet-600 font-medium';
-    
-    // Show/hide content
-    document.getElementById('thresholdsTab').classList.add('hidden');
-    document.getElementById('attendanceRulesTab').classList.add('hidden');
-    document.getElementById('notificationsTab').classList.add('hidden');
-    document.getElementById(tabName + 'Tab').classList.remove('hidden');
-}
-
-// ============ THRESHOLD SETTINGS ============
-
-// 4. Load Threshold Settings from Database
-async function loadThresholdSettings() {
+// 2. Load Settings from Supabase
+async function loadAllSettings() {
     try {
-        // Fetch all threshold settings from settings table
-        const { data, error } = await supabase
-            .from('settings')
-            .select('*')
-            .or('setting_key.like.%threshold_%,setting_key.like.%entry_%,setting_key.like.%dismissal_%,setting_key.like.%grace_%');
-        
-        if (error) throw error;
-        
-        // Create map of settings
-        const settingsMap = {};
-        (data || []).forEach(s => {
-            settingsMap[s.setting_key] = s.setting_value;
-        });
-        
-        // Entry Time Fields
-        const entryFields = ['entry_kinder', 'entry_g1_g6', 'entry_g7_g10', 'entry_g11_g12'];
-        entryFields.forEach(field => {
-            const element = document.getElementById(field);
-            if (element && settingsMap[field]) {
-                element.value = settingsMap[field];
-            } else if (element) {
-                // Set default values
-                const defaults = {
-                    'entry_kinder': '07:30',
-                    'entry_g1_g6': '07:30',
-                    'entry_g7_g10': '07:30',
-                    'entry_g11_g12': '07:30'
-                };
-                element.value = defaults[field] || '07:30';
-            }
-        });
-        
-        // Late Threshold Fields
-        const thresholdFields = [
-            'threshold_kinder', 'threshold_g1_g3', 'threshold_g4_g6',
-            'threshold_g7_g8', 'threshold_g9_g10', 'threshold_shs_am'
-        ];
-        
-        thresholdFields.forEach(field => {
-            const element = document.getElementById(field);
-            if (element && settingsMap[field]) {
-                element.value = settingsMap[field];
-            } else if (element) {
-                // Set default values (threshold = entry time + 15 min buffer)
-                const defaults = {
-                    'threshold_kinder': '08:00',
-                    'threshold_g1_g3': '08:00',
-                    'threshold_g4_g6': '08:00',
-                    'threshold_g7_g8': '08:00',
-                    'threshold_g9_g10': '08:00',
-                    'threshold_shs_am': '08:00'
-                };
-                element.value = defaults[field] || '08:15';
-            }
-        });
-        
-        // Dismissal Time Fields
-        const dismissalFields = ['dismissal_kinder', 'dismissal_g1_g6', 'dismissal_g7_g10', 'dismissal_g11_g12'];
-        dismissalFields.forEach(field => {
-            const element = document.getElementById(field);
-            if (element && settingsMap[field]) {
-                element.value = settingsMap[field];
-            } else if (element) {
-                // Set default values per grade level
-                const defaults = {
-                    'dismissal_kinder': '11:30',
-                    'dismissal_g1_g6': '15:00',
-                    'dismissal_g7_g10': '16:00',
-                    'dismissal_g11_g12': '16:30'
-                };
-                element.value = defaults[field] || '15:00';
-            }
-        });
-        
-        // Grace Period
-        const graceElement = document.getElementById('grace_period_minutes');
-        if (graceElement && settingsMap['grace_period_minutes']) {
-            graceElement.value = settingsMap['grace_period_minutes'];
-        } else if (graceElement) {
-            graceElement.value = '15'; // Default 15 minutes
-        }
-        
-    } catch (error) {
-        console.error('Error loading threshold settings:', error);
-        // Set default values on error
-        setDefaultTimeValues();
-    }
-}
-
-// Set default time values when DB fetch fails
-function setDefaultTimeValues() {
-    const defaults = {
-        'entry_kinder': '07:30', 'entry_g1_g6': '07:30', 'entry_g7_g10': '07:30', 'entry_g11_g12': '07:30',
-        'threshold_kinder': '08:00', 'threshold_g1_g3': '08:00', 'threshold_g4_g6': '08:00',
-        'threshold_g7_g8': '08:00', 'threshold_g9_g10': '08:00', 'threshold_shs_am': '08:00',
-        'dismissal_kinder': '11:30', 'dismissal_g1_g6': '15:00', 'dismissal_g7_g10': '16:00', 'dismissal_g11_g12': '16:30',
-        'grace_period_minutes': '15'
-    };
-    
-    Object.keys(defaults).forEach(field => {
-        const element = document.getElementById(field);
-        if (element) element.value = defaults[field];
-    });
-}
-
-// 5. Save Threshold Settings
-// UPDATED: Use bulk upsert instead of individual requests to prevent API spam
-async function saveThresholds() {
-    const settings = [
-        // Entry Times
-        { key: 'entry_kinder', value: document.getElementById('entry_kinder').value, desc: 'Kinder entry time' },
-        { key: 'entry_g1_g6', value: document.getElementById('entry_g1_g6').value, desc: 'Grades 1-6 entry time' },
-        { key: 'entry_g7_g10', value: document.getElementById('entry_g7_g10').value, desc: 'Grades 7-10 entry time' },
-        { key: 'entry_g11_g12', value: document.getElementById('entry_g11_g12').value, desc: 'Grades 11-12 entry time' },
-        // Late Thresholds (with grace period)
-        { key: 'threshold_kinder', value: document.getElementById('threshold_kinder').value, desc: 'Kinder late threshold' },
-        { key: 'threshold_g1_g3', value: document.getElementById('threshold_g1_g3').value, desc: 'Grades 1-3 late threshold' },
-        { key: 'threshold_g4_g6', value: document.getElementById('threshold_g4_g6').value, desc: 'Grades 4-6 late threshold' },
-        { key: 'threshold_g7_g8', value: document.getElementById('threshold_g7_g8').value, desc: 'Grades 7-8 late threshold' },
-        { key: 'threshold_g9_g10', value: document.getElementById('threshold_g9_g10').value, desc: 'Grades 9-10 late threshold' },
-        { key: 'threshold_shs_am', value: document.getElementById('threshold_shs_am').value, desc: 'SHS AM session late threshold' },
-        // Dismissal Times
-        { key: 'dismissal_kinder', value: document.getElementById('dismissal_kinder').value, desc: 'Kinder dismissal time' },
-        { key: 'dismissal_g1_g6', value: document.getElementById('dismissal_g1_g6').value, desc: 'Grades 1-6 dismissal time' },
-        { key: 'dismissal_g7_g10', value: document.getElementById('dismissal_g7_g10').value, desc: 'Grades 7-10 dismissal time' },
-        { key: 'dismissal_g11_g12', value: document.getElementById('dismissal_g11_g12').value, desc: 'Grades 11-12 dismissal time' },
-        // Grace Period
-        { key: 'grace_period_minutes', value: document.getElementById('grace_period_minutes').value, desc: 'Grace period in minutes for late arrival' }
-    ];
-    
-    try {
-        // Bulk upsert all settings in a single request
-        const bulkData = settings.map(setting => ({
-            setting_key: setting.key,
-            setting_value: setting.value,
-            description: setting.desc
-        }));
-
-        const { error } = await supabase
-            .from('settings')
-            .upsert(bulkData, { onConflict: 'setting_key' });
-        
-        if (error) throw error;
-        
-        alert('Time settings saved successfully!');
-        
-    } catch (error) {
-        console.error('Error saving thresholds:', error);
-        alert('Error saving settings: ' + error.message);
-    }
-}
-
-// ============ ATTENDANCE RULES ============
-
-// 6. Load Attendance Rules
-async function loadAttendanceRules() {
-    try {
-        const { data, error } = await supabase
-            .from('settings')
-            .select('*')
-            .in('setting_key', ['halfday_minutes', 'auto_absent_after', 'tardiness_cap', 'allow_excuse_override']);
-        
-        if (error) throw error;
-        
-        const settingsMap = {};
-        (data || []).forEach(s => {
-            settingsMap[s.setting_key] = s.setting_value;
-        });
-        
-        // Set values
-        if (settingsMap['halfday_minutes']) {
-            document.getElementById('halfday_minutes').value = settingsMap['halfday_minutes'];
-        }
-        if (settingsMap['auto_absent_after']) {
-            document.getElementById('auto_absent_after').value = settingsMap['auto_absent_after'];
-        }
-        if (settingsMap['tardiness_cap']) {
-            document.getElementById('tardiness_cap').value = settingsMap['tardiness_cap'];
-        }
-        if (settingsMap['allow_excuse_override']) {
-            document.getElementById('allow_excuse_override').value = settingsMap['allow_excuse_override'];
-        }
-        
-    } catch (error) {
-        console.error('Error loading attendance rules:', error);
-    }
-}
-
-// 7. Save Attendance Rules
-// UPDATED: Use bulk upsert instead of individual requests to prevent API spam
-async function saveAttendanceRules() {
-    const settings = [
-        { key: 'halfday_minutes', value: document.getElementById('halfday_minutes').value, desc: 'Minimum minutes for half-day' },
-        { key: 'auto_absent_after', value: document.getElementById('auto_absent_after').value, desc: 'Minutes after start to auto-mark absent' },
-        { key: 'tardiness_cap', value: document.getElementById('tardiness_cap').value, desc: 'Max tardiness minutes before absent' },
-        { key: 'allow_excuse_override', value: document.getElementById('allow_excuse_override').value, desc: 'Allow excuse letter for tardiness' }
-    ];
-    
-    try {
-        // Bulk upsert all rules in a single request
-        const bulkData = settings.map(setting => ({
-            setting_key: setting.key,
-            setting_value: setting.value,
-            description: setting.desc
-        }));
-
-        const { error } = await supabase
-            .from('settings')
-            .upsert(bulkData, { onConflict: 'setting_key' });
-        
-        if (error) throw error;
-        
-        alert('Attendance rules saved successfully!');
-        
-    } catch (error) {
-        console.error('Error saving attendance rules:', error);
-        alert('Error saving rules: ' + error.message);
-    }
-}
-
-// ============ NOTIFICATION SETTINGS ============
-
-// 8. Load Notification Settings
-async function loadNotificationSettings() {
-    try {
-        const { data: settings, error } = await supabase.from('settings').select('*');
+        const { data, error } = await supabase.from('settings').select('*');
         if (error) throw error;
 
-        settings.forEach(setting => {
-            const element = document.getElementById(setting.setting_key);
-            if (element) {
-                // If it's a checkbox, evaluate the string strictly
-                if (element.type === 'checkbox') {
-                    element.checked = (setting.setting_value === 'true');
-                } 
-                // If it's a time/text input, just assign the value
-                else {
-                    element.value = setting.setting_value;
+        // Map the database rows directly to the UI inputs
+        if (data) {
+            data.forEach(s => {
+                const input = document.getElementById(s.setting_key);
+                if (input) {
+                    if (input.type === 'checkbox') {
+                        input.checked = (s.setting_value === 'true');
+                    } else {
+                        input.value = s.setting_value;
+                    }
                 }
-            }
-        });
+            });
+        }
     } catch (err) {
         console.error("Error loading settings:", err);
     }
 }
 
-// 9. Save Notification Settings
-// UPDATED: Use bulk upsert instead of individual requests to prevent API spam
-async function saveNotificationSettings() {
-    const settings = [
-        { key: 'notify_late', value: document.getElementById('notify_late').checked.toString(), desc: 'Notify on late arrival' },
-        { key: 'notify_absent', value: document.getElementById('notify_absent').checked.toString(), desc: 'Notify on absence' },
-        { key: 'notify_clinic', value: document.getElementById('notify_clinic').checked.toString(), desc: 'Notify on clinic visit' },
-        { key: 'notify_early_dismissal', value: document.getElementById('notify_early_dismissal').checked.toString(), desc: 'Notify on early dismissal' },
-        { key: 'notify_batch_am', value: document.getElementById('notify_batch_am').value, desc: 'AM batch notification time' },
-        { key: 'notify_batch_pm', value: document.getElementById('notify_batch_pm').value, desc: 'PM batch notification time' }
-    ];
+// 3. The Switch Tab Function (Fixed to prevent "null" error)
+function switchTab(tabId) {
+    const tabs = ['thresholds', 'attendance-rules', 'notifications'];
+    
+    tabs.forEach(t => {
+        const contentArea = document.getElementById(`${t}Tab`);
+        const navBtn = document.getElementById(`tab-${t}`);
+
+        // Only try to modify if the element actually exists in the HTML
+        if (contentArea) {
+            if (t === tabId) {
+                contentArea.classList.remove('hidden');
+            } else {
+                contentArea.classList.add('hidden');
+            }
+        }
+
+        if (navBtn) {
+            if (t === tabId) {
+                navBtn.className = 'px-4 py-2 border-b-2 border-violet-500 text-violet-600 font-semibold transition-colors';
+            } else {
+                navBtn.className = 'px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors font-medium';
+            }
+        }
+    });
+}
+
+// 4. Save Logic: Time Thresholds
+async function saveThresholds() {
+    const btn = event.currentTarget;
+    setLoading(btn, true);
+
+    const keys = ['am_gate_open', 'am_late_threshold', 'am_absent_threshold', 'pm_dismissal_time', 'pm_early_cutoff'];
     
     try {
-        // Bulk upsert all settings in a single request
-        const bulkData = settings.map(setting => ({
-            setting_key: setting.key,
-            setting_value: setting.value,
-            description: setting.desc
-        }));
-
-        const { error } = await supabase
-            .from('settings')
-            .upsert(bulkData, { onConflict: 'setting_key' });
-        
-        if (error) throw error;
-        
-        alert('Notification settings saved successfully!');
-        
-    } catch (error) {
-        console.error('Error saving notification settings:', error);
-        alert('Error saving settings: ' + error.message);
+        await performBulkUpsert(keys);
+        showNotification("Gate thresholds updated successfully!", "success");
+    } catch (err) {
+        showNotification("Update failed: " + err.message, "error");
+    } finally {
+        setLoading(btn, false, '<i data-lucide="save" class="w-4 h-4"></i> Save Settings');
     }
+}
+
+// 5. Save Logic: Notification Toggles
+async function saveNotificationSettings() {
+    const btn = event.currentTarget;
+    setLoading(btn, true);
+
+    const keys = ['notify_late', 'notify_absent', 'notify_clinic', 'notify_early_dismissal', 'notify_batch_am', 'notify_batch_pm'];
+    
+    try {
+        await performBulkUpsert(keys);
+        showNotification("Notification preferences saved!", "success");
+    } catch (err) {
+        showNotification("Update failed: " + err.message, "error");
+    } finally {
+        setLoading(btn, false, '<i data-lucide="save" class="w-4 h-4"></i> Save Settings');
+    }
+}
+
+// 6. The "Simplifier" Utility: Bulk Upsert
+async function performBulkUpsert(keys) {
+    const payload = keys.map(key => {
+        const el = document.getElementById(key);
+        if (!el) return null;
+        
+        const val = el.type === 'checkbox' ? el.checked.toString() : el.value;
+        return { 
+            setting_key: key, 
+            setting_value: val,
+            // Optional: add a description so the DB stays readable
+            setting_description: `Admin setting for ${key}` 
+        };
+    }).filter(item => item !== null);
+
+    const { error } = await supabase
+        .from('settings')
+        .upsert(payload, { onConflict: 'setting_key' });
+
+    if (error) throw error;
+}
+
+// Helper: Loading Spinner
+function setLoading(btn, isLoading, originalText) {
+    btn.disabled = isLoading;
+    btn.innerHTML = isLoading ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...' : originalText;
+    if (window.lucide) lucide.createIcons();
+}
+
+function injectStyles() {
+    const style = document.createElement('style');
+    style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
+    document.head.appendChild(style);
+}
+
+function showNotification(msg, type='info', callback=null) {
+    const existing = document.getElementById('notification-modal');
+    if(existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'notification-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
+    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
+    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
+    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
+
+    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
+    if (!dndEnabled) {
+        // Feedback: Vibrate (Mobile) & Sound (Desktop)
+        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = type === 'error' ? 220 : 550;
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start(); osc.stop(ctx.currentTime + 0.2);
+        } catch(e){}
+    }
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
+    document.body.appendChild(modal);
+    document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
+    if(window.lucide) lucide.createIcons();
 }
