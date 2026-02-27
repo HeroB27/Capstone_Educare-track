@@ -1,86 +1,187 @@
 # Teacher Module Debug Log
 
-## Date: 2026-02-27
+**Date:** 2026-02-27
 
-### Problem 1: teacher-announcements-board.html & teacher-announcements-board.js
-**Issues Found:**
-- Standalone JS used wrong table (`announcements` with `posted_by_admin_id`) - should use `notifications` table for teacher-to-parent announcements
-- Missing HTML fields: date input, time input, urgent checkbox, character counter
-- Missing containers for scheduled and sent announcements
-- Used `alert()` instead of `showNotification()` from core
-- No adviser check (only advisers can post class announcements)
+---
 
-**Solution:**
-- Updated `teacher-announcements-board.html` to add missing fields:
-  - `#announcement-date` - Schedule date input
-  - `#announcement-time` - Schedule time input  
-  - `#announcement-urgent` - Urgent checkbox
-  - `#char-counter` - Character counter display
-  - `#scheduled-announcements-list` - Container for scheduled announcements
-  - `#sent-announcements-list` - Container for sent announcements
-- Deleted `teacher-announcements-board.js` - core now handles everything
-- Core already had all needed functions: `setupAnnouncementPage()`, `postAnnouncement()`, `loadScheduledAnnouncements()`, `loadSentAnnouncements()`
+## Problem 1: Excuse Letter Approval - Missing Enhancements in teacher-core.js
 
-### Problem 2: teacher-clinicpass.html & teacher-clinicpass.js
-**Issues Found:**
-- Standalone JS redefined core functions causing duplication
-- Used `alert()` instead of `showNotification()`
-- Clinic staff notification used `recipient_role: 'clinic_staff'` without `recipient_id`
-- Statistics cards existed but were never updated
-- Missing subject teacher support for issuing passes
+### What is the problem
+The excuse letter approval functionality needed enhancements (stats counters, filtering, image proof modal) that were in a standalone JS file.
 
-**Solution:**
-- Updated `teacher-clinicpass.html` - removed standalone JS reference
-- Deleted `teacher-clinicpass.js` - functionality moved to core
-- Enhanced `teacher-core.js` with:
-  1. **Subject teacher support** - `loadClinicPassInterface()` now loads students from both homeroom AND subject loads, with deduplication
-  2. **Proper clinic staff notifications** - `issueClinicPass()` now fetches all clinic staff from `clinic_staff` table and inserts individual notifications with `recipient_id`
-  3. **Clinic statistics** - Added `loadClinicStats()` function that counts today's passes, active passes (Pending/Approved/Checked In), and completed passes (Completed/Cleared/Sent Home)
-  4. **Enhanced forward button logic** - `loadRecentClinicPasses()` now shows forward button only when (nurse_notes exist OR status is 'Completed') AND parent_notified is false
-  5. **Improved forwardToParent** - Added confirmation and better message building
+### What cause it
+The standalone `teacher-excuse-letter-approval.js` file was supposed to be merged into `teacher-core.js`.
 
-### Problem 3: teacher-data-analytics.html & teacher-data-analytics.js
-**Issues Found:**
-- Standalone script redefines `loadAnalytics`, overriding core's simpler analytics functions
-- HTML has four stats cards (Present Rate, Absent Rate, Late Rate, Excused Rate) but they're never updated
-- Chart IDs mismatch - HTML has `attendancePieChart` and `monthlyBarChart` but script tries to use `attendanceTrendChart` and `statusPieChart`
-- Script includes `processInsights` for critical absences but HTML has no container for that list
-- Uses `console.error` only - no user-friendly notifications
-- Doesn't clean up previous Chart.js instances
+### What is the solution
+**RESOLVED:** Upon inspection, the enhancements have ALREADY been merged into `teacher-core.js`:
+- `loadExcuseLetters()` already updates stats counters (#pending-count, #approved-count, #rejected-count)
+- `renderExcuseLetters()` already implements filtering with active tab states
+- `filterLetters()` function is already implemented
+- `viewProof()` modal for image proof is already implemented
+- Uses `showNotification` and `showConfirmationModal` from core
+- Global variables `allExcuseLetters` and `currentExcuseFilter` are defined
 
-**Solution:**
-- Updated `teacher-data-analytics.html` to add critical absences section (`#critical-absences-list`)
-- Deleted `teacher-data-analytics.js` - functionality merged into core
-- Enhanced `teacher-core.js` with:
-  1. **`loadAttendanceStats()`** - NEW function that updates the four stats cards with present/absent/late/excused rates
-  2. **`loadCriticalAbsences()`** - NEW function that finds students with 10+ absences in last 30 days
-  3. Enhanced `loadAnalytics()` to call all these new functions
-  4. Charts already had proper cleanup in core (`window.pieChart.destroy()`, `window.barChart.destroy()`)
+The file `teacher-excuse-letter-approval.js` does not exist (already deleted).
 
-### Problem 4: teacher-excuse-letter-approval.html & teacher-excuse-letter-approval.js
-**Issues Found:**
-- Standalone script redefines all core excuse-letter functions
-- Uses `alert`, `confirm`, and `prompt` instead of core's modal system
-- HTML has stats cards (#pending-count, #approved-count, #rejected-count) and filter tabs that core doesn't update
-- Useful enhancements: stats counters, filter tabs, image proof modal
+---
 
-**Solution:**
-- Updated `teacher-excuse-letter-approval.html` - removed standalone JS reference
-- Deleted `teacher-excuse-letter-approval.js` - functionality merged into core
-- Enhanced `teacher-core.js` with:
-  1. **`loadExcuseLetters()`** - Now updates stats counters (`#pending-count`, `#approved-count`, `#rejected-count`)
-  2. **`renderExcuseLetters()`** - NEW function for rendering with current filter
-  3. **`filterLetters(status)`** - NEW function for filtering by status (pending/approved/rejected)
-  4. **`rejectExcuseLetter()`** - Now uses `showConfirmationModal` instead of `prompt`
-  5. **`viewProof()`** and **`closeProofModal()`** - NEW functions for image proof modal
+## Problem 2: Gatekeeper Mode - Missing Helper Functions
 
-### Files Modified:
-1. `teacher/teacher-announcements-board.html` - Added missing fields and sections
-2. `teacher/teacher-announcements-board.js` - DELETED
-3. `teacher/teacher-clinicpass.html` - Removed standalone JS reference
-4. `teacher/teacher-clinicpass.js` - DELETED
-5. `teacher/teacher-data-analytics.html` - Added critical absences section
-6. `teacher/teacher-data-analytics.js` - DELETED
-7. `teacher/teacher-excuse-letter-approval.html` - Removed standalone JS reference
-8. `teacher/teacher-excuse-letter-approval.js` - DELETED
-9. `teacher/teacher-core.js` - Enhanced with all missing features
+### What is the problem
+The gatekeeper mode JavaScript referenced helper functions that were not defined:
+- `getDismissalTime(gradeLevel)`
+- `getLateThreshold(gradeLevel)`
+- `isLate(scanTime, gradeLevel, threshold)`
+- `isEarlyExit(scanTime, dismissalTime)`
+
+### What cause it
+These functions were called in `processScan()` but never defined in the file.
+
+### What is the solution
+**FIXED:** Added the following helper functions to `teacher-gatekeeper-mode.js`:
+
+1. **`getDismissalTime(gradeLevel)`** - Returns dismissal time based on grade level (defaults + database fallback)
+2. **`getLateThreshold(gradeLevel)`** - Returns late threshold time based on grade level (defaults + database fallback)
+3. **`isLate(scanTime, gradeLevel, threshold)`** - Compares scan time with threshold
+4. **`isEarlyExit(scanTime, dismissalTime)`** - Compares scan time with dismissal time
+
+Also fixed the async call: Added `await` to `getDismissalTime(gradeLevel)` call.
+
+---
+
+## Problem 3: Gatekeeper Mode - Invalid Audio Base64 Data
+
+### What is the problem
+The audio elements in the HTML used invalid base64 WAV data URIs that were too short to be valid.
+
+### What is the solution
+**FIXED:** Replaced invalid base64 data with empty audio sources in `teacher-gatekeeper-mode.html`:
+- Removed invalid `data:audio/wav;base64,...` sources
+- Added TODO comment to replace with actual audio file paths later
+
+---
+
+## Problem 4: teacher-homeroom.js - Real-time Subscription Issues
+
+### What is the problem
+1. `myHomeroomStudentIds` array was never populated, so real-time updates never triggered
+2. No cleanup on page unload causing potential memory leaks
+3. Search triggered full reload on every keystroke
+
+### What is the solution
+**FIXED:** Rewrote `teacher-homeroom.js`:
+- Set up subscription first, then load students to populate IDs
+- Added subscription cleanup on `beforeunload` event
+- Added `debouncedSearch()` function for efficient search
+- Store class ID for filtering
+
+---
+
+## Problem 5: teacher-homeroom.html - Duplicate Scripts
+
+### What is the problem
+- Duplicate `<script src="https://unpkg.com/lucide@latest">` tags
+- Duplicate `<script src="https://cdn.tailwindcss.com">` tags
+
+### What is the solution
+**FIXED:** Removed duplicate script tags from `teacher-homeroom.html`
+- Changed search input to use `debouncedSearch()` function
+
+---
+
+## Problem 6: teacher-homeroomlist.js - Database Table Mismatch
+
+### What is the problem
+1. Code queried `attendance` table instead of `attendance_logs`
+2. Used wrong status values ('present' vs 'On Time')
+3. Clinic visit query used wrong column names and status values
+4. `getStatusBadge` was async but called without await (N+1 query problem)
+5. Used `alert` instead of `showNotification`
+6. Referenced nonexistent element `teacher-name-sidebar`
+
+### What is the solution
+**FIXED:** Major rewrite of `teacher-homeroomlist.js`:
+- Changed all `attendance` table references to `attendance_logs`
+- Fixed status values to use correct format ('On Time', 'Absent', 'Late', 'Excused')
+- Fixed clinic visit query to use `time_in`/`time_out` columns and proper statuses
+- Added `preFetchTodayData()` function to fetch all data in single query
+- Made `getStatusBadge()` synchronous using pre-fetched data
+- Replaced `alert` with `showNotification`
+- Removed reference to nonexistent `teacher-name-sidebar` element
+
+---
+
+## Problem 7: teacher-homeroomlist.html - Duplicate Scripts
+
+### What is the problem
+- Duplicate `<script src="https://unpkg.com/lucide@latest">` tags
+- Duplicate `lucide.createIcons()` calls
+
+### What is the solution
+**FIXED:** Removed duplicate script and initialization calls from `teacher-homeroomlist.html`
+
+---
+
+## Problem 8: teacher-settings.html - Duplicate Scripts
+
+### What is the problem
+- Duplicate `<script src="https://unpkg.com/lucide@latest">` tags
+
+### What is the solution
+**FIXED:** Removed duplicate Lucide script from `teacher-settings.html`
+
+---
+
+## Problem 9: teacher-subject-attendance.js - Multiple Issues
+
+### What is the problem
+1. Used custom `showToast` instead of core's `showNotification`
+2. Did not pass subjectLoadId and subjectName to markSubjectAttendance
+3. Did not update stats cards
+4. Did not set today's date
+5. Did not show subject-specific status in remarks
+6. Did not properly update stats (present/absent/late counts)
+
+### What is the solution
+**FIXED:** Complete rewrite of `teacher-subject-attendance.js`:
+- Replaced `showToast` with `showNotification` from core
+- Added subjectLoadId and subjectName parameters to markSubjectAttendance
+- Added stats card updates (total, present, absent, late)
+- Added today's date display
+- Added parsing of remarks to show subject-specific status
+- Added protection for Late/Excused gate status
+- Properly handles remarks to update subject-specific status only
+
+---
+
+## Problem 10: teacher-subject-attendance.html - Duplicate Scripts
+
+### What is the problem
+- Duplicate `<script src="https://cdn.tailwindcss.com">` tags
+
+### What is the solution
+**FIXED:** Removed duplicate Tailwind script from `teacher-subject-attendance.html`
+
+---
+
+## Files Modified
+
+1. `teacher/teacher-gatekeeper-mode.js` - Added missing helper functions
+2. `teacher/teacher-gatekeeper-mode.html` - Fixed audio element sources
+3. `teacher/teacher-homeroom.js` - Fixed real-time subscription, added debounce
+4. `teacher/teacher-homeroom.html` - Removed duplicate scripts
+5. `teacher/teacher-homeroomlist.js` - Fixed database queries, async issues, performance
+6. `teacher/teacher-homeroomlist.html` - Removed duplicate scripts
+7. `teacher/teacher-settings.html` - Removed duplicate Lucide script
+8. `teacher/teacher-subject-attendance.js` - Complete rewrite with proper logic
+9. `teacher/teacher-subject-attendance.html` - Removed duplicate Tailwind script
+
+## Files Verified (No Changes Needed)
+
+1. `teacher/teacher-core.js` - Enhancements already merged
+2. `teacher/teacher-excuse-letter-approval.js` - Already deleted
+3. `teacher/teacher-excuse-letter-approval.html` - HTML structure correct
+
+## Files to Delete (Optional)
+
+- `teacher/teacher-subject-attendance.js` - Could be merged into core if desired, but currently works as standalone

@@ -3,8 +3,11 @@
 // Ensure teacher is logged in and has gatekeeper rights
 const currentUser = checkSession('teachers');
 if (!currentUser || !currentUser.is_gatekeeper) {
-    alert("Unauthorized Access. Redirecting to dashboard.");
-    window.location.href = 'teacher-dashboard.html';
+    // Use custom toast for early message before core loads
+    showToast("Unauthorized Access. Redirecting to dashboard.", 'error');
+    setTimeout(() => {
+        window.location.href = 'teacher-dashboard.html';
+    }, 2000);
 }
 
 // Global variables for scanner logic
@@ -77,6 +80,12 @@ async function processScan(studentIdText) {
 
         if (studentError || !student) throw new Error('Student ID not found.');
 
+        // Get student grade level
+        const gradeLevel = student.classes?.grade_level;
+        if (!gradeLevel) {
+            throw new Error('Student grade level not found. Please contact administrator.');
+        }
+        
         const today = new Date().toISOString().split('T')[0];
         const { data: lastLog, error: logError } = await supabase
             .from('attendance_logs')
@@ -94,7 +103,7 @@ async function processScan(studentIdText) {
 
         if (lastLog) {
             action = 'EXIT';
-            const dismissalTime = getDismissalTime(student.classes.grade_level);
+            const dismissalTime = await getDismissalTime(gradeLevel);
             status = isEarlyExit(scanTime, dismissalTime) ? 'Early Exit' : 'Normal Exit';
             
             logData = await supabase
@@ -106,8 +115,8 @@ async function processScan(studentIdText) {
 
         } else {
             action = 'ENTRY';
-            const lateThreshold = await getLateThreshold(student.classes.grade_level);
-            status = isLate(scanTime, student.classes.grade_level, lateThreshold) ? 'Late' : 'On Time';
+            const lateThreshold = await getLateThreshold(gradeLevel);
+            status = isLate(scanTime, gradeLevel, lateThreshold) ? 'Late' : 'On Time';
 
             logData = await supabase
                 .from('attendance_logs')
@@ -213,7 +222,108 @@ function closeManualEntry() {
 function submitManualEntry() {
     const studentId = document.getElementById('manual-student-id').value.trim();
     if (studentId) {
-        processScan(studentId);
+        processScan(studentId).then(() => {
+            // Clear the input after successful submission
+            document.getElementById('manual-student-id').value = '';
+        });
     }
     closeManualEntry();
+}
+
+// ============================================
+// MISSING HELPER FUNCTIONS FOR GATEKEEPER MODE
+// ============================================
+
+// Get dismissal time based on grade level
+async function getDismissalTime(gradeLevel) {
+    // Default dismissal times by grade level
+    const defaultDismissalTimes = {
+        'Kinder': '14:30',
+        'Grade 1': '15:00',
+        'Grade 2': '15:00',
+        'Grade 3': '15:00',
+        'Grade 4': '15:30',
+        'Grade 5': '15:30',
+        'Grade 6': '15:30',
+        'Grade 7': '16:00',
+        'Grade 8': '16:00',
+        'Grade 9': '16:00',
+        'Grade 10': '16:00',
+        'Grade 11': '16:30',
+        'Grade 12': '16:30'
+    };
+    
+    // Try to get from grade_schedules table
+    try {
+        const { data: schedule, error } = await supabase
+            .from('grade_schedules')
+            .select('end_time')
+            .eq('grade_level', gradeLevel)
+            .single();
+        
+        if (!error && schedule && schedule.end_time) {
+            // Convert time to HH:MM format
+            const endTime = schedule.end_time;
+            if (typeof endTime === 'string') {
+                return endTime.substring(0, 5);
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch grade schedule, using default:', e);
+    }
+    
+    // Return default or fallback
+    return defaultDismissalTimes[gradeLevel] || '15:30';
+}
+
+// Get late threshold based on grade level
+async function getLateThreshold(gradeLevel) {
+    // Default late thresholds (typically 15 min after start time)
+    const defaultLateThresholds = {
+        'Kinder': '07:45',
+        'Grade 1': '07:45',
+        'Grade 2': '07:45',
+        'Grade 3': '07:45',
+        'Grade 4': '07:45',
+        'Grade 5': '07:45',
+        'Grade 6': '07:45',
+        'Grade 7': '07:30',
+        'Grade 8': '07:30',
+        'Grade 9': '07:30',
+        'Grade 10': '07:30',
+        'Grade 11': '07:30',
+        'Grade 12': '07:30'
+    };
+    
+    // Try to get from grade_schedules table
+    try {
+        const { data: schedule, error } = await supabase
+            .from('grade_schedules')
+            .select('late_threshold')
+            .eq('grade_level', gradeLevel)
+            .single();
+        
+        if (!error && schedule && schedule.late_threshold) {
+            const lateThreshold = schedule.late_threshold;
+            if (typeof lateThreshold === 'string') {
+                return lateThreshold.substring(0, 5);
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch grade schedule, using default:', e);
+    }
+    
+    return defaultLateThresholds[gradeLevel] || '07:45';
+}
+
+// Check if student is late
+function isLate(scanTime, gradeLevel, threshold) {
+    // threshold should be in HH:MM format
+    return scanTime > threshold;
+}
+
+// Check if student is leaving early
+function isEarlyExit(scanTime, dismissalTime) {
+    // If scan time is before dismissal time, it's early exit
+    return scanTime < dismissalTime;
 }

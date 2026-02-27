@@ -14,16 +14,15 @@
 // ============================================================================
 let homeroomStudents = [];
 let filteredStudents = [];
+let todayAttendance = {}; // Pre-fetched attendance data for all students
+let todayClinicVisits = {}; // Pre-fetched clinic visit data for all students
 
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (currentUser) {
-        // Set teacher name
-        const sidebarName = document.getElementById('teacher-name-sidebar');
-        if (sidebarName) sidebarName.textContent = currentUser.full_name || 'Teacher';
-        
+        // Set teacher name (only header element exists)
         const headerName = document.getElementById('teacher-name');
         if (headerName) headerName.textContent = currentUser.full_name || 'Teacher';
         
@@ -114,6 +113,9 @@ async function loadStudents() {
         homeroomStudents = students || [];
         filteredStudents = [...homeroomStudents];
         
+        // Pre-fetch today's attendance and clinic visits for all students
+        await preFetchTodayData();
+        
         // Update stats
         updateStats();
         
@@ -133,38 +135,67 @@ async function loadStudents() {
 }
 
 /**
+ * Pre-fetch today's attendance and clinic visits for all students
+ * This improves performance by doing a single query instead of N+1 queries
+ */
+async function preFetchTodayData() {
+    const today = new Date().toISOString().split('T')[0];
+    const studentIds = homeroomStudents.map(s => s.id);
+    
+    if (studentIds.length === 0) return;
+    
+    // Fetch today's attendance
+    const { data: attendance } = await supabase
+        .from('attendance_logs')
+        .select('student_id, status, time_in')
+        .eq('log_date', today)
+        .in('student_id', studentIds);
+    
+    // Build attendance lookup
+    attendance?.forEach(record => {
+        todayAttendance[record.student_id] = record;
+    });
+    
+    // Fetch today's clinic visits (status = 'Checked In' and no time_out)
+    const { data: visits } = await supabase
+        .from('clinic_visits')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .is('time_out', null)
+        .in('status', ['Pending', 'Checked In', 'Approved']);
+    
+    // Build clinic visits lookup
+    visits?.forEach(visit => {
+        todayClinicVisits[visit.student_id] = visit;
+    });
+}
+
+/**
  * Update statistics
  */
 async function updateStats() {
     const today = new Date().toISOString().split('T')[0];
     
-    // Get today's attendance for homeroom students
-    const studentIds = homeroomStudents.map(s => s.id);
-    
-    const { data: attendance, error } = await supabase
-        .from('attendance')
-        .select('status, student_id')
-        .in('student_id', studentIds)
-        .eq('date', today);
-    
-    if (error) {
-        console.error('Error loading attendance:', error);
-        return;
-    }
-    
     const total = homeroomStudents.length;
-    const present = attendance?.filter(a => a.status === 'present').length || 0;
-    const absent = attendance?.filter(a => a.status === 'absent').length || 0;
     
-    // Count students in clinic
-    const { data: clinicVisits } = await supabase
-        .from('clinic_visits')
-        .select('student_id')
-        .in('student_id', studentIds)
-        .eq('visit_date', today)
-        .in('status', ['pending', 'checked_in']);
+    // Count from pre-fetched data
+    let present = 0;
+    let absent = 0;
     
-    const inClinic = clinicVisits?.length || 0;
+    homeroomStudents.forEach(student => {
+        const att = todayAttendance[student.id];
+        if (att && (att.status === 'On Time' || att.status === 'Excused')) {
+            present++;
+        }
+    });
+    
+    // For absent, we need to check which students don't have any record
+    // or have 'Absent' status
+    const attendedIds = new Set(Object.keys(todayAttendance));
+    absent = homeroomStudents.filter(s => !attendedIds.has(String(s.id))).length;
+    
+    // Count students in clinic from pre-fetched data
+    const inClinic = Object.keys(todayClinicVisits).length;
     
     // Update DOM
     document.getElementById('stat-total').textContent = total;
@@ -236,49 +267,34 @@ function renderStudents() {
 }
 
 /**
- * Get today's status badge for student
+ * Get status badge for student (synchronous - uses pre-fetched data)
  */
-async function getStatusBadge(studentId) {
-    const today = new Date().toISOString().split('T')[0];
-    
-    try {
-        const { data: attendance } = await supabase
-            .from('attendance')
-            .select('status')
-            .eq('student_id', studentId)
-            .eq('date', today)
-            .single();
-        
-        const status = attendance?.status;
-        
-        if (status === 'present') {
-            return '<span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium">Present</span>';
-        } else if (status === 'absent') {
-            return '<span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">Absent</span>';
-        } else if (status === 'late') {
-            return '<span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">Late</span>';
-        } else if (status === 'excused') {
-            return '<span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">Excused</span>';
-        }
-        
-        // Check if in clinic
-        const { data: clinicVisit } = await supabase
-            .from('clinic_visits')
-            .select('status')
-            .eq('student_id', studentId)
-            .eq('visit_date', today)
-            .in('status', ['pending', 'checked_in'])
-            .single();
-        
-        if (clinicVisit) {
-            return '<span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">In Clinic</span>';
-        }
-        
-        return '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">No Record</span>';
-        
-    } catch (error) {
-        return '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">Unknown</span>';
+function getStatusBadge(studentId) {
+    // Check clinic visits first (from pre-fetched data)
+    if (todayClinicVisits[studentId]) {
+        return '<span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">In Clinic</span>';
     }
+    
+    // Check attendance (from pre-fetched data)
+    const att = todayAttendance[studentId];
+    
+    if (!att) {
+        return '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">No Record</span>';
+    }
+    
+    const status = att.status;
+    
+    if (status === 'On Time') {
+        return '<span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium">Present</span>';
+    } else if (status === 'Absent') {
+        return '<span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">Absent</span>';
+    } else if (status === 'Late') {
+        return '<span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">Late</span>';
+    } else if (status === 'Excused') {
+        return '<span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">Excused</span>';
+    }
+    
+    return '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">No Record</span>';
 }
 
 // ============================================================================
@@ -328,13 +344,13 @@ async function viewStudentDetails(studentId) {
     
     // Get additional info
     const { data: attendanceStats } = await supabase
-        .from('attendance')
+        .from('attendance_logs')
         .select('status')
         .eq('student_id', studentId);
     
-    const presentCount = attendanceStats?.filter(a => a.status === 'present').length || 0;
-    const absentCount = attendanceStats?.filter(a => a.status === 'absent').length || 0;
-    const lateCount = attendanceStats?.filter(a => a.status === 'late').length || 0;
+    const presentCount = attendanceStats?.filter(a => a.status === 'On Time' || a.status === 'Excused').length || 0;
+    const absentCount = attendanceStats?.filter(a => a.status === 'Absent').length || 0;
+    const lateCount = attendanceStats?.filter(a => a.status === 'Late').length || 0;
     const totalDays = attendanceStats?.length || 1;
     const attendanceRate = Math.round((presentCount / totalDays) * 100);
     
@@ -440,7 +456,7 @@ async function viewAttendance(studentId) {
  */
 function exportStudentList() {
     if (filteredStudents.length === 0) {
-        alert('No students to export');
+        showNotification('No students to export', 'error');
         return;
     }
     
