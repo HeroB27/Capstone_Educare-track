@@ -100,27 +100,59 @@ async function loadTopLates() {
         const d = new Date();
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(d.setDate(diff));
+        const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1));
         const weekStart = monday.toISOString().split('T')[0];
         
-        // Query late arrivals with student info
-        const result = await supabase
+        console.log('Week start:', weekStart); // Debug log
+        
+        // First, get all late attendance logs this week
+        const logsResult = await supabase
             .from('attendance_logs')
-            .select(`
-                student_id,
-                students!inner(full_name, student_id_text, classes(grade_level, section_name))
-            `)
+            .select('student_id, log_date, status')
             .eq('status', 'Late')
             .gte('log_date', weekStart);
         
-        if (result.error) throw result.error;
+        if (logsResult.error) {
+            console.error('Logs query error:', logsResult.error);
+            throw logsResult.error;
+        }
+        
+        console.log('Late logs:', logsResult.data); // Debug log
+        
+        // Get unique student IDs who were late
+        const studentIds = [...new Set((logsResult.data || []).map(log => log.student_id))];
+        
+        if (studentIds.length === 0) {
+            renderTopLates([]);
+            return;
+        }
+        
+        // Query students table directly for these IDs with class info
+        const studentsResult = await supabase
+            .from('students')
+            .select('id, full_name, student_id_text, classes(id, grade_level, section_name)')
+            .in('id', studentIds)
+            .eq('status', 'Enrolled');
+        
+        if (studentsResult.error) {
+            console.error('Students query error:', studentsResult.error);
+            throw studentsResult.error;
+        }
+        
+        console.log('Students data:', studentsResult.data); // Debug log
         
         // Count lates per student
         const counts = {};
-        (result.data || []).forEach(rec => {
+        (logsResult.data || []).forEach(rec => {
             if (rec.student_id) {
                 counts[rec.student_id] = (counts[rec.student_id] || 0) + 1;
             }
+        });
+        
+        // Create a map for quick student lookup
+        const studentMap = {};
+        (studentsResult.data || []).forEach(s => {
+            studentMap[s.id] = s;
         });
         
         // Sort and get top 10
@@ -128,22 +160,23 @@ async function loadTopLates() {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10)
             .map(([sid, count]) => {
-                const rec = result.data.find(r => r.student_id === sid);
-                const student = rec?.students;
+                const student = studentMap[sid];
                 return {
                     id: sid,
                     name: student?.full_name || 'Unknown',
+                    studentId: student?.student_id_text || '-',
                     grade: student?.classes?.grade_level || '-',
                     section: student?.classes?.section_name || '-',
                     count: count
                 };
             });
         
+        console.log('Top lates:', topLates); // Debug log
         renderTopLates(topLates);
         
     } catch (err) {
         console.error('Error loading lates:', err);
-        container.innerHTML = '<p class="text-center text-gray-500 py-4">Error loading data</p>';
+        container.innerHTML = '<p class="text-center text-gray-400 py-4">Error loading data</p>';
     }
 }
 
@@ -152,25 +185,25 @@ function renderTopLates(list) {
     if (!container) return;
     
     if (!list || list.length === 0) {
-        container.innerHTML = '<p class="text-center text-gray-500 py-4">No late arrivals this week</p>';
+        container.innerHTML = '<p class="text-center text-gray-400 py-4">No late arrivals this week</p>';
         return;
     }
     
-    const badges = ['bg-yellow-100 text-yellow-800', 'bg-gray-100 text-gray-800', 'bg-orange-100 text-orange-800'];
+    const badges = ['bg-yellow-500 text-gray-900', 'bg-gray-400 text-gray-900', 'bg-amber-600 text-white'];
     
     container.innerHTML = list.map((s, i) => {
         const badge = badges[i] || badges[2];
         return `
-            <div class="flex items-center justify-between p-3 border-b">
+            <div class="flex items-center justify-between p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
                 <div class="flex items-center gap-3">
                     <span class="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${badge}">${i + 1}</span>
                     <div>
-                        <p class="font-medium text-gray-800">${s.name}</p>
-                        <p class="text-xs text-gray-500">${s.grade} - ${s.section}</p>
+                        <p class="font-medium text-white">${s.name}</p>
+                        <p class="text-xs text-gray-400">${s.grade} - ${s.section}</p>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-yellow-600">${s.count}x</p>
+                    <p class="font-bold text-yellow-400">${s.count}x</p>
                     <p class="text-xs text-gray-500">late</p>
                 </div>
             </div>
@@ -279,7 +312,7 @@ function renderTopAbsentees(list) {
 }
 
 // ============================================
-// Weekly Trend
+// Weekly Attendance Trend
 // ============================================
 async function loadWeeklyTrend() {
     const container = document.getElementById('weekly-trend-container');
@@ -297,47 +330,59 @@ async function loadWeeklyTrend() {
             const dateStr = d.toISOString().split('T')[0];
             const dayName = d.toLocaleDateString('en-PH', { weekday: 'short' });
             
+            // Query for all "present" statuses: On Time, Present, Excused
             const presentRes = await supabase
                 .from('attendance_logs')
                 .select('id', { count: 'exact', head: true })
                 .eq('log_date', dateStr)
-                .eq('status', 'On Time');
+                .in('status', ['On Time', 'Present', 'Excused']);
             
+            // Query for late
             const lateRes = await supabase
                 .from('attendance_logs')
                 .select('id', { count: 'exact', head: true })
                 .eq('log_date', dateStr)
                 .eq('status', 'Late');
             
+            // Query for absent
+            const absentRes = await supabase
+                .from('attendance_logs')
+                .select('id', { count: 'exact', head: true })
+                .eq('log_date', dateStr)
+                .eq('status', 'Absent');
+            
             weekData.push({
                 day: dayName,
                 date: dateStr,
                 present: presentRes.count || 0,
-                late: lateRes.count || 0
+                late: lateRes.count || 0,
+                absent: absentRes.count || 0
             });
         }
         
         // Render
-        const maxVal = Math.max(...weekData.map(d => d.present + d.late), 1);
+        const maxVal = Math.max(...weekData.map(d => d.present + d.late + d.absent), 1);
         const todayStr = new Date().toISOString().split('T')[0];
         
         container.innerHTML = weekData.map(d => {
-            const total = d.present + d.late;
+            const total = d.present + d.late + d.absent;
             const pPct = (d.present / maxVal) * 100;
             const lPct = (d.late / maxVal) * 100;
+            const aPct = (d.absent / maxVal) * 100;
             const isToday = d.date === todayStr;
             const bgClass = isToday ? 'bg-blue-50 border-blue-200' : '';
             
             return `
                 <div class="flex items-center gap-2 p-2 rounded ${bgClass}">
-                    <span class="w-8 text-xs text-gray-600 font-medium">${d.day}</span>
+                    <span class="w-8 text-xs text-gray-400 font-medium">${d.day}</span>
                     <div class="flex-1">
-                        <div class="flex h-4 rounded overflow-hidden bg-gray-100">
-                            <div class="bg-green-500" style="width: ${pPct}%"></div>
-                            <div class="bg-yellow-500" style="width: ${lPct}%"></div>
+                        <div class="flex h-4 rounded overflow-hidden bg-gray-700">
+                            <div class="bg-green-500" title="Present: ${d.present}" style="width: ${pPct}%"></div>
+                            <div class="bg-yellow-500" title="Late: ${d.late}" style="width: ${lPct}%"></div>
+                            <div class="bg-red-500" title="Absent: ${d.absent}" style="width: ${aPct}%"></div>
                         </div>
                     </div>
-                    <span class="w-12 text-xs text-gray-600 text-right">${total}</span>
+                    <span class="w-12 text-xs text-gray-400 text-right">${total}</span>
                 </div>
             `;
         }).join('');
@@ -350,6 +395,9 @@ async function loadWeeklyTrend() {
                     </span>
                     <span class="flex items-center gap-1">
                         <span class="w-3 h-3 bg-yellow-500 rounded"></span> Late
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span class="w-3 h-3 bg-red-500 rounded"></span> Absent
                     </span>
                 </div>
             `;
