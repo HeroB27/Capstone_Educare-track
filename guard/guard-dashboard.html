@@ -275,14 +275,20 @@
                     return;
                 }
                 
-                // Count by status
+                // Count by status - consistent with guard-basic-analytics.js
+                // Present includes: On Time, Present, Excused
                 let present = 0, late = 0, earlyExit = 0, medical = 0;
                 
                 logs.forEach(log => {
-                    if (log.status === 'On Time') present++;
-                    else if (log.status === 'Late') late++;
-                    else if (log.status === 'Early Exit') earlyExit++;
-                    else if (log.status === 'Medical Exit') medical++;
+                    if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Excused') {
+                        present++;
+                    } else if (log.status === 'Late') {
+                        late++;
+                    } else if (log.status === 'Early Exit') {
+                        earlyExit++;
+                    } else if (log.status === 'Medical Exit') {
+                        medical++;
+                    }
                 });
                 
                 document.getElementById('stat-present').innerText = present;
