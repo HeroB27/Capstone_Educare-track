@@ -618,6 +618,11 @@ async function fetchStudentVisitHistory(studentId) {
             .from('clinic_visits')
             .select(`
                 *,
+                students (
+                    full_name,
+                    student_id_text,
+                    classes (grade_level, section_name)
+                ),
                 teachers (full_name)
             `)
             .eq('student_id', studentId)
