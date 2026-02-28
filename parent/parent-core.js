@@ -230,7 +230,7 @@ async function switchChild(childId) {
     
     // 3. BROADCAST: Tell other pages to refresh their data
     const event = new CustomEvent('childChanged', { detail: { ...child } });
-    window.dispatchEvent(event);
+    document.dispatchEvent(event);
     
     // Close modal if open (ignore if function doesn't exist)
     if (typeof closeChildModal === 'function') {
@@ -267,6 +267,7 @@ function setupRealtimeSubscriptions() {
     // Remove existing channel
     if (realtimeChannel) {
         supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
     }
 
     realtimeChannel = supabase
@@ -295,7 +296,11 @@ function setupRealtimeSubscriptions() {
                 refreshDashboard();
             }
         })
-        .subscribe();
+        .subscribe((status, err) => {
+            if (err) {
+                console.error('Realtime subscription error:', err);
+            }
+        });
 }
 
 // ============================================
@@ -386,3 +391,16 @@ window.getInitials = getInitials;
 window.formatTime = formatTime;
 window.formatDate = formatDate;
 window.getRelativeTime = getRelativeTime;
+
+/**
+ * Logout function - clears session and redirects to login
+ * UPDATED: Added confirmation dialog
+ */
+function logout() {
+    if (confirm('Are you sure you want to logout?')) {
+        sessionStorage.removeItem('educare_user');
+        localStorage.removeItem('educare_selected_child');
+        window.location.href = '../index.html';
+    }
+}
+window.logout = logout;

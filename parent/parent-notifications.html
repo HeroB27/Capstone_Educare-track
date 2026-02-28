@@ -47,10 +47,10 @@
         
         <!-- Filter Tabs -->
         <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
-            <button onclick="filterNotifications('all')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-primary-500 text-white whitespace-nowrap transition-all duration-200" id="tab-all">All</button>
-            <button onclick="filterNotifications('attendance')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-attendance">Attendance</button>
-            <button onclick="filterNotifications('clinic')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-clinic">Clinic</button>
-            <button onclick="filterNotifications('early_exit')" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-alerts">Alerts</button>
+            <button onclick="filterNotifications('all')" data-filter="all" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-primary-500 text-white whitespace-nowrap transition-all duration-200" id="tab-all">All</button>
+            <button onclick="filterNotifications('attendance')" data-filter="attendance" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-attendance">Attendance</button>
+            <button onclick="filterNotifications('clinic')" data-filter="clinic" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-clinic">Clinic</button>
+            <button onclick="filterNotifications('early_exit')" data-filter="early_exit" class="filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200" id="tab-early_exit">Alerts</button>
         </div>
 
         <!-- Loading State -->

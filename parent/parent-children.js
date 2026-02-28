@@ -65,11 +65,10 @@ function showEmptyState() {
 async function renderChildrenList() {
     const container = document.getElementById('children-list');
     
-    for (const child of childrenData) {
-        // Get today's attendance status
-        const status = await getChildTodayStatus(child.id);
-        child.todayStatus = status;
-    }
+    // UPDATED: Use Promise.all to fetch all statuses in parallel
+    await Promise.all(childrenData.map(async (child) => {
+        child.todayStatus = await getChildTodayStatus(child.id);
+    }));
 
     container.innerHTML = childrenData.map((child, index) => {
         const statusColor = getStatusColor(child.todayStatus);
@@ -307,6 +306,8 @@ async function getChildAttendanceStats(childId) {
             lastLog = log.time_in || log.time_out;
             if (log.status === 'Late') {
                 late++;
+            } else if (log.status === 'Excused') {
+                present++; // excused counts as present
             } else if (log.status === 'Present' || log.time_in) {
                 present++;
             }
@@ -378,14 +379,25 @@ document.getElementById('child-modal')?.addEventListener('click', (e) => {
 
 /**
  * Opens the phone's dialer with the adviser's contact number.
+ * UPDATED: Add fallback for desktop - copy to clipboard
  */
 function contactAdviser(contactNumber) {
     if (!contactNumber) {
         alert("Adviser's contact information is not available.");
         return;
     }
-    // This will open the phone's dialer on mobile devices
-    window.location.href = `tel:${contactNumber}`;
+    
+    // Check if mobile device
+    if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        window.location.href = `tel:${contactNumber}`;
+    } else {
+        // Desktop fallback - copy to clipboard
+        navigator.clipboard.writeText(contactNumber).then(() => {
+            alert("Adviser's contact number copied to clipboard!");
+        }).catch(() => {
+            prompt("Copy this number manually:", contactNumber);
+        });
+    }
 }
 
 // Make functions available globally

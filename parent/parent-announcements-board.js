@@ -4,6 +4,8 @@
 
 let allAnnouncements = [];
 let currentFilter = 'all'; // all, class, general, important
+let currentAdviserId = null;
+let announcementsChannel = null;
 
 /**
  * Initialize announcements page
@@ -18,11 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
  * PARANOIA SHIELD: Data Isolation - Only fetch Admin posts OR posts from the current child's adviser
  */
 async function loadAnnouncements() {
-    const childId = localStorage.getItem('selectedChildId');
-    if (!childId) {
+    // UPDATED: Use currentChild from parent-core.js instead of localStorage
+    if (!window.currentChild) {
         showEmptyState();
         return;
     }
+
+    const childId = window.currentChild.id;
 
     try {
         // 1. Get the child's class and teacher info
@@ -35,6 +39,7 @@ async function loadAnnouncements() {
         if (childError) throw childError;
 
         const adviserId = childData?.classes?.adviser_id;
+        currentAdviserId = adviserId; // Store for real-time filtering
 
         // 2. PARANOIA SHIELD: Build privacy-focused query
         // Only fetch Admin posts (posted_by_teacher_id is null) OR posts from the current child's adviser
@@ -88,9 +93,15 @@ async function loadAnnouncements() {
 
 /**
  * Setup real-time announcements subscription
+ * UPDATED: Filter by adviser for privacy isolation
  */
 function setupRealtimeAnnouncements() {
-    supabase
+    // Remove existing channel if any
+    if (announcementsChannel) {
+        supabase.removeChannel(announcementsChannel);
+    }
+
+    announcementsChannel = supabase
         .channel('parent-announcements')
         .on('postgres_changes', {
             event: 'INSERT',
@@ -101,11 +112,16 @@ function setupRealtimeAnnouncements() {
             console.log('New announcement received:', payload);
             
             const newAnnouncement = payload.new;
-            allAnnouncements.unshift(newAnnouncement);
-            renderAnnouncements();
             
-            // Show toast notification
-            showAnnouncementToast(newAnnouncement);
+            // PARANOIA SHIELD: Only add if from admin (null) or current adviser
+            if (newAnnouncement.posted_by_teacher_id === null || 
+                newAnnouncement.posted_by_teacher_id === currentAdviserId) {
+                allAnnouncements.unshift(newAnnouncement);
+                renderAnnouncements();
+                
+                // Show toast notification
+                showAnnouncementToast(newAnnouncement);
+            }
         })
         .subscribe();
 }

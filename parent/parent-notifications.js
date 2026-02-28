@@ -3,14 +3,57 @@
 
 let allNotifications = [];
 let currentFilter = 'all';
+let notificationsChannel = null;
 
 /**
  * Initialize notifications page
  */
 document.addEventListener('DOMContentLoaded', async () => {
     await loadNotifications();
-    // WebSocket removed - using 60s polling from parent-core.js instead
+    setupNotificationsRealtime();
 });
+
+/**
+ * Setup real-time subscription for notifications
+ */
+function setupNotificationsRealtime() {
+    // Remove existing channel if any
+    if (notificationsChannel) {
+        supabase.removeChannel(notificationsChannel);
+    }
+
+    notificationsChannel = supabase
+        .channel('parent-notifications')
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `recipient_id=eq.${currentUser.id}`
+        }, async (payload) => {
+            console.log('New notification received:', payload);
+            const newNotification = payload.new;
+            
+            // Add to local notifications
+            allNotifications.unshift(newNotification);
+            
+            // Show toast notification
+            showNotificationToast(newNotification);
+            
+            // Re-render
+            renderNotifications();
+            
+            // Dispatch event for dashboard badge update
+            window.dispatchEvent(new CustomEvent('notificationsUpdated'));
+        })
+        .subscribe();
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (notificationsChannel) {
+            supabase.removeChannel(notificationsChannel);
+        }
+    });
+}
 
 /**
  * Load all notifications for parent
@@ -91,7 +134,19 @@ function renderNotifications() {
         : allNotifications.filter(n => n.type === currentFilter);
 
     if (filtered.length === 0) {
-        container.innerHTML = '';
+        // Show message for empty filtered results
+        const filterLabels = {
+            'all': 'No notifications',
+            'attendance': 'No attendance notifications',
+            'clinic': 'No clinic notifications',
+            'early_exit': 'No alert notifications'
+        };
+        container.innerHTML = `
+            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 text-center">
+                <p class="text-gray-500">${filterLabels[currentFilter] || 'No notifications of this type'}</p>
+            </div>
+        `;
+        container.classList.remove('hidden');
         return;
     }
 
@@ -149,10 +204,10 @@ function getNotificationIcon(type) {
 function filterNotifications(type) {
     currentFilter = type;
     
-    // Update button styles
+    // Update button styles using data-filter attribute
     document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn.textContent.toLowerCase().includes(type) || 
-            (type === 'all' && btn.textContent === 'All')) {
+        if (btn.dataset.filter === type || 
+            (type === 'all' && btn.dataset.filter === 'all')) {
             btn.className = 'filter-btn px-4 py-2 rounded-full text-sm bg-green-700 text-white whitespace-nowrap';
         } else {
             btn.className = 'filter-btn px-4 py-2 rounded-full text-sm bg-white text-gray-600 border whitespace-nowrap';
@@ -180,19 +235,28 @@ async function showNotificationDetail(notificationId) {
     document.getElementById('modal-icon').textContent = getNotificationIcon(notification.type);
     document.getElementById('modal-title').textContent = notification.title;
     document.getElementById('modal-time').textContent = formatDate(notification.created_at);
-    document.getElementById('modal-message').innerHTML = `
-        <p class="text-gray-700 whitespace-pre-wrap">${notification.message}</p>
-        ${notification.type === 'clinic' ? `
-            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p class="text-sm text-blue-700">Please contact the school clinic if you have any concerns.</p>
-            </div>
-        ` : ''}
-        ${notification.type === 'early_exit' ? `
-            <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
-                <p class="text-sm text-yellow-700">⚠️ This is an unauthorized early exit. Please explain the reason to the school.</p>
-            </div>
-        ` : ''}
-    `;
+    
+    // Use textContent for message to prevent XSS
+    const modalMessage = document.getElementById('modal-message');
+    modalMessage.innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'text-gray-700 whitespace-pre-wrap';
+    p.textContent = notification.message;
+    modalMessage.appendChild(p);
+    
+    // Add type-specific divs (these are static, safe to use innerHTML)
+    if (notification.type === 'clinic') {
+        const div = document.createElement('div');
+        div.className = 'mt-4 p-3 bg-blue-50 rounded-lg';
+        div.innerHTML = '<p class="text-sm text-blue-700">Please contact the school clinic if you have any concerns.</p>';
+        modalMessage.appendChild(div);
+    }
+    if (notification.type === 'early_exit') {
+        const div = document.createElement('div');
+        div.className = 'mt-4 p-3 bg-yellow-50 rounded-lg';
+        div.innerHTML = '<p class="text-sm text-yellow-700">⚠️ This is an unauthorized early exit. Please explain the reason to the school.</p>';
+        modalMessage.appendChild(div);
+    }
 
     document.getElementById('notification-modal').classList.remove('hidden');
 }
@@ -226,6 +290,9 @@ async function markAllRead() {
         // Update local state
         allNotifications.forEach(n => n.is_read = true);
         renderNotifications();
+
+        // Dispatch event for dashboard badge update
+        window.dispatchEvent(new CustomEvent('notificationsUpdated'));
 
     } catch (err) {
         console.error('Error marking all as read:', err);

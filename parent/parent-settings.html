@@ -35,6 +35,36 @@
 
     <main class="flex-1 overflow-y-auto">
         <div class="max-w-xl mx-auto w-full p-8">
+            
+            <!-- Notification Preferences -->
+            <div class="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 mb-6">
+                <h3 class="font-bold text-xl text-gray-800 mb-4">Notification Preferences</h3>
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" id="pref-entryexit" class="rounded text-green-600 focus:ring-green-500" checked>
+                        <span class="text-gray-700">Entry/Exit Alerts</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" id="pref-clinic" class="rounded text-green-600 focus:ring-green-500" checked>
+                        <span class="text-gray-700">Clinic Visit Updates</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" id="pref-urgent" class="rounded text-green-600 focus:ring-green-500" checked>
+                        <span class="text-gray-700">Urgent Announcements</span>
+                    </label>
+                    <label class="flex items-center gap-3">
+                        <input type="checkbox" id="pref-excuse" class="rounded text-green-600 focus:ring-green-500" checked>
+                        <span class="text-gray-700">Excuse Letter Status</span>
+                    </label>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button onclick="saveNotificationPreferences()" id="save-prefs-btn" class="px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-green-700 transition-all shadow-lg shadow-green-200">
+                        Save Preferences
+                    </button>
+                </div>
+            </div>
+
+            <!-- Change Password -->
             <div class="bg-white rounded-3xl shadow-lg border border-gray-100 p-8">
                 <h3 class="font-bold text-xl text-gray-800 mb-4">Change Password</h3>
                 <div class="space-y-4">
@@ -52,9 +82,15 @@
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end">
-                    <button onclick="submitPasswordChange()" class="px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-green-700 transition-all shadow-lg shadow-green-200">Update Password</button>
+                    <button onclick="submitPasswordChange()" id="update-pass-btn" class="px-6 py-3 bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-green-700 transition-all shadow-lg shadow-green-200">
+                        Update Password
+                    </button>
                 </div>
             </div>
+
+            <!-- Message Container -->
+            <div id="settings-message" class="hidden mt-4 p-3 rounded-lg"></div>
+
         </div>
     </main>
 
