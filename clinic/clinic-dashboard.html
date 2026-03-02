@@ -24,10 +24,10 @@
 <body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-[32px] bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+    <aside class="w-64 m-4 rounded-3xl bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="heart-pulse" class="w-6 h-6 text-red-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">CLINIC</span>
+            <span class="text-2xl font-black tracking-tighter">CLINIC</span>
         </div>
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
             <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 bg-red-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
@@ -84,19 +84,17 @@
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8">
             
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 <!-- Today's Check-ins -->
-                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Today's Check-ins</p>
-                            <p id="stats-checkins" class="text-4xl font-black text-gray-900 mt-2">0</p>
-                        </div>
-                        <div class="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center">
-                            <i data-lucide="user-check" class="w-7 h-7 text-blue-600"></i>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Today's Check-ins</p>
+                        <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="user-check" class="w-6 h-6 text-blue-600"></i>
                         </div>
                     </div>
+                    <h3 id="stats-checkins" class="text-4xl font-black text-gray-900">0</h3>
                     <div class="mt-4 pt-4 border-t border-gray-100">
                         <span class="flex items-center gap-2 text-sm text-gray-500 font-medium">
                             <i data-lucide="trending-up" class="w-4 h-4 text-green-500"></i>
@@ -106,16 +104,14 @@
                 </div>
 
                 <!-- Currently in Clinic -->
-                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Currently in Clinic</p>
-                            <p id="stats-active" class="text-4xl font-black text-gray-900 mt-2">0</p>
-                        </div>
-                        <div class="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center">
-                            <i data-lucide="heart-pulse" class="w-7 h-7 text-red-600"></i>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Currently in Clinic</p>
+                        <div class="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="heart-pulse" class="w-6 h-6 text-red-600"></i>
                         </div>
                     </div>
+                    <h3 id="stats-active" class="text-4xl font-black text-gray-900">0</h3>
                     <div class="mt-4 pt-4 border-t border-gray-100">
                         <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
                             Active patients
@@ -124,16 +120,14 @@
                 </div>
 
                 <!-- Discharged Today -->
-                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Discharged Today</p>
-                            <p id="stats-discharged" class="text-4xl font-black text-gray-900 mt-2">0</p>
-                        </div>
-                        <div class="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center">
-                            <i data-lucide="check-circle" class="w-7 h-7 text-green-600"></i>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Discharged Today</p>
+                        <div class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
                         </div>
                     </div>
+                    <h3 id="stats-discharged" class="text-4xl font-black text-gray-900">0</h3>
                     <div class="mt-4 pt-4 border-t border-gray-100">
                         <span class="flex items-center gap-2 text-sm text-gray-500 font-medium">
                             <i data-lucide="shield-check" class="w-4 h-4 text-green-500"></i>
@@ -153,35 +147,35 @@
             </div>
 
             <!-- Pending Approvals Section -->
-            <div id="pending-approvals-section" class="bg-white p-8 rounded-[32px] border border-yellow-200 shadow-sm" style="display: none;">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-black text-gray-900 flex items-center gap-2">
+            <div id="pending-approvals-section" class="bg-white rounded-3xl border border-yellow-200 shadow-sm overflow-hidden" style="display: none;">
+                <div class="px-8 py-6 border-b border-gray-50 flex justify-between items-center bg-yellow-50/50">
+                    <h3 class="font-black text-gray-800 flex items-center gap-2">
                         <i data-lucide="clock" class="w-5 h-5 text-yellow-600"></i>
                         Pending Pass Approvals
                     </h3>
                     <span id="pending-count" class="bg-yellow-200 text-yellow-800 px-4 py-1.5 rounded-full text-sm font-bold">0</span>
                 </div>
-                <div id="pending-approvals-list" class="space-y-3">
+                <div id="pending-approvals-list" class="p-6 space-y-3">
                     <!-- Pending passes loaded dynamically -->
                 </div>
             </div>
 
             <!-- Approved Passes Section -->
-            <div id="approved-passes-section" class="bg-white p-8 rounded-[32px] border border-blue-200 shadow-sm" style="display: none;">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-black text-gray-900 flex items-center gap-2">
+            <div id="approved-passes-section" class="bg-white rounded-3xl border border-blue-200 shadow-sm overflow-hidden" style="display: none;">
+                <div class="px-8 py-6 border-b border-gray-50 flex justify-between items-center bg-blue-50/50">
+                    <h3 class="font-black text-gray-800 flex items-center gap-2">
                         <i data-lucide="check-circle" class="w-5 h-5 text-blue-600"></i>
                         Approved Passes - Awaiting Check-in
                     </h3>
                     <span id="approved-count" class="bg-blue-200 text-blue-800 px-4 py-1.5 rounded-full text-sm font-bold">0</span>
                 </div>
-                <div id="approved-passes-list" class="space-y-3">
+                <div id="approved-passes-list" class="p-6 space-y-3">
                     <!-- Approved passes loaded dynamically -->
                 </div>
             </div>
 
             <!-- Active Patients Table -->
-            <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead class="bg-gray-50/80 backdrop-blur-sm">
@@ -210,7 +204,7 @@
 
     <!-- Patient Details Modal -->
     <div id="patient-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-white rounded-[32px] shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div class="px-8 py-6 border-b flex justify-between items-center">
                 <h3 class="text-xl font-black text-gray-900">Patient Details</h3>
                 <button onclick="closePatientModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
@@ -225,8 +219,8 @@
 
     <!-- Discharge Modal -->
     <div id="discharge-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-white rounded-[32px] shadow-xl w-full max-w-lg mx-4">
-            <div class="px-8 py-6 border-b flex justify-between items-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-[32px]">
+        <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg mx-4">
+            <div class="px-8 py-6 border-b flex justify-between items-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-3xl">
                 <h3 class="text-xl font-black">Discharge Patient</h3>
                 <button onclick="closeDischargeModal()" class="p-2 hover:bg-white/20 rounded-xl transition-colors">
                     <i data-lucide="x" class="w-5 h-5"></i>
@@ -319,7 +313,7 @@
             list.innerHTML = pendingApprovals.map(visit => {
                 const student = visit.students;
                 return `
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-2 border-yellow-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-yellow-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div class="flex items-center gap-3">
                             <div class="h-12 w-12 rounded-2xl bg-yellow-100 flex items-center justify-center text-yellow-700 font-black text-lg">
                                 ${student?.full_name?.charAt(0) || '?'}
@@ -366,7 +360,7 @@
             list.innerHTML = approvedPasses.map(visit => {
                 const student = visit.students;
                 return `
-                    <div class="bg-white p-4 rounded-xl shadow-sm border-2 border-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div class="flex items-center gap-3">
                             <div class="h-12 w-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 font-black text-lg">
                                 ${student?.full_name?.charAt(0) || '?'}
@@ -530,28 +524,28 @@
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="bg-gray-50 p-4 rounded-2xl">
                             <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Time In</p>
                             <p class="font-bold text-gray-800">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                         </div>
-                        <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="bg-gray-50 p-4 rounded-2xl">
                             <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Duration</p>
                             <p class="font-bold text-gray-800">${hours}h ${minutes}m</p>
                         </div>
                     </div>
                     
-                    <div class="bg-gray-50 p-4 rounded-xl">
+                    <div class="bg-gray-50 p-4 rounded-2xl">
                         <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Reason for Visit</p>
                         <p class="font-medium text-gray-800">${visit.reason || 'No reason provided'}</p>
                     </div>
                     
-                    <div class="bg-gray-50 p-4 rounded-xl">
+                    <div class="bg-gray-50 p-4 rounded-2xl">
                         <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Referred By</p>
                         <p class="font-medium text-gray-800">${visit.referred_by_teacher?.full_name || 'Self'}</p>
                     </div>
                     
                     ${visit.notes ? `
-                    <div class="bg-gray-50 p-4 rounded-xl">
+                    <div class="bg-gray-50 p-4 rounded-2xl">
                         <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Nurse Notes</p>
                         <p class="font-medium text-gray-800">${visit.notes}</p>
                     </div>
@@ -659,17 +653,6 @@
             if (e.target === this) closeDischargeModal();
         });
 
-        async function loadNotificationBadge() {
-            // Implementation from clinic-core.js
-        }
-
-        function showToast(message, type) {
-            if (typeof displayToast === 'function') {
-                displayToast(message, type);
-            } else {
-                alert(message);
-            }
-        }
     </script>
 </body>
 </html>

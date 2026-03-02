@@ -1,5 +1,29 @@
 // admin/admin-core.js
 
+// Subscription Manager to prevent WebSocket memory leaks from multiplying on page navigation.
+let activeRealtimeSubscriptions = [];
+
+/**
+ * Unsubscribes from all currently active Supabase real-time channels.
+ * This should be called before loading new page content in a Single Page Application.
+ */
+function cleanupAllSubscriptions() {
+    activeRealtimeSubscriptions.forEach(sub => {
+        if (sub && typeof sub.unsubscribe === 'function') {
+            supabase.removeChannel(sub);
+        }
+    });
+    activeRealtimeSubscriptions = [];
+}
+
+/**
+ * Registers a new subscription for future cleanup.
+ * @param {RealtimeChannel} subscription - The subscription object returned by supabase.channel().
+ */
+function addSubscription(subscription) {
+    activeRealtimeSubscriptions.push(subscription);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const user = checkSession('admins');
     if (!user) return;
@@ -13,11 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDashboardStats(); // Initial load
         
         // Real-time subscription for dashboard stats
-        supabase.channel('dashboard-stats-realtime')
+        const dashboardSub = supabase.channel('dashboard-stats-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => loadDashboardStats())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_visits' }, () => loadDashboardStats())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => loadDashboardStats())
             .subscribe();
+        addSubscription(dashboardSub);
     }
     if (document.getElementById('recent-announcements-list')) loadRecentAnnouncements();
     
@@ -25,20 +50,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function loadDashboardStats() {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone-adjusted date calculation for accurate early-morning stats
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     const todayStart = today + 'T00:00:00';
     
     try {
         // Parallel execution for maximum speed
-        // PHASE 1 FIX: Count both "Present" AND "On Time" as present
         const [teachers, students, present, late, absent, clinic] = await Promise.all([
             supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Enrolled'),
-            // FIX: Count both Present and On Time as present
-            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).in('status', ['Present', 'On Time']),
+            // FIX: Count Present, On Time, and Excused as present for a more accurate 'on-campus' metric.
+            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).in('status', ['Present', 'On Time', 'Excused']),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Late'),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Absent'),
-            // FIX: Only count today's clinic visits (not all visits without time_out)
+            // FIX: Only count today's clinic visits
             supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null).gte('time_in', todayStart)
         ]);
 
@@ -86,9 +113,10 @@ async function loadRecentAnnouncements() {
 
     await fetchAndRender();
 
-    supabase.channel('public-announcements-dashboard')
+    const announcementsSub = supabase.channel('public-announcements-dashboard')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, payload => {
             fetchAndRender();
         })
         .subscribe();
+    addSubscription(announcementsSub);
 }

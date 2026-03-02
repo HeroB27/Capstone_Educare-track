@@ -229,58 +229,28 @@ function getDayClass(attendance, holiday, isWeekend, dateStr) {
         return 'bg-gray-100 text-gray-400';
     }
 
-    // No attendance record (mark as absent)
+    // No attendance record for a past school day (mark as absent)
     if (!attendance) {
         return 'bg-red-200 text-red-800';
     }
 
-    // Has attendance record - check status string directly
-    if (attendance.status === 'Late') {
-        return 'bg-yellow-200 text-yellow-800';
-    } else if (attendance.status === 'Absent') {
-        return 'bg-red-200 text-red-800';
-    } else if (attendance.status === 'Excused') {
-        return 'bg-purple-200 text-purple-800';
-    } else {
-        return 'bg-green-200 text-green-800';
+    // FIX: Normalize status to handle variations like "Entered" or "late "
+    const normalizedStatus = (attendance.status || '').trim().toLowerCase();
+
+    switch (normalizedStatus) {
+        case 'present':
+        case 'on time':
+        case 'entered':
+            return 'bg-green-200 text-green-800';
+        case 'late':
+            return 'bg-yellow-200 text-yellow-800';
+        case 'absent':
+            return 'bg-red-200 text-red-800';
+        case 'excused':
+            return 'bg-purple-200 text-purple-800';
+        default:
+            return 'bg-gray-200 text-gray-400'; // Fallback for unknown status
     }
-}
-
-/**
- * Renders the attendance trend chart for the current month.
- */
-function renderTrendChart() {
-    const ctx = document.getElementById('attendance-trend-chart')?.getContext('2d');
-    if (!ctx) return;
-
-    const dailyCounts = {};
-    Object.values(attendanceData).forEach(log => {
-        if (!dailyCounts[log.log_date]) {
-            dailyCounts[log.log_date] = { present: 0, late: 0, absent: 0 };
-        }
-        if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Excused') {
-            dailyCounts[log.log_date].present++;
-        } else if (log.status === 'Late') {
-            dailyCounts[log.log_date].late++;
-        } else if (log.status === 'Absent') {
-            dailyCounts[log.log_date].absent++;
-        }
-    });
-
-    const labels = Object.keys(dailyCounts).sort();
-
-    if (window.attendanceTrendChart) window.attendanceTrendChart.destroy();
-    window.attendanceTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: 'Present', data: labels.map(l => dailyCounts[l]?.present || 0), borderColor: '#22c55e', tension: 0.1, fill: false },
-                { label: 'Late', data: labels.map(l => dailyCounts[l]?.late || 0), borderColor: '#f59e0b', tension: 0.1, fill: false },
-            ]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
 }
 
 
@@ -413,7 +383,7 @@ function calculateStats() {
         
         if (!attendance) {
             absent++;
-        } else if (attendance.status === 'Late') {
+        } else if (attendance.status === 'Late') { // FIX: Check status string, not non-existent field
             late++;
         } else if (attendance.status === 'Excused') {
             excused++; // Excused counts as present
@@ -571,21 +541,24 @@ window.exportToCSV = exportToCSV;
  * @returns {string} - CSS color class
  */
 function getStatusColor(status) {
-    switch (status) {
+    if (!status) return 'bg-gray-100'; // Default gray for empty
+    
+    // FIX: Force lowercase and trim spaces to catch ANY variation
+    const normalized = status.trim().toLowerCase();
+    
+    switch (normalized) {
         case 'present':
-        case 'On Time':
+        case 'on time':
+        case 'entered': // Added safe fallback for Guard scanner
             return 'bg-green-500'; // Green
         case 'late':
-        case 'Late':
             return 'bg-yellow-500'; // Yellow
         case 'absent':
-        case 'Absent':
             return 'bg-red-500'; // Red
         case 'excused':
-        case 'Excused':
-            return 'bg-purple-500'; // Purple - NEW
+            return 'bg-blue-500'; // Blue
         default:
-            return 'bg-gray-300';
+            return 'bg-gray-100'; // Gray fallback
     }
 }
 

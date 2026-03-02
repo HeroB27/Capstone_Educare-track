@@ -157,8 +157,93 @@ function getDismissalTime(gradeLevel) {
     return '15:00'; // Default
 }
 
-// 9. Create Notification for Early Exit
-// Sends alert to parent and teacher when student exits early
+/**
+ * Returns the current local date as an ISO string (YYYY-MM-DD) without time.
+ * This correctly handles timezone offsets, fixing the "Morning UTC Trap".
+ * @returns {string} The local date in YYYY-MM-DD format.
+ */
+function getLocalISOString() {
+    const date = new Date();
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+}
+
+/**
+ * Normalizes various grade level formats into a consistent, padded code (e.g., "G1" -> "G001").
+ * This ensures reliable database lookups.
+ * @param {string} grade - The grade level string (e.g., "Grade 1", "G1", "G001").
+ * @returns {string} The normalized grade code.
+ */
+function normalizeGradeCode(grade) {
+    if (!grade) return '';
+    const gradeStr = String(grade).toUpperCase().replace('GRADE ', '').trim();
+
+    if (gradeStr.startsWith('G')) {
+        const num = gradeStr.replace('G', '');
+        if (!isNaN(num) && num.length > 0) {
+            return `G${num.padStart(3, '0')}`;
+        }
+    }
+
+    if (!isNaN(gradeStr) && gradeStr.length > 0) {
+        return `G${gradeStr.padStart(3, '0')}`;
+    }
+
+    // Handle specific cases like Kinder
+    if (gradeStr === 'KINDER' || gradeStr === 'K') return 'Kinder';
+
+    return grade; // Return as-is if no match
+}
+
+// FIX: Centralized Notification System to ensure UI consistency.
+function showNotification(msg, type = 'info', callback = null) {
+    const existing = document.getElementById('notification-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'notification-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[999] flex items-center justify-center animate-fade-in p-4';
+
+    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
+    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
+    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
+    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
+
+    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
+    if (!dndEnabled) {
+        // Feedback: Vibrate (Mobile) & Sound (Desktop)
+        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 100);
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = type === 'error' ? 220 : 550;
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+        } catch (e) {
+            // Audio context can fail in some environments, fail silently.
+        }
+    }
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up">
+        <div class="flex flex-col items-center text-center">
+            <div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div>
+            <h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3>
+            <p class="text-sm text-gray-500 font-medium mb-6">${msg}</p>
+            <button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button>
+        </div></div>`;
+
+    document.body.appendChild(modal);
+    document.getElementById('notif-btn').onclick = () => { modal.remove(); if (callback) callback(); };
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// 9. Create Notification for Early Exit // Sends alert to parent and teacher when student exits early
 async function createEarlyExitNotification(studentName, parentId, teacherId, exitTime) {
     try {
         // Notify Parent

@@ -69,7 +69,7 @@ function generatePortraitIDHTML(u, config) {
             </div>
             <div class="flex-1 flex flex-col items-center pt-4 px-3 text-center">
                 <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden">
-                    <img src="https://ui-avatars.com/api/?name=${u.full_name}&background=f3f4f6&color=4b5563" class="w-full h-full object-cover rounded-lg">
+                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=f3f4f6&color=4b5563" class="w-full h-full object-cover rounded-lg">
                 </div>
                 <h2 class="text-[9px] font-black text-gray-900 uppercase leading-tight mt-2">${u.full_name}</h2>
                 <div class="w-full text-left mt-4 space-y-2 border-t pt-3 border-gray-50">

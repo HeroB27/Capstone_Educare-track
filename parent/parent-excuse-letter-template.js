@@ -9,8 +9,11 @@ let excuseHistory = [];
  * Initialize excuse letter page
  */
 document.addEventListener('DOMContentLoaded', async () => {
-    // Set max date to today
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Inline timezone math to prevent ReferenceError crash
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+    
     document.getElementById('absence-date').max = today;
 
     // Populate child selector

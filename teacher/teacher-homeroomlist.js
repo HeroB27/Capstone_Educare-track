@@ -141,7 +141,11 @@ async function loadStudents() {
  * This fixes the "Double Identity" bug where gate attendance gets overwritten
  */
 async function preFetchTodayData() {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone adjustment
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+
     const studentIds = homeroomStudents.map(s => s.id);
     
     if (studentIds.length === 0) return;
@@ -491,7 +495,11 @@ function exportStudentList() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `homeroom-students-${new Date().toISOString().split('T')[0]}.csv`;
+    
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+    link.download = `homeroom-students-${today}.csv`;
     link.click();
 }
 

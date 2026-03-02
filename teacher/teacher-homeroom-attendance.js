@@ -8,7 +8,11 @@ let currentView = 'daily'; // daily, weekly, monthly
 
 // Set default date to today
 document.addEventListener('DOMContentLoaded', async () => {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone adjustment so the default date picker selects "today" locally
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+    
     document.getElementById('selected-date').value = today;
     
     // Load initial data
@@ -344,16 +348,14 @@ async function loadSummaryAttendance(dateStart, dateEnd) {
 
 // Get subject status from remarks
 function getSubjectStatus(remarks, subjectName, defaultStatus) {
-    if (!remarks) return defaultStatus || null;
-    
-    // Match pattern: [SubjectName: Status]
-    const regex = new RegExp(`\\[${subjectName}: (Present|Absent|Late|Excused)\\]`, 'i');
-    const match = remarks.match(regex);
-    
-    if (match) {
-        return match[1];
+    // FIX: Read from JSONB object instead of parsing a string.
+    if (remarks && typeof remarks === 'object' && subjectName) {
+        return remarks[subjectName] || defaultStatus || null;
     }
-    return null;
+    // If remarks is a string (old format), fallback gracefully.
+    if (typeof remarks === 'string' && remarks.includes(`[${subjectName}:`)) return "Legacy";
+
+    return defaultStatus || null;
 }
 
 // Get status badge HTML
@@ -379,15 +381,10 @@ function getStatusBadge(status, isClinicVisit) {
 
 // Calculate overall status from remarks
 function calculateOverallFromRemarks(remarks) {
-    if (!remarks) return null;
+    // FIX: Read from JSONB object.
+    if (!remarks || typeof remarks !== 'object') return null;
     
-    const subjectRegex = /\[([^\]]+): (Present|Absent|Late|Excused)\]/g;
-    const statuses = [];
-    let match;
-    
-    while ((match = subjectRegex.exec(remarks)) !== null) {
-        statuses.push(match[2]);
-    }
+    const statuses = Object.values(remarks);
     
     if (statuses.length === 0) return null;
     
@@ -395,7 +392,9 @@ function calculateOverallFromRemarks(remarks) {
     if (statuses.includes('Excused')) return 'Excused';
     if (statuses.includes('Absent')) return 'Absent';
     if (statuses.includes('Late')) return 'Late';
-    return 'Present';
+    if (statuses.includes('On Time') || statuses.includes('Present')) return 'On Time';
+
+    return null;
 }
 
 // Export to CSV

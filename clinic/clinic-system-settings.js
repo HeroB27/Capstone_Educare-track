@@ -322,40 +322,6 @@ async function updateProfile() {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Show toast notification
- */
-function showToast(message, type = 'info') {
-    // Create toast element if it doesn't exist
-    let toast = document.getElementById('toast-notification');
-    
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'toast-notification';
-        toast.className = 'fixed bottom-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-300 translate-y-full opacity-0';
-        document.body.appendChild(toast);
-    }
-    
-    // Set colors based on type
-    const typeClasses = {
-        success: 'bg-green-500 text-white',
-        error: 'bg-red-500 text-white',
-        warning: 'bg-amber-500 text-white',
-        info: 'bg-blue-500 text-white'
-    };
-    
-    toast.className = `fixed bottom-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-300 ${typeClasses[type] || typeClasses.info}`;
-    toast.textContent = message;
-    
-    // Show toast
-    toast.classList.remove('translate-y-full', 'opacity-0');
-    
-    // Hide after 3 seconds
-    setTimeout(() => {
-        toast.classList.add('translate-y-full', 'opacity-0');
-    }, 3000);
-}
-
 // Save notification preferences when checkboxes change
 document.addEventListener('DOMContentLoaded', () => {
     const checkboxes = ['notify-new-patient', 'notify-parent-contact', 'notify-system'];

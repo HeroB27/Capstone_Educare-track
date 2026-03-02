@@ -21,39 +21,53 @@ document.addEventListener('DOMContentLoaded', () => {
     injectStyles();
 });
 
-// ROBUST DATE HANDLER: Calculates exact month end to prevent 400 Errors
+// ROBUST DATE HANDLER: Calculates exact month end to prevent timezone data-loss
 async function loadSuspensions() {
     const list = document.getElementById('suspensionList');
+    if (!list) return;
     list.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400 italic">Syncing...</td></tr>';
 
     const month = parseInt(document.getElementById('holidayMonth').value);
     const year = parseInt(document.getElementById('holidayYear').value);
 
-    const start = new Date(year, month, 1).toISOString().split('T')[0];
-    const end = new Date(year, month + 1, 0).toISOString().split('T')[0]; // Gets last day of month correctly
+    // FIX: Manually build the YYYY-MM-DD string to bypass UTC shifting
+    const monthStr = String(month + 1).padStart(2, '0');
+    const lastDay = new Date(year, month + 1, 0).getDate(); // Gets 28, 30, or 31 accurately
+    
+    const start = `${year}-${monthStr}-01`;
+    const end = `${year}-${monthStr}-${lastDay}`;
 
-    const { data, error } = await supabase.from('holidays').select('*')
-        .gte('holiday_date', start).lte('holiday_date', end).order('holiday_date', { ascending: true });
+    try {
+        const { data, error } = await supabase
+            .from('holidays')
+            .select('*')
+            .gte('holiday_date', start)
+            .lte('holiday_date', end)
+            .order('holiday_date', { ascending: true });
 
-    if (error) return;
+        if (error) throw error;
 
-    list.innerHTML = data.length ? data.map(h => `
-        <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-6 py-4 font-mono text-[11px] font-bold text-slate-500">${h.holiday_date}</td>
-            <td class="px-6 py-4">
-                <p class="text-sm font-bold text-slate-800">${h.description}</p>
-                <p class="text-[10px] text-slate-400 italic">${h.notes || ''}</p>
-            </td>
-            <td class="px-6 py-4">
-                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${h.target_grades === 'All' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
-                    ${h.target_grades}
-                </span>
-            </td>
-            <td class="px-6 py-4 text-right">
-                <button onclick="deleteRecord(${h.id})" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            </td>
-        </tr>`).join('') : '<tr><td colspan="4" class="px-6 py-12 text-center text-slate-400">No events scheduled.</td></tr>';
-    lucide.createIcons();
+        list.innerHTML = data.length ? data.map(h => `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-6 py-4 font-mono text-[11px] font-bold text-slate-500">${h.holiday_date}</td>
+                <td class="px-6 py-4">
+                    <p class="text-sm font-bold text-slate-800">${h.description}</p>
+                    <p class="text-[10px] text-slate-400 italic">${h.notes || ''}</p>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${h.target_grades === 'All' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">
+                        ${h.target_grades}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-right">
+                    <button onclick="deleteRecord(${h.id})" class="text-slate-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </td>
+            </tr>`).join('') : '<tr><td colspan="4" class="px-6 py-12 text-center text-slate-400">No events scheduled.</td></tr>';
+        lucide.createIcons();
+    } catch (err) {
+        console.error("Error loading suspensions:", err);
+        list.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-red-500">Error loading data.</td></tr>';
+    }
 }
 
 function setCategory(cat) {

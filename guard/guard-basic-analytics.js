@@ -45,7 +45,10 @@ function setCurrentDate() {
 // Today's Statistics
 // ============================================
 async function loadTodayStats() {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone-adjusted date for accurate morning analytics
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     
     try {
         // Total enrolled students
@@ -95,8 +98,11 @@ async function loadTodayStats() {
 async function loadTodayBreakdown() {
     const canvas = document.getElementById('breakdownPieChart');
     if (!canvas) return;
-    
-    const today = new Date().toISOString().split('T')[0];
+
+    // FIX: Timezone-adjusted date for accurate morning analytics
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     
     try {
         // Get total enrolled students

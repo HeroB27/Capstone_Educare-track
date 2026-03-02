@@ -12,8 +12,10 @@ let analyticsData = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Set default date range: Last 7 days to Today
+    // FIX: Timezone-adjusted dates to prevent "yesterday" bug during morning defense
     const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    
     const lastWeek = new Date(today);
     lastWeek.setDate(lastWeek.getDate() - 7);
 
@@ -271,7 +273,7 @@ async function fetchCommonReasons(dateStart, dateEnd) {
         .from('clinic_visits')
         .select('reason, time_in')
         .gte('time_in', dateStart)
-        .lte('time_in', dateEnd + ' 23:59:59');
+        .lte('time_in', dateEnd + 'T23:59:59');
 
     if (clinicVisits) {
         clinicVisits.forEach(v => {

@@ -779,7 +779,7 @@ async function loadClinicStats() {
 }
 
 // 12. Issue Clinic Pass
-// UPDATED: Now notifies ALL clinic staff individually
+// UPDATED: Now validates teacher has authority over student before issuing pass
 async function issueClinicPass() {
     const studentId = document.getElementById('clinic-student-select').value;
     const reason = document.getElementById('clinic-reason').value.trim();
@@ -790,6 +790,16 @@ async function issueClinicPass() {
     }
     
     try {
+        // ===========================================================
+        // SECURITY FIX: Validate teacher has authority over this student
+        // ===========================================================
+        const authorized = await validateTeacherAuthority(studentId);
+        
+        if (!authorized) {
+            showNotification('You are not authorized to issue a clinic pass for this student. You can only issue passes for students in your homeroom or subject classes.', "error");
+            return;
+        }
+        
         // Check if student already has an active pass
         const { data: existingPass } = await supabase
             .from('clinic_visits')
@@ -854,6 +864,60 @@ async function issueClinicPass() {
     } catch (err) {
         console.error('Error issuing clinic pass:', err);
         showNotification('Error issuing clinic pass. Please try again.', "error");
+    }
+}
+
+// 12a. Validate Teacher Authority Over Student
+// SECURITY: Ensures teacher can only issue passes for students they teach
+async function validateTeacherAuthority(studentId) {
+    try {
+        // Get teacher's homeroom class
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+        
+        // Get teacher's subject loads
+        const { data: subjectLoads } = await supabase
+            .from('subject_loads')
+            .select('class_id')
+            .eq('teacher_id', currentUser.id);
+        
+        // Build list of authorized class IDs
+        const authorizedClassIds = new Set();
+        
+        // Add homeroom class
+        if (teacherClass) {
+            authorizedClassIds.add(teacherClass.id);
+        }
+        
+        // Add subject classes
+        if (subjectLoads) {
+            subjectLoads.forEach(sl => {
+                authorizedClassIds.add(sl.class_id);
+            });
+        }
+        
+        // Check if student belongs to any authorized class
+        const { data: student } = await supabase
+            .from('students')
+            .select('class_id')
+            .eq('id', studentId)
+            .single();
+        
+        if (!student) {
+            console.error('Student not found:', studentId);
+            return false;
+        }
+        
+        // Validate student is in one of teacher's classes
+        return authorizedClassIds.has(student.class_id);
+        
+    } catch (err) {
+        console.error('Error validating teacher authority:', err);
+        // For safety, deny access on error
+        return false;
     }
 }
 
@@ -2559,6 +2623,12 @@ function exportAttendanceToCSV() {
 
 // 49. Keyboard Shortcuts
 document.addEventListener('keydown', function(e) {
+    // FIX: Prevent shortcuts from firing when typing in an input or textarea.
+    const activeElement = document.activeElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        return;
+    }
+
     // Ctrl/Cmd + M = Mark Present
     if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
         e.preventDefault();

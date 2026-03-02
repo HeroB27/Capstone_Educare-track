@@ -9,6 +9,9 @@ let notificationsChannel = null;
  * Initialize notifications page
  */
 document.addEventListener('DOMContentLoaded', async () => {
+    // FIX: Prevent fatal TypeError crash if the session drops or is still loading
+    if (!currentUser || !currentUser.id) return;
+
     await loadNotifications();
     setupNotificationsRealtime();
 });

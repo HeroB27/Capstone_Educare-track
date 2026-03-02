@@ -29,7 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
  * - Sent Home: Status = 'Completed' with action_taken = 'Sent Home'
  */
 async function updateStatsCards() {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone adjustment for accurate daily stats
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     
     // Fetch all visits for today
     const todayVisits = await fetchVisitsByDateRange(today, today);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Scanner - Clinic</title>
+    <title>Patient Scanner - Educare Clinic</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -17,45 +17,150 @@
     <script src="clinic-scanner.js" defer></script>
     
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #111827; }
-        #qr-reader { border: none !important; border-radius: 1rem; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        #qr-reader { border: none !important; }
     </style>
 </head>
-<body class="text-white min-h-screen flex flex-col">
+<body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
-    <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-700/50 p-4">
-        <div class="flex items-center justify-between max-w-2xl mx-auto">
-            <div class="flex items-center gap-3">
-                <a href="clinic-dashboard.html" class="p-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors">
-                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
-                </a>
-                <div>
-                    <h1 class="font-black text-lg tracking-tight">Patient Scanner</h1>
-                    <p class="text-xs text-gray-400 font-medium">Scan Student ID for Check-in</p>
+    <!-- Floating Sidebar -->
+    <aside class="w-64 m-4 rounded-3xl bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="heart-pulse" class="w-6 h-6 text-red-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter">CLINIC</span>
+        </div>
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="clinic-scanner.html" class="flex items-center gap-3 px-4 py-3 bg-red-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="scan-line" class="w-5 h-5"></i> Patient Check-In
+            </a>
+            <a href="clinic-notes-and-findings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="file-text" class="w-5 h-5"></i> Visit Records
+            </a>
+            <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Daily Logs
+            </a>
+            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bell" class="w-5 h-5"></i> Notifications
+            </a>
+            <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="clinic-system-settings.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings
+            </a>
+        </nav>
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-gray-300 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <!-- Glassmorphism Header -->
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <div>
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Patient Scanner</h2>
+                <p class="text-sm text-gray-500 mt-1 font-medium">Scan Student ID for Check-in</p>
+            </div>
+            
+            <div class="flex items-center gap-6">
+                <div class="h-10 w-px bg-gray-200"></div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p id="clinic-name" class="font-black text-gray-900 text-sm leading-none mb-1">Clinic Staff</p>
+                        <p class="text-[10px] text-red-600 font-black tracking-widest uppercase">Medical Care</p>
+                    </div>
+                    <div class="h-12 w-12 bg-red-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
+                        <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                    </div>
                 </div>
             </div>
-            <div id="current-time" class="font-mono text-lg font-bold text-red-400">--:--:--</div>
-        </div>
-    </header>
+        </header>
 
-    <main class="flex-1 flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto w-full">
-        <div class="w-full relative">
-            <div id="qr-reader" class="w-full aspect-square bg-gray-800 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"></div>
-        </div>
-        <div id="status-indicator" class="w-full text-center py-3 px-4 rounded-xl bg-gray-800/80 border border-gray-700">
-            <p class="text-sm text-gray-300 font-medium">Ready to scan student ID</p>
-        </div>
-        <div id="last-scan" class="w-full hidden p-6 rounded-2xl bg-gray-800/80 border border-gray-700">
-            <h2 id="scan-student-name" class="text-2xl font-black mb-1">Student Name</h2>
-            <p id="scan-status" class="text-lg font-bold">Status</p>
+        <!-- Scanner Content -->
+        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            <div class="max-w-2xl mx-auto">
+                
+                    <!-- Scanner Card -->
+                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                        <h3 class="font-black text-gray-900 text-lg">QR Code Scanner</h3>
+                        <span id="current-time" class="font-mono text-lg font-bold text-red-600">--:--:--</span>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div id="qr-reader" class="w-full aspect-square bg-gray-900 rounded-2xl overflow-hidden mb-6"></div>
+                        
+                        <!-- Status Indicator -->
+                        <div id="status-indicator" class="w-full text-center py-4 px-6 rounded-2xl bg-gray-50 border border-gray-200">
+                            <p class="text-sm text-gray-600 font-medium">Ready to scan student ID</p>
+                        </div>
+                        
+                        <!-- Last Scan Result -->
+                        <div id="last-scan" class="hidden mt-6 p-6 rounded-2xl bg-gray-50 border border-gray-200">
+                            <div class="flex items-center gap-4">
+                                <div class="h-14 w-14 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 font-black text-xl">
+                                    <i data-lucide="user" class="w-7 h-7"></i>
+                                </div>
+                                <div>
+                                    <h4 id="scan-student-name" class="text-xl font-black text-gray-900">Student Name</h4>
+                                    <p id="scan-status" class="text-lg font-bold">Status</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Actions -->
+                        <div class="mt-6 flex gap-4">
+                            <a href="clinic-dashboard.html" class="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-200 font-bold text-gray-700">
+                                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                                Back to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Entry Option -->
+                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                    <h4 class="font-black text-gray-900 mb-4">Manual Student Search</h4>
+                    <div class="flex gap-4">
+                        <div class="flex-1 relative">
+                            <i data-lucide="search" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="manual-student-search" placeholder="Enter student name or ID..." 
+                                class="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 font-medium">
+                        </div>
+                        <button onclick="manualSearch()" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all duration-200">
+                            Search
+                        </button>
+                    </div>
+                    <div id="manual-search-results" class="mt-4 space-y-2 max-h-48 overflow-y-auto hidden"></div>
+                </div>
+            </div>
         </div>
     </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
+            
+            // Update time
+            const updateTime = () => {
+                const now = new Date();
+                const timeEl = document.getElementById('current-time');
+                if (timeEl) {
+                    timeEl.innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            };
+            updateTime();
+            setInterval(updateTime, 1000);
         });
     </script>
 </body>

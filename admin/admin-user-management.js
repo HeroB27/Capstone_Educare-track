@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- ID ENGINE ---
 // Generates unique IDs for all user types following the naming convention
-// Format: {PREFIX}-{YEAR}-{LAST4}-{SUFFIX}
+// Format: {PREFIX}-{YEAR}-{LEVEL_CODE}-{SUFFIX}
 
 // PHASE 1 FIX: Use crypto.getRandomValues() instead of Math.random() for secure ID generation
 function generateSecureSuffix(length = 4) {
@@ -27,14 +27,52 @@ function generateSecureSuffix(length = 4) {
     return hex.substring(0, length).toUpperCase();
 }
 
-function generateID(role, seedValue) {
-    const year = new Date().getFullYear();
-    const last4 = seedValue.toString().slice(-4);
-    // FIX: Use secure random suffix
-    const suffix = generateSecureSuffix(4);
+// Convert grade level to code (e.g., "Grade 1" -> "G001", "Kinder" -> "K000")
+function getGradeLevelCode(gradeLevel) {
+    if (!gradeLevel) return 'G000'; // Default/unknown
     
-    // Student ID: EDU-{year}-{last4LRN}-{suffix}
-    if (role === 'students') return `EDU-${year}-${last4}-${suffix}`;
+    // Handle Kinder
+    if (gradeLevel.toLowerCase().includes('kinder') || gradeLevel === 'K') {
+        return 'K000';
+    }
+    
+    // Handle Grade 1-12
+    const gradeMatch = gradeLevel.match(/Grade\s*(\d+)/i);
+    if (gradeMatch) {
+        const gradeNum = parseInt(gradeMatch[1]);
+        if (gradeNum >= 1 && gradeNum <= 12) {
+            return `G${gradeNum.toString().padStart(3, '0')}`;
+        }
+    }
+    
+    // Handle G1-G12 format
+    const gMatch = gradeLevel.match(/^G(\d{1,2})$/i);
+    if (gMatch) {
+        const gradeNum = parseInt(gMatch[1]);
+        if (gradeNum >= 1 && gradeNum <= 12) {
+            return `G${gradeNum.toString().padStart(3, '0')}`;
+        }
+    }
+    
+    return 'G000'; // Default
+}
+
+function generateID(role, seedValue, gradeLevel = null) {
+    const year = new Date().getFullYear();
+    
+    // For students: EDU-{year}-{gradeLevelCode}-{4-digit-sequence}
+    // Example: EDU-2026-G001-0001
+    if (role === 'students') {
+        const levelCode = getGradeLevelCode(gradeLevel);
+        // Use last 4 digits of seed (LRN) for sequence
+        const sequence = seedValue ? seedValue.toString().slice(-4) : '0001';
+        const suffix = generateSecureSuffix(4);
+        return `EDU-${year}-${levelCode}-${suffix}`;
+    }
+    
+    // For other roles: use last 4 of seed value + secure suffix
+    const last4 = seedValue ? seedValue.toString().slice(-4) : '0000';
+    const suffix = generateSecureSuffix(4);
     
     // All other roles follow: {PREFIX}-{year}-{last4Phone}-{suffix}
     const prefixes = { 
@@ -295,7 +333,7 @@ async function finalizeParentStudent() {
         const studentPayload = studentData.map(s => ({ 
             full_name: s.name, 
             lrn: s.lrn, 
-            student_id_text: generateID('students', s.lrn), 
+            student_id_text: generateID('students', s.lrn, s.grade),
             parent_id: parent.id, 
             address: parentInfo.address, 
             emergency_contact: parentInfo.contact_number, 

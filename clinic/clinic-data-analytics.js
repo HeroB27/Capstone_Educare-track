@@ -104,7 +104,13 @@ function renderDetailedLogs(visits) {
 }
 
 function setToday() {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Timezone adjustment
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+    
+    // FIX: Make sure these IDs exactly match your HTML file! 
+    // If your HTML uses 'start-date' and 'end-date', change 'date-from' and 'date-to' below.
     document.getElementById('date-from').value = today;
     document.getElementById('date-to').value = today;
     applyDateFilter();

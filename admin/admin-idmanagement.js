@@ -109,19 +109,50 @@ function closeViewIdModal() {
     document.getElementById('viewIdModal').classList.remove('flex');
 }
 
+// Convert grade level to code (e.g., "Grade 1" -> "G001", "Kinder" -> "K000")
+function getGradeLevelCode(gradeLevel) {
+    if (!gradeLevel) return 'G000';
+    if (gradeLevel.toLowerCase().includes('kinder') || gradeLevel === 'K') return 'K000';
+    const gradeMatch = gradeLevel.match(/Grade\s*(\d+)/i);
+    if (gradeMatch) {
+        const gradeNum = parseInt(gradeMatch[1]);
+        if (gradeNum >= 1 && gradeNum <= 12) return `G${gradeNum.toString().padStart(3, '0')}`;
+    }
+    return 'G000';
+}
+
 // Re-issue ID - Generate new student ID
 async function reissueID(dbId) {
     if (!confirm("Are you sure you want to re-issue this ID? This will generate a new student ID.")) return;
-    
     const student = studentRecords.find(x => x.id === dbId);
     if (!student) return;
-    
     const year = new Date().getFullYear();
-    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const last4 = student.lrn.toString().slice(-4);
-    const newID = `EDU-${year}-${last4}-${suffix}`;
+    const gradeLevel = student.classes?.grade_level || 'Unknown';
+    const levelCode = getGradeLevelCode(gradeLevel);
 
-    const { error } = await supabase.from('students').update({ student_id_text: newID }).eq('id', dbId);
+    // --- FIX: Loop to ensure the newly generated ID is unique before updating. ---
+    let newID;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!isUnique && attempts < maxAttempts) {
+        const suffix = Math.random().toString(36).substring(2, 6).toUpperCase(); // Simple random for this case
+        newID = `EDU-${year}-${levelCode}-${suffix}`;
+
+        const { count, error } = await supabase
+            .from('students')
+            .select('id', { head: true, count: 'exact' })
+            .eq('student_id_text', newID);
+
+        if (error) break; // Exit on query error
+        if (count === 0) isUnique = true;
+        attempts++;
+    }
+
+    if (!isUnique) return showNotification('Could not generate a unique ID. Please try again.', 'error');
+
+    const { error } = await supabase.from('students').update({ student_id_text: newID, qr_code_data: newID }).eq('id', dbId);
     if (!error) {
         showNotification(`New ID Issued: ${newID}`, "success");
         loadStudentIDs();

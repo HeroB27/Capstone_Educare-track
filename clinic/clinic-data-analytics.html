@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Logs & Analytics - Educare Clinic</title>
+    <title>Daily Logs - Educare Clinic</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -25,10 +25,10 @@
 <body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-[32px] bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+    <aside class="w-64 m-4 rounded-3xl bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="heart-pulse" class="w-6 h-6 text-red-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">CLINIC</span>
+            <span class="text-2xl font-black tracking-tighter">CLINIC</span>
         </div>
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
             <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
@@ -60,14 +60,20 @@
         </div>
     </aside>
 
+    <!-- Main Content -->
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <!-- Glassmorphism Header -->
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
             <div>
-                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Daily Logs & Analytics</h2>
-                <p class="text-sm text-gray-500 mt-1 font-medium">Track clinic visits and generate reports</p>
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Daily Logs</h2>
+                <p class="text-sm text-gray-500 mt-1 font-medium">Analytics and insights for clinic visits</p>
             </div>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-3">
+            
+            <div class="flex items-center gap-6">
+                <div class="h-10 w-px bg-gray-200"></div>
+                
+                <div class="flex items-center gap-4">
                     <div class="text-right">
                         <p id="clinic-name" class="font-black text-gray-900 text-sm leading-none mb-1">Clinic Staff</p>
                         <p class="text-[10px] text-red-600 font-black tracking-widest uppercase">Medical Care</p>
@@ -79,57 +85,121 @@
             </div>
         </header>
 
+        <!-- Content -->
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            
             <!-- Date Filter -->
-            <div class="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm mb-8 flex items-center gap-4">
-                <label class="text-sm font-bold text-gray-600">Date Range:</label>
-                <input type="date" id="date-from" class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-medium">
-                <span class="text-gray-400 font-bold">TO</span>
-                <input type="date" id="date-to" class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500 font-medium">
-                <button onclick="applyDateFilter()" class="px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">
-                    <i data-lucide="filter" class="w-4 h-4 inline mr-2"></i> Apply
-                </button>
-                <div class="ml-auto flex gap-2">
-                    <button onclick="setToday()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">Today</button>
-                    <button onclick="setThisWeek()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">This Week</button>
-                    <button onclick="setThisMonth()" class="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-xl">This Month</button>
-                    <button onclick="setAllTime()" class="px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl">All Time</button>
-                </div>
-            </div>
-
-            <!-- Charts Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-                    <h3 class="text-lg font-black text-gray-900 mb-6 tracking-tight">Most Common Reasons</h3>
-                    <div class="relative h-64"><canvas id="reasons-chart"></canvas></div>
-                </div>
-                <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-                    <h3 class="text-lg font-black text-gray-900 mb-6 tracking-tight">Daily Visit Trend</h3>
-                    <div class="relative h-64"><canvas id="daily-chart"></canvas></div>
-                </div>
-            </div>
-
-            <!-- Detailed Log Table -->
-            <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="font-black text-gray-900 text-lg tracking-tight">Detailed Visit Log</h3>
-                    <button onclick="exportData()" class="flex items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold">
-                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-6">
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Start Date</label>
+                        <input type="date" id="start-date" 
+                            class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">End Date</label>
+                        <input type="date" id="end-date" 
+                            class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 font-medium">
+                    </div>
+                    <button onclick="applyDateFilter()" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all duration-200">
+                        Apply Filter
                     </button>
+                    <button onclick="resetDateFilter()" class="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-bold transition-all duration-200">
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Total Visits</p>
+                            <p class="text-3xl font-black text-gray-800 mt-2" id="stat-total">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="users" class="w-6 h-6 text-red-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Returned to Class</p>
+                            <p class="text-3xl font-black text-green-600 mt-2" id="stat-returned">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="school" class="w-6 h-6 text-green-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Sent Home</p>
+                            <p class="text-3xl font-black text-blue-600 mt-2" id="stat-sent-home">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="home" class="w-6 h-6 text-blue-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Average Duration</p>
+                            <p class="text-3xl font-black text-gray-800 mt-2" id="stat-avg-duration">0m</p>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="clock" class="w-6 h-6 text-purple-600"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Visit Trends -->
+                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                    <h3 class="font-black text-gray-900 mb-4">Visit Trends</h3>
+                    <div class="h-64">
+                        <canvas id="trend-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Visit Reasons -->
+                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                    <h3 class="font-black text-gray-900 mb-4">Top Visit Reasons</h3>
+                    <div class="h-64">
+                        <canvas id="reasons-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Visits Table -->
+            <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-gray-100">
+                    <h3 class="font-black text-gray-900">Recent Visits</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full">
                         <thead class="bg-gray-50/80">
                             <tr class="border-b border-gray-200">
-                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Date/Time</th>
+                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Date</th>
                                 <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Student</th>
                                 <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Reason</th>
-                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Action</th>
-                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Duration</th>
+                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Time In</th>
+                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Time Out</th>
+                                <th class="px-6 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="detailed-logs-body" class="divide-y divide-gray-100">
-                            <tr><td colspan="5" class="px-6 py-12 text-center text-gray-500 font-medium">Loading data...</td></tr>
+                        <tbody id="recent-visits-body" class="divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-gray-500 font-medium">
+                                    Loading visits...
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>

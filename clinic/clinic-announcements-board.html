@@ -24,10 +24,10 @@
 <body class="bg-gradient-to-br from-red-50 via-white to-red-50 min-h-screen flex text-gray-800">
 
     <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-[32px] bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
+    <aside class="w-64 m-4 rounded-3xl bg-red-900 text-white flex flex-col shadow-2xl shrink-0">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="heart-pulse" class="w-6 h-6 text-red-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">CLINIC</span>
+            <span class="text-2xl font-black tracking-tighter">CLINIC</span>
         </div>
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
             <a href="clinic-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
@@ -60,19 +60,22 @@
     </aside>
 
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
-        <!-- Gradient Header -->
+        <!-- Glassmorphism Header -->
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
             <div>
                 <h2 class="text-3xl font-black text-gray-900 tracking-tight">School Announcements</h2>
                 <p class="text-sm text-gray-500 mt-1 font-medium">Stay informed about school-wide updates</p>
             </div>
-            <div class="flex items-center gap-3">
-                <div class="text-right">
-                    <p id="clinic-name" class="font-black text-gray-900 text-sm leading-none mb-1">Clinic Staff</p>
-                    <p class="text-[10px] text-red-600 font-black tracking-widest uppercase">Medical Care</p>
-                </div>
-                <div class="h-12 w-12 bg-red-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
-                    <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+            <div class="flex items-center gap-6">
+                <div class="h-10 w-px bg-gray-200"></div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p id="clinic-name" class="font-black text-gray-900 text-sm leading-none mb-1">Clinic Staff</p>
+                        <p class="text-[10px] text-red-600 font-black tracking-widest uppercase">Medical Care</p>
+                    </div>
+                    <div class="h-12 w-12 bg-red-600 rounded-2xl flex items-center justify-center text-white font-black text-xl">
+                        <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                    </div>
                 </div>
             </div>
         </header>
@@ -106,7 +109,7 @@
 
     <!-- Announcement Detail Modal -->
     <div id="announcement-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-[32px] shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
+        <div class="bg-white rounded-3xl shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
             <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50">
                 <h3 id="modal-title" class="text-xl font-black text-gray-900">Announcement Details</h3>
                 <button onclick="closeAnnouncementModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-all">

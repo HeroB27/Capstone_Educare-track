@@ -65,20 +65,21 @@
             const rememberMe = document.getElementById('remember-me').checked;
             const errorMsg = document.getElementById('error-msg');
             const roles = ['admins', 'teachers', 'clinic_staff', 'guards', 'parents'];
-
+ 
             errorMsg.classList.add('hidden');
-
+ 
             try {
-                let user = null;
-                let role = '';
-
-                for (const r of roles) {
-                    const { data, error } = await supabase.from(r).select('*').eq('username', username).eq('password', password).maybeSingle();
-                    if (data) { user = data; role = r; break; }
-                }
-
+                // --- SECURITY FIX: Use RPC to verify password securely on the server ---
+                const { data: user, error: rpcError } = await supabase.rpc('verify_user_password', {
+                    p_username: username,
+                    p_password: password
+                });
+ 
+                if (rpcError) throw rpcError;
                 if (!user) throw new Error("Invalid credentials");
-
+ 
+                const role = user.role;
+ 
                 // CRITICAL FIX: Check if the user account is active
                 // For admins who don't have is_active column, undefined means active
                 // is_active = false means explicitly deactivated
@@ -86,18 +87,17 @@
                     throw new Error("Your account has been deactivated. Please contact an administrator.");
                 }
 
-                // Save Session
-                const userSession = { ...user, role: role };
+                // Save Session - The user object from RPC already contains the role
                 const storage = rememberMe ? localStorage : sessionStorage;
-                storage.setItem('educare_user', JSON.stringify(userSession));
-
+                storage.setItem('educare_user', JSON.stringify(user));
+ 
                 // REDIRECT LOGIC (Updated to your naming convention)
                 if (role === 'admins') window.location.href = 'admin/admin-dashboard.html';
                 else if (role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
                 else if (role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
                 else if (role === 'guards') window.location.href = 'guard/guard-dashboard.html';
                 else if (role === 'parents') window.location.href = 'parent/parent-dashboard.html';
-
+ 
             } catch (err) {
                 errorMsg.innerText = err.message;
                 errorMsg.classList.remove('hidden');

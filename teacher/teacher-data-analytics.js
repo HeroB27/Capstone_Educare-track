@@ -5,7 +5,6 @@ let pieChart, barChart;
 let currentTeacher = null;
 let currentClassId = null;
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     // Check session
     currentTeacher = checkSession('teachers');
@@ -14,8 +13,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     
+    // FIX: Timezone-adjusted dates to prevent "yesterday" bug during morning defense
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    const lastWeek = new Date(today);
+    lastWeek.setDate(lastWeek.getDate() - 7);
+
+    // Only set these if the elements exist on the page
+    const dateEndEl = document.getElementById('dateEnd');
+    const dateStartEl = document.getElementById('dateStart');
+    if (dateEndEl) dateEndEl.value = today.toISOString().split('T')[0];
+    if (dateStartEl) dateStartEl.value = lastWeek.toISOString().split('T')[0];
+    
     // Set teacher name in header
-    document.getElementById('teacher-name').textContent = currentTeacher.full_name;
+    const teacherNameEl = document.getElementById('teacher-name');
+    if(teacherNameEl) teacherNameEl.textContent = currentTeacher.full_name;
     
     // Load teacher's classes
     await loadTeacherClasses();
@@ -25,9 +37,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Load initial data if class is selected
     const classSelect = document.getElementById('analytics-class-select');
-    if (classSelect.value) {
+    if (classSelect && classSelect.value) {
         await updateAnalytics();
     }
+
+    // FIX: Add real-time subscription to keep analytics fresh.
+    const analyticsSub = supabase.channel('teacher-analytics-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => updateAnalytics())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'excuse_letters' }, () => updateAnalytics())
+        .subscribe();
+    
+    // Assumes addSubscription is available from teacher-core.js or general-core.js
+    if (typeof addSubscription === 'function') addSubscription(analyticsSub);
 });
 
 async function loadTeacherClasses() {
@@ -136,36 +157,38 @@ async function updateAnalytics() {
             .eq('status', 'Approved');
         
         const excusedStudentIds = new Set(excuses?.map(e => e.student_id) || []);
-        
+
         // Calculate stats
-        const stats = calculateStats(attendance, excusedStudentIds, students.length);
-        
+        const stats = calculateStats(attendance, excusedStudentIds, students);
+
         // Update UI
         document.getElementById('present-rate').textContent = stats.presentRate + '%';
         document.getElementById('absent-rate').textContent = stats.absentRate + '%';
         document.getElementById('late-rate').textContent = stats.lateRate + '%';
         document.getElementById('excused-rate').textContent = stats.excusedRate + '%';
-        
+
         // Update charts
         updatePieChart(stats);
         await updateWeeklyTrend(classId);
         await loadCriticalAbsences(studentIds);
-        
+
     } catch (error) {
         console.error("Error updating analytics:", error);
     }
 }
 
-function calculateStats(attendance, excusedStudentIds, totalStudents) {
+function calculateStats(attendance, excusedStudentIds, allStudents) {
     let present = 0, absent = 0, late = 0, excused = 0;
-    
+    const totalStudents = allStudents.length;
+
     // Create attendance lookup
     const attendanceMap = {};
     attendance?.forEach(a => {
         attendanceMap[a.student_id] = a;
     });
-    
-    studentsLoop: for (const student of attendanceMap) {
+
+    // FIX: Iterate over all students in the class, not just those with attendance logs.
+    for (const student of allStudents) {
         // Check if excused
         if (excusedStudentIds.has(student.id)) {
             excused++;
@@ -173,28 +196,17 @@ function calculateStats(attendance, excusedStudentIds, totalStudents) {
         }
         
         const record = attendanceMap[student.id];
-        const status = record?.status || 'Absent';
-        
-        if (status === 'Present' || status === 'On Time') {
-            present++;
-        } else if (status === 'Late') {
-            late++;
-        } else if (status === 'Absent') {
+        if (!record) {
             absent++;
+        } else if (record.status === 'Present' || record.status === 'On Time') {
+            present++;
+        } else if (record.status === 'Late') {
+            late++;
         } else {
-            // Default to present if has time_in
-            if (record?.time_in) {
-                present++;
-            } else {
-                absent++;
-            }
+            absent++;
         }
     }
-    
-    // Students with no record are absent
-    const accountedFor = present + absent + late + excused;
-    absent += (totalStudents - accountedFor);
-    
+
     return {
         present,
         absent,

@@ -322,17 +322,19 @@ async function deleteClass(id, cnt) {
     let confirmMsg = 'Are you sure you want to delete this class?';
     if (count > 0) confirmMsg = `This class has ${count} subjects assigned. Deleting it will remove these subjects. Continue?`;
 
-    if(confirm(confirmMsg)) {
-        // Delete subjects first if they exist (manual cascade for safety)
-        if (count > 0) await supabase.from('subject_loads').delete().eq('class_id', id);
+    if (confirm(confirmMsg)) {
+        // --- FIX: Use a single, transactional RPC call to prevent data corruption ---
+        const { error } = await supabase.rpc('delete_class_and_subjects', {
+            class_id_to_delete: id
+        });
 
-        const { error } = await supabase.from('classes').delete().eq('id',id); 
-        if (error) showNotification(error.message, 'error');
-        else {
+        if (error) {
+            showNotification(error.message, 'error');
+        } else {
             loadClasses(selectedGrade);
             showNotification('Class deleted successfully', 'success');
         }
-    } 
+    }
 }
 
 function injectStyles() {

@@ -141,6 +141,18 @@ async function loadSubjectStudents(subjectLoadId) {
             todayLogs = logs || [];
         }
         
+        // PHASE 2 FIX: Subject Teacher Blind Spot for Clinic Visits
+        // Pre-fetch today's clinic visits for these students
+        let todayClinicVisits = {};
+        if (studentIds.length > 0) {
+            const { data: visits } = await supabase
+                .from('clinic_visits')
+                .select('student_id, status')
+                .is('time_out', null) // Active visit
+                .in('student_id', studentIds);
+            (visits || []).forEach(v => todayClinicVisits[v.student_id] = v);
+        }
+
         // Build lookup map
         const logsMap = {};
         todayLogs.forEach(log => {
@@ -166,13 +178,14 @@ async function loadSubjectStudents(subjectLoadId) {
             studentTableBody.innerHTML = allStudents.map(student => {
                 const log = logsMap[student.id];
                 const gateStatus = log?.status || 'Not Marked';
+                const isInClinic = !!todayClinicVisits[student.id];
                 const timeIn = log?.time_in ? new Date(log.time_in).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '--:--';
                 const remarks = log?.remarks || '';
                 
                 // Determine subject-specific status from remarks
                 const currentSubjectStatus = getSubjectStatusFromRemarks(remarks, currentSubjectName);
                 
-                // Determine if status is protected
+                // Determine if status is protected (teacher cannot override Late/Excused from gate)
                 const isProtected = gateStatus === 'Late' || gateStatus === 'Excused';
                 
                 // Status badge for gate status
@@ -182,7 +195,7 @@ async function loadSubjectStudents(subjectLoadId) {
                 const presentDisabled = isProtected ? 'opacity-50 cursor-not-allowed' : '';
                 
                 // Track stats (use subject status if marked, otherwise gate status)
-                const displayStatus = currentSubjectStatus || gateStatus;
+                const displayStatus = isInClinic ? 'In Clinic' : (currentSubjectStatus || gateStatus);
                 if (displayStatus === 'On Time' || displayStatus === 'Present') presentCount++;
                 else if (displayStatus === 'Absent') absentCount++;
                 else if (displayStatus === 'Late') lateCount++;
@@ -245,11 +258,11 @@ async function loadSubjectStudents(subjectLoadId) {
  * Get subject-specific status from remarks field
  */
 function getSubjectStatusFromRemarks(remarks, subjectName) {
-    if (!remarks || !subjectName) return null;
-    // Match pattern [SubjectName: Status]
-    const pattern = new RegExp(`\\[${escapeRegex(subjectName)}: (\\w+)\\]`, 'i');
-    const match = remarks.match(pattern);
-    return match ? match[1] : null;
+    // FIX: Read from JSONB object instead of parsing a string.
+    if (remarks && typeof remarks === 'object' && subjectName) {
+        return remarks[subjectName] || null;
+    }
+    return null;
 }
 
 /**
@@ -274,6 +287,8 @@ function escapeHtml(text) {
  */
 function getStatusBadge(status) {
     switch (status) {
+        case 'In Clinic':
+            return 'bg-blue-100 text-blue-800';
         case 'On Time':
         case 'Present':
             return 'bg-green-100 text-green-800';
@@ -295,7 +310,10 @@ function getStatusBadge(status) {
  */
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // FIX: Timezone adjustment to prevent saving to yesterday's date
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const today = localDate.toISOString().split('T')[0];
         
         // 1. Fetch existing daily log to preserve gate data
         const { data: existingLog } = await supabase
@@ -303,32 +321,45 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
             .select('status, time_in, remarks')
             .eq('student_id', studentId)
             .eq('log_date', today)
-            .single();
+            .maybeSingle();
 
         // 2. PROTECT specific statuses
         // If student is already Late or Excused, subject teacher cannot override
-        if (existingLog && (existingLog.status === 'Late' || existingLog.status === 'Excused')) {
+        if (existingLog && (existingLog.status === 'Late' || existingLog.status === 'Excused') && newStatus !== 'Excused') {
             showNotification(`Cannot change status: Student is marked as ${existingLog.status} at the gate`, 'error');
             return;
         }
 
-        // 3. Parse existing remarks to remove this subject's previous entry
-        let existingRemarks = existingLog?.remarks || '';
-        // Remove any existing [SubjectName: Status] pattern
-        const subjectPattern = new RegExp(`\\[${escapeRegex(subjectName)}: \\w+\\]\\s*`, 'gi');
-        existingRemarks = existingRemarks.replace(subjectPattern, '').replace(/\|\s*$/, '').trim();
-        
-        // 4. Safely append subject info without destroying gate data
-        let newRemarks = existingRemarks ? `${existingRemarks} | [${subjectName}: ${newStatus}]` : `[${subjectName}: ${newStatus}]`;
+        // 3. FIX: Work with JSONB remarks for atomic updates.
+        const existingRemarks = (existingLog?.remarks && typeof existingLog.remarks === 'object') ? existingLog.remarks : {};
+        const newRemarks = { ...existingRemarks, [subjectName]: newStatus };
 
-        // 5. Perform the Upsert - PRESERVE existing time_in from gate
+        // 4. Auto-calculate overall status from all subject statuses in the new remarks
+        const allSubjectStatuses = Object.values(newRemarks);
+        let overallStatus = 'On Time'; // Default if all are present
+        if (allSubjectStatuses.includes('Excused')) {
+            overallStatus = 'Excused';
+        } else if (allSubjectStatuses.includes('Absent')) {
+            overallStatus = 'Absent';
+        } else if (allSubjectStatuses.includes('Late')) {
+            overallStatus = 'Late';
+        }
+
+        // If the gate status was 'Late', the overall status must remain 'Late' unless a subject is 'Absent' or 'Excused'.
+        if (existingLog?.status === 'Late' && overallStatus === 'On Time') {
+            overallStatus = 'Late';
+        }
+
+        // 5. Perform the Upsert - PRESERVE existing time_in from gate.
+        // The `onConflict` constraint handles the "Double Identity" bug by ensuring only one record per day.
+        // Using JSONB remarks makes this single record reliable.
         const { error } = await supabase
             .from('attendance_logs')
             .upsert({
                 student_id: studentId,
                 log_date: today,
-                time_in: existingLog ? existingLog.time_in : null, 
-                status: newStatus === 'Excused' ? 'Excused' : (newStatus === 'Present' ? 'On Time' : 'Absent'),
+                time_in: existingLog?.time_in || new Date().toISOString(), 
+                status: overallStatus,
                 remarks: newRemarks
             }, {
                 onConflict: 'student_id, log_date'

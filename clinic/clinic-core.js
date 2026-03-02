@@ -208,14 +208,15 @@ async function rejectClinicPass(visitId, reason = '') {
 /**
  * Admit a referred student into the clinic.
  * Updates status to 'In Clinic' to remove them from the 'Pending' queue.
+ * FIX: Also notifies parent when student is admitted
  * @param {number} visitId - The visit ID to admit
  */
 async function admitReferredStudent(visitId) {
     try {
-        // Get visit details for notification
+        // Get visit details for notification (including parent info)
         const { data: visit, error: fetchError } = await supabase
             .from('clinic_visits')
-            .select(`*, students(full_name, classes(grade_level, section_name))`)
+            .select(`*, students(full_name, parent_id, classes(grade_level, section_name))`)
             .eq('id', visitId)
             .single();
         
@@ -231,6 +232,15 @@ async function admitReferredStudent(visitId) {
             .eq('id', visitId);
         
         if (error) throw error;
+        
+        // FIX Issue #1: Notify parent that child has been admitted to clinic
+        if (visit.students && visit.students.parent_id) {
+            await notifyParentChildInClinic(
+                visit.students.parent_id,
+                visit.students.full_name
+            );
+            console.log('[DEBUG] Parent notified of clinic admission');
+        }
         
         // Show success toast and refresh
         if (typeof showToast === 'function') {
@@ -472,6 +482,7 @@ async function clinicCheckIn(visitId) {
 
 /**
  * Add findings and set action for a checked-in student
+ * FIX Issue #2: When action is 'Sent Home', requires teacher approval instead of immediate discharge
  * @param {number} visitId - The visit ID
  * @param {string} notes - Nurse notes/findings
  * @param {string} action - Action taken: 'Sent Home' or 'Rest at Clinic'
@@ -483,7 +494,7 @@ async function addClinicFindings(visitId, notes, action) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (full_name, classes (grade_level, section_name))
+                students (full_name, parent_id, classes (grade_level, section_name))
             `)
             .eq('id', visitId)
             .single();
@@ -492,33 +503,204 @@ async function addClinicFindings(visitId, notes, action) {
             throw new Error('Visit not found');
         }
         
-        const { error } = await supabase
-            .from('clinic_visits')
-            .update({
-                nurse_notes: notes,
-                action_taken: action,
-                status: action === 'Sent Home' ? 'Completed' : 'In Clinic'
-            })
-            .eq('id', visitId);
+        let newStatus = 'In Clinic';
         
-        if (error) {
-            console.error('Error adding clinic findings:', error);
-            throw error;
-        }
-        
-        // If sent home, notify teacher of action taken
+        // FIX Issue #2: If action is 'Sent Home', require teacher approval
         if (action === 'Sent Home') {
-            await notifyTeacherActionTaken(
+            // Set status to "Awaiting Teacher Approval" instead of completing immediately
+            newStatus = 'Awaiting Teacher Approval';
+            
+            // Update with pending teacher approval status
+            const { error } = await supabase
+                .from('clinic_visits')
+                .update({
+                    nurse_notes: notes,
+                    action_taken: action,
+                    status: newStatus
+                })
+                .eq('id', visitId);
+            
+            if (error) {
+                console.error('Error adding clinic findings:', error);
+                throw error;
+            }
+            
+            // Notify teacher that student needs to be sent home and requires approval
+            await notifyTeacherForApproval(
                 visit.referred_by_teacher_id,
                 visit.students.full_name,
-                'Sent Home'
+                notes,
+                action,
+                visitId
             );
+            
+            if (typeof showToast === 'function') {
+                showToast('Sent home request submitted. Waiting for teacher approval.', 'info');
+            } else {
+                alert('Sent home request submitted. Waiting for teacher approval.');
+            }
+        } else {
+            // For "Rest at Clinic" or other actions, keep student in clinic
+            const { error } = await supabase
+                .from('clinic_visits')
+                .update({
+                    nurse_notes: notes,
+                    action_taken: action,
+                    status: newStatus
+                })
+                .eq('id', visitId);
+            
+            if (error) {
+                console.error('Error adding clinic findings:', error);
+                throw error;
+            }
+            
+            if (typeof showToast === 'function') {
+                showToast('Findings saved successfully', 'success');
+            } else {
+                alert('Findings saved successfully');
+            }
         }
         
         return true;
     } catch (err) {
         console.error('Error in addClinicFindings:', err);
         throw err;
+    }
+}
+
+/**
+ * Notify teacher that student needs approval for sent home
+ * FIX Issue #2: New function for teacher approval workflow
+ * @param {number} teacherId - Teacher ID
+ * @param {string} studentName - Student's full name
+ * @param {string} nurseNotes - Nurse's findings
+ * @param {string} action - Action recommended
+ * @param {number} visitId - Visit ID for reference
+ */
+async function notifyTeacherForApproval(teacherId, studentName, nurseNotes, action, visitId) {
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .insert([{
+                recipient_id: teacherId,
+                recipient_role: 'teacher',
+                title: 'Approval Required: Send Home',
+                message: `Clinic recommends ${studentName} be sent home. Nurse notes: ${nurseNotes}. Please approve or disapprove.`,
+                type: 'clinic_approval_required',
+                is_read: false
+            }]);
+        
+        if (error) {
+            console.error('Error notifying teacher for approval:', error);
+        }
+    } catch (err) {
+        console.error('Error in notifyTeacherForApproval:', err);
+    }
+}
+
+/**
+ * Approve sent home recommendation from clinic
+ * FIX Issue #2: Teacher approves the sent home recommendation
+ * @param {number} visitId - The visit ID
+ * @param {boolean} approved - True to approve, false to disapprove
+ * @param {string} remarks - Teacher's remarks
+ */
+async function approveSentHome(visitId, approved, remarks = '') {
+    try {
+        const { data: visit, error: fetchError } = await supabase
+            .from('clinic_visits')
+            .select(`*, students(full_name, parent_id)`)
+            .eq('id', visitId)
+            .single();
+        
+        if (fetchError) throw fetchError;
+        
+        if (approved) {
+            // Teacher approved - complete the discharge
+            const { error } = await supabase
+                .from('clinic_visits')
+                .update({
+                    status: 'Completed',
+                    time_out: new Date().toISOString(),
+                    teacher_approval: true,
+                    teacher_remarks: remarks
+                })
+                .eq('id', visitId);
+            
+            if (error) throw error;
+            
+            // Notify parent that student is being sent home (after teacher approval)
+            if (visit.students && visit.students.parent_id) {
+                await notifyParentCheckOut(
+                    visit.students.parent_id,
+                    visit.students.full_name,
+                    'Sent Home'
+                );
+            }
+            
+            // Notify clinic that approval was granted
+            await notifyClinicApprovalResult(visitId, visit.students.full_name, true, remarks);
+            
+            if (typeof showToast === 'function') {
+                showToast('Sent home approved. Parent has been notified.', 'success');
+            }
+        } else {
+            // Teacher disapproved - student stays in clinic
+            const { error } = await supabase
+                .from('clinic_visits')
+                .update({
+                    status: 'In Clinic',
+                    teacher_approval: false,
+                    teacher_remarks: remarks
+                })
+                .eq('id', visitId);
+            
+            if (error) throw error;
+            
+            // Notify clinic that approval was denied
+            await notifyClinicApprovalResult(visitId, visit.students.full_name, false, remarks);
+            
+            if (typeof showToast === 'function') {
+                showToast('Sent home disapproved. Student remains in clinic.', 'info');
+            }
+        }
+        
+        return true;
+    } catch (err) {
+        console.error('Error in approveSentHome:', err);
+        throw err;
+    }
+}
+
+/**
+ * Notify clinic of teacher's approval decision
+ * @param {number} visitId - Visit ID
+ * @param {string} studentName - Student name
+ * @param {boolean} approved - Whether approved
+ * @param {string} remarks - Teacher's remarks
+ */
+async function notifyClinicApprovalResult(visitId, studentName, approved, remarks) {
+    try {
+        // Get all clinic staff
+        const { data: clinicStaff } = await supabase
+            .from('clinic_staff')
+            .select('id');
+        
+        if (clinicStaff && clinicStaff.length > 0) {
+            const notifications = clinicStaff.map(staff => ({
+                recipient_id: staff.id,
+                recipient_role: 'clinic_staff',
+                title: approved ? 'Sent Home Approved' : 'Sent Home Disapproved',
+                message: `Teacher ${approved ? 'approved' : 'disapproved'} sending ${studentName} home. ${remarks ? 'Remarks: ' + remarks : ''}`,
+                type: 'clinic_approval_result',
+                is_read: false
+            }));
+            
+            await supabase.from('notifications').insert(notifications);
+        }
+    } catch (err) {
+        console.error('Error notifying clinic:', err);
     }
 }
 
@@ -678,49 +860,26 @@ async function fetchAllVisits() {
  * @param {string} endDate - End date YYYY-MM-DD
  */
 async function fetchVisitsByDateRange(startDate, endDate) {
+    // --- PERFORMANCE FIX: Filter on the database, not the client ---
+    // This prevents downloading thousands of unnecessary rows.
     try {
-        // Fetch all visits and filter locally (to avoid timezone issues)
-        const { data: allData, error: allError } = await supabase
+        // Append time to ensure the entire end date is included in the query.
+        const endDateWithTime = `${endDate}T23:59:59`;
+
+        const { data, error } = await supabase
             .from('clinic_visits')
             .select(`
                 *,
-                students (
-                    id,
-                    full_name,
-                    student_id_text,
-                    classes (grade_level, section_name)
-                ),
+                students (id, full_name, student_id_text, classes (grade_level, section_name)),
                 referred_by_teacher:teachers (full_name)
             `)
+            .gte('time_in', startDate)
+            .lte('time_in', endDateWithTime)
             .order('time_in', { ascending: false });
         
-        if (allError) {
-            console.error('Error fetching all visits:', allError);
-            return [];
-        }
+        if (error) throw error;
         
-        // Filter by date locally - compare only the date part, not time
-        const startParts = startDate.split('-');
-        const startYear = parseInt(startParts[0]);
-        const startMonth = parseInt(startParts[1]) - 1;
-        const startDay = parseInt(startParts[2]);
-        const startDateTime = new Date(startYear, startMonth, startDay, 0, 0, 0, 0);
-        
-        const endParts = endDate.split('-');
-        const endYear = parseInt(endParts[0]);
-        const endMonth = parseInt(endParts[1]) - 1;
-        const endDay = parseInt(endParts[2]);
-        const endDateTime = new Date(endYear, endMonth, endDay, 23, 59, 59, 999);
-        
-        const filtered = (allData || []).filter(visit => {
-            const visitDate = new Date(visit.time_in);
-            const visitDateOnly = new Date(visitDate.getFullYear(), visitDate.getMonth(), visitDate.getDate());
-            const startDateOnly = new Date(startDateTime.getFullYear(), startDateTime.getMonth(), startDateTime.getDate());
-            const endDateOnly = new Date(endDateTime.getFullYear(), endDateTime.getMonth(), endDateTime.getDate());
-            return visitDateOnly >= startDateOnly && visitDateOnly <= endDateOnly;
-        });
-        
-        return filtered;
+        return data || [];
         
     } catch (err) {
         console.error('Error in fetchVisitsByDateRange:', err);

@@ -445,90 +445,66 @@
         });
 
         // Load Dashboard Stats - Updated Status Definitions
-        // Present: Students with time_in but no time_out today
-        // Late: Students marked as 'Late' by Gatekeeper  
-        // In Clinic: Students with active clinic visits
-        // Pending Excuses: Count of excuse_letters with 'Pending' status
-        async function loadDashboardStats() {
-            // Check if status cards exist (adviser mode)
-            const presentEl = document.getElementById('stat-present');
-            if (!presentEl) return; // Not an adviser or not on dashboard
-            
+        async function loadAdviserDashboardStats() {
             try {
-                // Get teacher's homeroom class
-                const { data: teacherClass } = await supabase
-                    .from('classes')
-                    .select('id')
-                    .eq('adviser_id', currentUser.id)
-                    .single();
-                
-                if (!teacherClass) {
-                    // Hide status cards for non-advisers
-                    document.getElementById('status-cards').style.display = 'none';
-                    return;
+                // FIX 1: Timezone adjustment for morning defenses
+                const localDate = new Date();
+                localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+                const today = localDate.toISOString().split('T')[0];
+
+                let present = 0, late = 0, inClinic = 0, pendingCount = 0;
+                let studentIds = [];
+
+                // Only fetch homeroom students if the teacher has an advisory class
+                if (homeroomClass && homeroomClass.id) {
+                    const { data: students } = await supabase
+                        .from('students')
+                        .select('id')
+                        .eq('class_id', homeroomClass.id);
+                    
+                    if (students && students.length > 0) {
+                        studentIds = students.map(s => s.id);
+                    }
                 }
 
-                const today = new Date().toISOString().split('T')[0];
-                
-                // Get students in this class
-                const { data: students } = await supabase
-                    .from('students')
-                    .select('id')
-                    .eq('class_id', teacherClass.id);
-                
-                const studentIds = students?.map(s => s.id) || [];
-                
-                if (studentIds.length === 0) {
-                    presentEl.innerText = '0';
-                    return;
+                // If they have homeroom students, get their attendance and excuses
+                if (studentIds.length > 0) {
+                    const { data: attendance } = await supabase
+                        .from('attendance_logs')
+                        .select('status')
+                        .in('student_id', studentIds)
+                        .eq('log_date', today);
+
+                    if (attendance) {
+                        present = attendance.filter(a => ['Present', 'On Time', 'Excused'].includes(a.status)).length;
+                        late = attendance.filter(a => a.status === 'Late').length;
+                    }
+
+                    const { data: pendingExcuses } = await supabase
+                        .from('excuse_letters')
+                        .select('id')
+                        .in('student_id', studentIds)
+                        .eq('status', 'Pending');
+                    
+                    pendingCount = pendingExcuses?.length || 0;
                 }
 
-                // Get today's attendance logs for these students
-                const { data: attendanceLogs } = await supabase
-                    .from('attendance_logs')
-                    .select('student_id, status, time_in, time_out')
-                    .eq('log_date', today)
-                    .in('student_id', studentIds);
-
-                // Calculate Present: has time_in but no time_out (still in school)
-                let present = 0;
-                let late = 0;
+                // FIX 2: Get clinic visits for homeroom students OR students this teacher referred
+                let clinicQuery = supabase.from('clinic_visits').select('id').eq('status', 'In Clinic').is('time_out', null);
+                if (studentIds.length > 0) {
+                    clinicQuery = clinicQuery.or(`student_id.in.(${studentIds.join(',')}),referred_by_teacher_id.eq.${currentUser.id}`);
+                } else {
+                    clinicQuery = clinicQuery.eq('referred_by_teacher_id', currentUser.id);
+                }
                 
-                attendanceLogs?.forEach(log => {
-                    if (log.time_in && !log.time_out) {
-                        // Has time_in but no time_out = Present (still in school)
-                        present++;
-                    }
-                    if (log.status === 'Late') {
-                        late++;
-                    }
-                });
-
-                // Get In Clinic count: clinic_visits with 'In Clinic' status (has time_in but no time_out)
-                const { data: clinicVisits } = await supabase
-                    .from('clinic_visits')
-                    .select('id')
-                    .in('student_id', studentIds)
-                    .eq('status', 'In Clinic')
-                    .is('time_out', null);
-                
-                const inClinic = clinicVisits?.length || 0;
-
-                // Get Pending Excuses count
-                const { data: pendingExcuses } = await supabase
-                    .from('excuse_letters')
-                    .select('id')
-                    .in('student_id', studentIds)
-                    .eq('status', 'Pending');
-                
-                const pendingCount = pendingExcuses?.length || 0;
+                const { data: clinicVisits } = await clinicQuery;
+                inClinic = clinicVisits?.length || 0;
 
                 // Update the UI
                 document.getElementById('stat-present').innerText = present;
                 document.getElementById('stat-late').innerText = late;
                 document.getElementById('stat-clinic').innerText = inClinic;
                 document.getElementById('stat-pending-excuses').innerText = pendingCount;
-
             } catch (err) {
                 console.error('Error loading dashboard stats:', err);
             }

@@ -40,8 +40,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupRealTimeSubscription() {
     if (!supabase) return;
     
-    const today = new Date().toISOString().split('T')[0];
-    
+    // FIX: Listen to the correct local date
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+
     attendanceSubscription = supabase
         .channel('attendance-changes')
         .on('postgres_changes', {
@@ -62,12 +65,12 @@ function setupRealTimeSubscription() {
             }
         })
         .subscribe();
+    addSubscription(attendanceSubscription); // Register for cleanup
     
     // Cleanup on page unload to prevent memory leaks
     window.addEventListener('beforeunload', () => {
-        if (attendanceSubscription) {
-            supabase.removeChannel(attendanceSubscription);
-        }
+        // The cleanupAllSubscriptions function is more robust for SPA-like navigation.
+        cleanupAllSubscriptions();
         clearTimeout(refreshTimeout);
     });
 }
