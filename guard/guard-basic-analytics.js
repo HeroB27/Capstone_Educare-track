@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setCurrentDate();
     
     loadTodayStats();
+    loadTodayBreakdown();
     loadTopLates();
     loadTopAbsentees();
     loadWeeklyTrend();
@@ -86,6 +87,120 @@ async function loadTodayStats() {
     } catch (err) {
         console.error('Error loading stats:', err);
     }
+}
+
+// ============================================
+// Today's Breakdown Pie Chart
+// ============================================
+async function loadTodayBreakdown() {
+    const canvas = document.getElementById('breakdownPieChart');
+    if (!canvas) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+        // Get total enrolled students
+        const totalResult = await supabase
+            .from('students')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'Enrolled');
+        
+        // Present today (status: On Time, Present, or Excused)
+        const presentResult = await supabase
+            .from('attendance_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('log_date', today)
+            .in('status', ['On Time', 'Present', 'Excused']);
+        
+        // Late today
+        const lateResult = await supabase
+            .from('attendance_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('log_date', today)
+            .eq('status', 'Late');
+        
+        const totalStudents = totalResult.count || 0;
+        const presentCount = presentResult.count || 0;
+        const lateCount = lateResult.count || 0;
+        const absentCount = Math.max(0, totalStudents - (presentCount + lateCount));
+        
+        console.log('Today breakdown:', { present: presentCount, late: lateCount, absent: absentCount });
+        
+        renderBreakdownChart(presentCount, lateCount, absentCount);
+        
+    } catch (err) {
+        console.error('Error loading breakdown:', err);
+    }
+}
+
+function renderBreakdownChart(present, late, absent) {
+    const canvas = document.getElementById('breakdownPieChart');
+    if (!canvas) return;
+    
+    // Destroy existing chart if it exists
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Present', 'Late', 'Absent'],
+            datasets: [{
+                data: [present, late, absent],
+                backgroundColor: [
+                    '#22c55e', // green-500
+                    '#eab308', // yellow-500
+                    '#ef4444'  // red-500
+                ],
+                borderColor: [
+                    '#15803d', // green-700
+                    '#a16207', // yellow-700
+                    '#b91c1c'  // red-700
+                ],
+                borderWidth: 2,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#9ca3af',
+                        font: {
+                            family: 'Inter',
+                            size: 12
+                        },
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#1f2937',
+                    titleColor: '#fff',
+                    bodyColor: '#d1d5db',
+                    borderColor: '#374151',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            const total = present + late + absent;
+                            const value = context.raw;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
 }
 
 // ============================================
@@ -223,58 +338,81 @@ async function loadTopAbsentees() {
         const d = new Date();
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(d.setDate(diff));
+        const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1));
         const weekStart = monday.toISOString().split('T')[0];
         
-        // Get all enrolled students
+        console.log('Absences - Week start:', weekStart);
+        
+        // Get attendance records with Absent status this week
+        const absentResult = await supabase
+            .from('attendance_logs')
+            .select('student_id, log_date, status')
+            .eq('status', 'Absent')
+            .gte('log_date', weekStart);
+        
+        if (absentResult.error) {
+            console.error('Absent query error:', absentResult.error);
+            throw absentResult.error;
+        }
+        
+        console.log('Absent logs:', absentResult.data);
+        
+        // Count unique absent days per student
+        const absentDaysCount = {};
+        (absentResult.data || []).forEach(rec => {
+            if (!absentDaysCount[rec.student_id]) {
+                absentDaysCount[rec.student_id] = new Set();
+            }
+            absentDaysCount[rec.student_id].add(rec.log_date);
+        });
+        
+        // Get unique student IDs who were absent
+        const studentIds = Object.keys(absentDaysCount);
+        
+        if (studentIds.length === 0) {
+            renderTopAbsentees([]);
+            return;
+        }
+        
+        // Query students table for these IDs with class info
         const studentsResult = await supabase
             .from('students')
             .select('id, full_name, student_id_text, classes(grade_level, section_name)')
+            .in('id', studentIds)
             .eq('status', 'Enrolled');
         
-        if (studentsResult.error) throw studentsResult.error;
+        if (studentsResult.error) {
+            console.error('Students query error:', studentsResult.error);
+            throw studentsResult.error;
+        }
         
-        // Get attendance records this week
-        const attendanceResult = await supabase
-            .from('attendance_logs')
-            .select('student_id, log_date')
-            .gte('log_date', weekStart);
-        
-        if (attendanceResult.error) throw attendanceResult.error;
-        
-        // Count unique days present per student
-        const presentDays = {};
-        (attendanceResult.data || []).forEach(rec => {
-            if (!presentDays[rec.student_id]) {
-                presentDays[rec.student_id] = new Set();
-            }
-            presentDays[rec.student_id].add(rec.log_date);
+        // Create a map for quick student lookup
+        const studentMap = {};
+        (studentsResult.data || []).forEach(s => {
+            studentMap[s.id] = s;
         });
         
-        // Calculate absences (5 school days)
-        const absences = [];
-        (studentsResult.data || []).forEach(s => {
-            const daysPresent = presentDays[s.id]?.size || 0;
-            const absentDays = 5 - daysPresent;
-            if (absentDays > 0) {
-                absences.push({
-                    id: s.id,
-                    name: s.full_name,
-                    grade: s.classes?.grade_level || '-',
-                    section: s.classes?.section_name || '-',
-                    absentDays: absentDays
-                });
-            }
+        // Build absences list
+        const absences = studentIds.map(sid => {
+            const student = studentMap[sid];
+            return {
+                id: sid,
+                name: student?.full_name || 'Unknown',
+                grade: student?.classes?.grade_level || '-',
+                section: student?.classes?.section_name || '-',
+                absentDays: absentDaysCount[sid].size
+            };
         });
         
         // Sort and get top 10
         const topAbsentees = absences.sort((a, b) => b.absentDays - a.absentDays).slice(0, 10);
         
+        console.log('Top absentees:', topAbsentees);
         renderTopAbsentees(topAbsentees);
         
     } catch (err) {
         console.error('Error loading absentees:', err);
-        container.innerHTML = '<p class="text-center text-gray-500 py-4">Error loading data</p>';
+        container.innerHTML = '<p class="text-center text-gray-400 py-4">Error loading data</p>';
     }
 }
 
@@ -293,18 +431,18 @@ function renderTopAbsentees(list) {
         const badge = badges[i] || badges[2];
         const risk = s.absentDays >= 3 ? '🔴 High Risk' : s.absentDays >= 2 ? '🟡 Moderate' : '🟢 Low';
         return `
-            <div class="flex items-center justify-between p-3 border-b">
+            <div class="flex items-center justify-between p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
                 <div class="flex items-center gap-3">
                     <span class="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${badge}">${i + 1}</span>
                     <div>
-                        <p class="font-medium text-gray-800">${s.name}</p>
-                        <p class="text-xs text-gray-500">${s.grade} - ${s.section}</p>
+                        <p class="font-medium text-white">${s.name}</p>
+                        <p class="text-xs text-gray-400">${s.grade} - ${s.section}</p>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-red-600">${s.absentDays}x</p>
+                    <p class="font-bold text-red-400">${s.absentDays}x</p>
                     <p class="text-xs text-gray-500">absent</p>
-                    <p class="text-xs ${s.absentDays >= 3 ? 'text-red-600 font-bold' : 'text-gray-400'}">${risk}</p>
+                    <p class="text-xs ${s.absentDays >= 3 ? 'text-red-400 font-bold' : 'text-gray-400'}">${risk}</p>
                 </div>
             </div>
         `;

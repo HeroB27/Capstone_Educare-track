@@ -35,6 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load local device settings
     loadDeviceSettings();
+    
+    // Load notification preferences
+    loadNotificationPreferences();
 });
 
 /**
@@ -163,7 +166,7 @@ async function loadGuardProfile() {
         
         if (fullnameInput) fullnameInput.value = guard?.full_name || '';
         if (emailInput) emailInput.value = guard?.email || '';
-        if (phoneInput) phoneInput.value = guard?.phone || '';
+        if (phoneInput) phoneInput.value = guard?.contact_number || '';
         if (usernameInput) usernameInput.value = guard?.username || '';
         
     } catch (error) {
@@ -210,7 +213,7 @@ async function saveProfile() {
             .update({
                 full_name: fullname,
                 email: email,
-                phone: phone
+                contact_number: phone
             })
             .eq('id', currentUser.id);
         
@@ -315,25 +318,55 @@ async function changePassword() {
 }
 
 // ============================================================================
-// NOTIFICATION PREFERENCES
+// NOTIFICATION PREFERENCES (stored in localStorage per user)
 // ============================================================================
+
+const NOTIFICATION_PREFS_KEY = 'educare_guard_notification_prefs';
+
+/**
+ * Load notification preferences from localStorage
+ */
+function loadNotificationPreferences() {
+    const stored = localStorage.getItem(NOTIFICATION_PREFS_KEY);
+    const prefs = stored ? JSON.parse(stored) : {
+        scanNotifications: true,
+        announcementAlerts: true
+    };
+    
+    // Set form values
+    const scanToggle = document.getElementById('notify-scan');
+    const announcementToggle = document.getElementById('notify-announcements');
+    
+    if (scanToggle) scanToggle.checked = prefs.scanNotifications !== false;
+    if (announcementToggle) announcementToggle.checked = prefs.announcementAlerts !== false;
+}
 
 /**
  * Save notification preferences
  */
 async function saveNotificationPreferences() {
-    if (!currentUser || !currentUser.id) return;
+    if (!currentUser || !currentUser.id) {
+        alert('You must be logged in to save preferences');
+        return;
+    }
     
     const scanNotifications = document.getElementById('notify-scan')?.checked;
-    const announcementNotifications = document.getElementById('notify-announcements')?.checked;
+    const announcementAlerts = document.getElementById('notify-announcements')?.checked;
     
     try {
-        // This would typically save to a preferences table or user metadata
-        // For now, we'll just show a success message
-        alert('Notification preferences saved!');
+        // Save to localStorage (per user on this device)
+        const prefs = {
+            scanNotifications: scanNotifications,
+            announcementAlerts: announcementAlerts,
+            savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
+        
+        showNotification('Notification preferences saved!');
         
     } catch (error) {
         console.error('Error saving preferences:', error);
+        alert('An error occurred while saving preferences');
     }
 }
 

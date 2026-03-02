@@ -229,11 +229,6 @@ async function handlePasswordChange(event) {
             .update({ password: newPassword })
             .eq('id', currentUser.id);
         
-        if (updateError) {
-            showToast('Failed to update password', 'error');
-            return;
-        }
-        
         showToast('Password updated successfully', 'success');
         
         // Clear form

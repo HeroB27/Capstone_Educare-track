@@ -267,7 +267,7 @@
             try {
                 const { data: logs, error } = await supabase
                     .from('attendance_logs')
-                    .select('status')
+                    .select('status, remarks')
                     .eq('log_date', today);
                 
                 if (error) {
@@ -277,11 +277,24 @@
                 
                 // Count by status - consistent with guard-basic-analytics.js
                 // Present includes: On Time, Present, Excused
+                // Early Exit: check status OR remarks for early exit keywords
+                // Medical Exit: check status OR remarks for medical/clinic keywords
                 let present = 0, late = 0, earlyExit = 0, medical = 0;
                 
                 logs.forEach(log => {
+                    const remarks = log.remarks ? log.remarks.toLowerCase() : '';
+                    const isEarlyExitRemark = remarks.includes('early') || remarks.includes('exit');
+                    const isMedicalRemark = remarks.includes('medical') || remarks.includes('clinic');
+                    
                     if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Excused') {
-                        present++;
+                        // Check if this is actually an early exit or medical exit based on remarks
+                        if (isEarlyExitRemark && !isMedicalRemark) {
+                            earlyExit++;
+                        } else if (isMedicalRemark) {
+                            medical++;
+                        } else {
+                            present++;
+                        }
                     } else if (log.status === 'Late') {
                         late++;
                     } else if (log.status === 'Early Exit') {
@@ -312,6 +325,7 @@
                     .select(`
                         id,
                         status,
+                        remarks,
                         time_in,
                         time_out,
                         students (
@@ -323,12 +337,20 @@
                         )
                     `)
                     .eq('log_date', today)
+                    .neq('status', 'Absent')
                     .order('id', { ascending: false })
                     .limit(15);
                 
-                if (error) {
-                    console.error('Error loading activity:', error);
-                    return;
+                // Sort in memory by most recent time (time_out > time_in)
+                if (logs && logs.length > 0) {
+                    logs.sort((a, b) => {
+                        const timeA = a.time_out || a.time_in;
+                        const timeB = b.time_out || b.time_in;
+                        if (timeA && timeB) return new Date(timeB) - new Date(timeA);
+                        if (timeA) return -1;
+                        if (timeB) return 1;
+                        return b.id - a.id;
+                    });
                 }
                 
                 if (!logs || logs.length === 0) {
@@ -345,25 +367,43 @@
                     let statusColor = 'text-green-400';
                     let actionIcon = '→';
                     let actionText = 'IN';
+                    let displayTime = '';
                     
-                    if (log.status === 'Late') {
+                    // Check if this is an early exit or medical exit based on remarks
+                    const remarks = log.remarks ? log.remarks.toLowerCase() : '';
+                    const isEarlyExitRemark = remarks.includes('early') || (remarks.includes('exit') && !remarks.includes('late'));
+                    const isMedicalRemark = remarks.includes('medical') || remarks.includes('clinic');
+                    const hasExited = !!log.time_out;
+                    
+                    // If student has time_out, they have exited - show OUT regardless of status
+                    if (hasExited) {
+                        if (log.status === 'Medical Exit' || isMedicalRemark) {
+                            statusColor = 'text-blue-400';
+                            actionText = 'MED';
+                        } else if (isEarlyExitRemark) {
+                            statusColor = 'text-red-400';
+                            actionText = 'OUT';
+                        } else {
+                            // Normal exit
+                            actionText = 'OUT';
+                        }
+                        actionIcon = '←';
+                    } else if (log.status === 'Late' || (log.status === 'Present' && remarks.includes('late'))) {
                         statusColor = 'text-yellow-400';
-                    } else if (log.status === 'Early Exit' || log.status === 'Late Exit') {
-                        statusColor = 'text-red-400';
-                        actionIcon = '←';
-                        actionText = 'OUT';
-                    } else if (log.status === 'Medical Exit') {
-                        statusColor = 'text-blue-400';
-                        actionIcon = '←';
-                        actionText = 'MED';
                     }
                     
-                    const time = log.time_in ? new Date(log.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--:--';
+                    // Always show the most recent time - time_out if exists, otherwise time_in
+                    // This shows the latest activity (entry OR exit) for each student
+                    if (log.time_out) {
+                        displayTime = new Date(log.time_out).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    } else {
+                        displayTime = log.time_in ? new Date(log.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--:--';
+                    }
                     
                     return `
                         <div class="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
                             <div class="flex items-center gap-3">
-                                <span class="text-yellow-500 font-mono">[${time}]</span>
+                                <span class="text-yellow-500 font-mono">[${displayTime}]</span>
                                 <span class="text-gray-300">${name}</span>
                                 <span class="text-gray-600 text-xs">${grade} ${section}</span>
                             </div>

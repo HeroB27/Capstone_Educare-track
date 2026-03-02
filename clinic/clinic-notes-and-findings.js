@@ -15,14 +15,61 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             await loadAllVisits();
         }
+        
+        // Load stats
+        await updateStatsCards();
     }
 });
+
+/**
+ * Update the stats cards on the dashboard
+ * - Today's Visits: All visits for today
+ * - Active in Clinic: Status = 'In Clinic'
+ * - Discharged: Status = 'Completed' with action_taken = 'Returned to Class'
+ * - Sent Home: Status = 'Completed' with action_taken = 'Sent Home'
+ */
+async function updateStatsCards() {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Fetch all visits for today
+    const todayVisits = await fetchVisitsByDateRange(today, today);
+    
+    // Today's Visits - all visits today
+    const todayCount = todayVisits.length;
+    
+    // Active in Clinic - currently in clinic (status = 'In Clinic')
+    const activeCount = todayVisits.filter(v => v.status === 'In Clinic').length;
+    
+    // Discharged - completed and returned to class
+    const dischargedCount = todayVisits.filter(v => 
+        v.status === 'Completed' && 
+        (v.action_taken === 'Returned to Class' || 
+         v.action_taken === 'Returned to Class' ||
+         v.action_taken === 'First Aid Provided' ||
+         v.action_taken === 'Medication Given' ||
+         v.action_taken === 'Observed and Released')
+    ).length;
+    
+    // Sent Home - completed and sent home
+    const sentHomeCount = todayVisits.filter(v => 
+        v.status === 'Completed' && 
+        (v.action_taken === 'Sent Home' || 
+         v.action_taken === 'Picked up by Parent' ||
+         v.action_taken === 'Sent to Hospital')
+    ).length;
+    
+    // Update DOM
+    document.getElementById('stat-today').textContent = todayCount;
+    document.getElementById('stat-active').textContent = activeCount;
+    document.getElementById('stat-discharged').textContent = dischargedCount;
+    document.getElementById('stat-sent-home').textContent = sentHomeCount;
+}
 
 async function loadAndOpenVisit(visitId) {
     try {
         const { data: visit, error } = await supabase
             .from('clinic_visits')
-            .select(`*, students(*, classes(*)), teachers(*)`)
+            .select(`*, students(*, classes(*)), referred_by_teacher:teachers(*)`)
             .eq('id', visitId)
             .single();
         
@@ -100,11 +147,11 @@ async function loadStudentVisitHistory(studentId) {
 
 async function filterByDate() {
     const date = document.getElementById('filter-date').value;
-    console.log('[DEBUG] filterByDate called with:', date);
     
     if (!date) {
         // If no date is selected, show all visits
         await loadAllVisits();
+        await updateStatsCards();
         return;
     }
     
@@ -112,11 +159,10 @@ async function filterByDate() {
         const visits = await fetchStudentVisitHistory(selectedStudentId);
         currentVisitHistory = visits.filter(v => v.time_in.startsWith(date));
     } else {
-        console.log('[DEBUG] Fetching visits for date range:', date, 'to', date);
         currentVisitHistory = await fetchVisitsByDateRange(date, date);
-        console.log('[DEBUG] fetchVisitsByDateRange returned:', currentVisitHistory.length, 'visits');
     }
     renderVisitHistory(currentVisitHistory);
+    await updateStatsCards();
 }
 
 async function resetSearch() {
@@ -127,6 +173,7 @@ async function resetSearch() {
     document.getElementById('filter-date').value = '';
     currentVisitHistory = await fetchAllVisits();
     renderVisitHistory(currentVisitHistory);
+    await updateStatsCards();
 }
 
 function renderVisitHistory(visits) {

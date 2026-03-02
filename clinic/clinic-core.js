@@ -80,7 +80,7 @@ async function fetchPendingApprovals() {
                     profile_photo_url,
                     classes (grade_level, section_name, adviser_id)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
             .eq('status', 'Pending')
             .order('time_in', { ascending: true });
@@ -115,7 +115,7 @@ async function fetchApprovedPasses() {
                     profile_photo_url,
                     classes (grade_level, section_name, adviser_id)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
             .eq('status', 'Approved')
             .order('time_in', { ascending: true });
@@ -423,7 +423,7 @@ async function dischargeStudent(visitId, outcome, nurseNotes = '', parentNotifie
 
 /**
  * Check in a student at the clinic (via QR scan or visit ID)
- * Updates time_in and status to 'Checked In'
+ * Updates time_in and status to 'In Clinic'
  * @param {number} visitId - The visit ID to check in
  */
 async function clinicCheckIn(visitId) {
@@ -446,7 +446,7 @@ async function clinicCheckIn(visitId) {
             .from('clinic_visits')
             .update({
                 time_in: new Date().toISOString(),
-                status: 'Checked In'
+                status: 'In Clinic'
             })
             .eq('id', visitId);
         
@@ -497,7 +497,7 @@ async function addClinicFindings(visitId, notes, action) {
             .update({
                 nurse_notes: notes,
                 action_taken: action,
-                status: action === 'Sent Home' ? 'Sent Home' : 'Checked In'
+                status: action === 'Sent Home' ? 'Completed' : 'In Clinic'
             })
             .eq('id', visitId);
         
@@ -543,7 +543,7 @@ async function clinicCheckOut(visitId, disposition) {
             throw new Error('Visit not found');
         }
         
-        const finalStatus = disposition === 'Sent Home' ? 'Sent Home' : 'Cleared';
+        const finalStatus = disposition === 'Sent Home' ? 'Completed' : 'Cleared';
         
         const { error } = await supabase
             .from('clinic_visits')
@@ -574,7 +574,7 @@ async function clinicCheckOut(visitId, disposition) {
 
 /**
  * Fetch all active clinic visits (students currently in clinic)
- * Returns students where time_out is NULL and status is 'Checked In'
+ * Returns students where time_out is NULL and status is 'In Clinic' or 'Checked In'
  */
 async function fetchActiveVisits() {
     try {
@@ -590,9 +590,9 @@ async function fetchActiveVisits() {
                     profile_photo_url,
                     classes (grade_level, section_name)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
-            .eq('status', 'Checked In')
+            .in('status', ['In Clinic', 'Checked In'])
             .is('time_out', null)
             .order('time_in', { ascending: false });
         
@@ -619,11 +619,12 @@ async function fetchStudentVisitHistory(studentId) {
             .select(`
                 *,
                 students (
+                    id,
                     full_name,
                     student_id_text,
                     classes (grade_level, section_name)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
             .eq('student_id', studentId)
             .order('time_in', { ascending: false });
@@ -644,22 +645,20 @@ async function fetchStudentVisitHistory(studentId) {
  * Fetch all visits without any date filter
  */
 async function fetchAllVisits() {
-    console.log('[DEBUG] fetchAllVisits called');
     try {
         const { data, error } = await supabase
             .from('clinic_visits')
             .select(`
                 *,
                 students (
+                    id,
                     full_name,
                     student_id_text,
                     classes (grade_level, section_name)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
             .order('time_in', { ascending: false });
-        
-        console.log('[DEBUG] fetchAllVisits returned:', data?.length || 0, 'records', error);
         
         if (error) {
             console.error('Error fetching all visits:', error);
@@ -686,11 +685,12 @@ async function fetchVisitsByDateRange(startDate, endDate) {
             .select(`
                 *,
                 students (
+                    id,
                     full_name,
                     student_id_text,
                     classes (grade_level, section_name)
                 ),
-                teachers (full_name)
+                referred_by_teacher:teachers (full_name)
             `)
             .order('time_in', { ascending: false });
         
@@ -699,14 +699,25 @@ async function fetchVisitsByDateRange(startDate, endDate) {
             return [];
         }
         
-        // Filter by date locally
-        const startDateTime = new Date(startDate);
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
+        // Filter by date locally - compare only the date part, not time
+        const startParts = startDate.split('-');
+        const startYear = parseInt(startParts[0]);
+        const startMonth = parseInt(startParts[1]) - 1;
+        const startDay = parseInt(startParts[2]);
+        const startDateTime = new Date(startYear, startMonth, startDay, 0, 0, 0, 0);
+        
+        const endParts = endDate.split('-');
+        const endYear = parseInt(endParts[0]);
+        const endMonth = parseInt(endParts[1]) - 1;
+        const endDay = parseInt(endParts[2]);
+        const endDateTime = new Date(endYear, endMonth, endDay, 23, 59, 59, 999);
         
         const filtered = (allData || []).filter(visit => {
             const visitDate = new Date(visit.time_in);
-            return visitDate >= startDateTime && visitDate <= endDateTime;
+            const visitDateOnly = new Date(visitDate.getFullYear(), visitDate.getMonth(), visitDate.getDate());
+            const startDateOnly = new Date(startDateTime.getFullYear(), startDateTime.getMonth(), startDateTime.getDate());
+            const endDateOnly = new Date(endDateTime.getFullYear(), endDateTime.getMonth(), endDateTime.getDate());
+            return visitDateOnly >= startDateOnly && visitDateOnly <= endDateOnly;
         });
         
         return filtered;
@@ -729,7 +740,7 @@ async function checkInPatient(visitData) {
                 student_id: visitData.studentId,
                 referred_by_teacher_id: visitData.teacherId,
                 reason: visitData.reason,
-                status: 'Checked In',
+                status: 'In Clinic',
                 time_in: new Date().toISOString()
             }])
             .select()
@@ -753,15 +764,22 @@ async function checkInPatient(visitData) {
  * @param {object} dischargeData - Discharge information (notes, action taken, parent notified)
  */
 async function dischargePatient(visitId, dischargeData) {
+    console.log('[DEBUG] dischargePatient called with:', visitId, dischargeData);
     try {
         const currentTime = new Date().toISOString();
 
         // 1. Get the visit details
-        const { data: visitData } = await supabase
+        const { data: visitData, error: fetchError } = await supabase
             .from('clinic_visits')
             .select('student_id, students(parent_id, full_name)')
             .eq('id', visitId)
             .single();
+
+        if (fetchError) {
+            console.error('[DEBUG] Error fetching visit data:', fetchError);
+            throw fetchError;
+        }
+        console.log('[DEBUG] Visit data fetched:', visitData);
 
         // 2. Update the Clinic Visit record
         const { error } = await supabase
@@ -776,12 +794,15 @@ async function dischargePatient(visitId, dischargeData) {
             .eq('id', visitId);
         
         if (error) {
-            console.error('Error discharging patient:', error);
+            console.error('[DEBUG] Error updating visit:', error);
+            console.error(error);
             throw error;
         }
+        console.log('[DEBUG] Visit updated successfully');
 
         // 3. The Parent Handshake: Send notification
         if (dischargeData.parentNotified && visitData?.students?.parent_id) {
+            console.log('[DEBUG] Sending parent notification');
             await supabase.from('notifications').insert({
                 recipient_id: visitData.students.parent_id,
                 recipient_role: 'parent',
@@ -794,12 +815,13 @@ async function dischargePatient(visitId, dischargeData) {
 
         // Notify referring teacher if parent was notified
         if (dischargeData.teacherId && dischargeData.parentNotified) {
+            console.log('[DEBUG] Sending teacher notification');
             await notifyTeacherClearance(dischargeData.teacherId, dischargeData.studentName);
         }
         
         return true;
     } catch (err) {
-        console.error('Error in dischargePatient:', err);
+        console.error('[DEBUG] Error in dischargePatient:', err);
         throw err;
     }
 }
@@ -1166,28 +1188,32 @@ async function fetchDailyClinicStats(date) {
             .gte('time_in', `${date}T00:00:00`)
             .lt('time_in', `${date}T23:59:59`);
         
-        // Still in clinic (active visits)
+        // Still in clinic (active visits for the specific date)
         const { data: active, error: activeError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' })
-            .is('time_out', null);
+            .is('time_out', null)
+            .in('status', ['In Clinic', 'Checked In'])
+            .gte('time_in', `${date}T00:00:00`)
+            .lt('time_in', `${date}T23:59:59`);
         
         // Discharged today
         const { data: discharged, error: dischargedError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' })
+            .eq('status', 'Completed')
             .gte('time_out', `${date}T00:00:00`)
             .lt('time_out', `${date}T23:59:59`);
         
         if (checkInsError || activeError || dischargedError) {
-            console.error('Error fetching clinic stats:', error);
+            console.error('Error fetching clinic stats:', checkInsError || activeError || dischargedError);
             return { totalCheckIns: 0, stillInClinic: 0, dischargedToday: 0 };
         }
         
         return {
-            totalCheckIns: checkIns.length,
-            stillInClinic: active.length,
-            dischargedToday: discharged.length
+            totalCheckIns: checkIns?.length || 0,
+            stillInClinic: active?.length || 0,
+            dischargedToday: discharged?.length || 0
         };
     } catch (err) {
         console.error('Error in fetchDailyClinicStats:', err);

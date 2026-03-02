@@ -330,7 +330,7 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-sm text-gray-500 font-medium">By: ${visit.teachers?.full_name || 'Unknown'}</span>
+                            <span class="text-sm text-gray-500 font-medium">By: ${visit.referred_by_teacher?.full_name || 'Unknown'}</span>
                             <button onclick="rejectPass(${visit.id})" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl border-2 border-red-200 text-sm font-bold transition-colors">
                                 <i data-lucide="x" class="w-4 h-4"></i>
                             </button>
@@ -481,7 +481,7 @@
                         <td class="px-6 py-4">
                             <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">${visit.reason || 'General'}</span>
                         </td>
-                        <td class="px-6 py-4 font-medium text-gray-600">${visit.teachers?.full_name || 'Self'}</td>
+                        <td class="px-6 py-4 font-medium text-gray-600">${visit.referred_by_teacher?.full_name || 'Self'}</td>
                         <td class="px-6 py-4 font-bold text-gray-800">${durationStr}</td>
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
@@ -547,7 +547,7 @@
                     
                     <div class="bg-gray-50 p-4 rounded-xl">
                         <p class="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Referred By</p>
-                        <p class="font-medium text-gray-800">${visit.teachers?.full_name || 'Self'}</p>
+                        <p class="font-medium text-gray-800">${visit.referred_by_teacher?.full_name || 'Self'}</p>
                     </div>
                     
                     ${visit.notes ? `
@@ -584,7 +584,7 @@
             if (!visit) return;
             
             document.getElementById('discharge-visit-id').value = visitId;
-            document.getElementById('discharge-teacher-id').value = visit.teacher_id || '';
+            document.getElementById('discharge-teacher-id').value = visit.referred_by_teacher_id || '';
             document.getElementById('discharge-student-name').value = visit.students?.full_name || '';
             document.getElementById('discharge-notes').value = '';
             document.getElementById('discharge-action').value = '';
@@ -608,15 +608,45 @@
             const notes = document.getElementById('discharge-notes').value;
             const action = document.getElementById('discharge-action').value;
             const parentNotified = document.getElementById('discharge-parent-notified').checked;
+            const teacherId = document.getElementById('discharge-teacher-id').value;
+            const studentName = document.getElementById('discharge-student-name').value;
+            
+            console.log('[DEBUG] Discharge initiated for visit ID:', visitId);
+            console.log('[DEBUG] Action:', action);
+            console.log('[DEBUG] Parent notified:', parentNotified);
+            console.log('[DEBUG] Teacher ID:', teacherId);
+            
+            // Validate required fields
+            if (!visitId) {
+                showToast('Error: No visit ID found', 'error');
+                return;
+            }
+            
+            if (!action) {
+                showToast('Please select an action taken', 'error');
+                return;
+            }
+            
+            // Prepare discharge data object matching the expected format
+            const dischargeData = {
+                nurseNotes: notes,
+                actionTaken: action,
+                parentNotified: parentNotified,
+                teacherId: teacherId ? parseInt(teacherId) : null,
+                studentName: studentName
+            };
+            
+            console.log('[DEBUG] Calling dischargePatient with:', dischargeData);
             
             try {
-                await dischargePatient(visitId, notes, action, parentNotified);
+                await dischargePatient(visitId, dischargeData);
+                console.log('[DEBUG] Discharge successful');
                 showToast('Patient discharged successfully!', 'success');
                 closeDischargeModal();
                 await loadDashboardData();
             } catch (error) {
-                showToast('Error discharging patient', 'error');
-                console.error(error);
+                console.error('[DEBUG] Discharge error:', error);
+                showToast('Error discharging patient: ' + error.message, 'error');
             }
         }
 
