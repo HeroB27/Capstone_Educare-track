@@ -97,31 +97,45 @@ async function processScan(studentIdText) {
             .eq('student_id_text', studentIdText)
             .single();
         
-        if (studentError || !student) {
+        // If not found by student_id_text, try qr_code_data
+        let studentData = student;
+        if (studentError || !studentData) {
+            const { data: qrStudent, error: qrError } = await supabase
+                .from('students')
+                .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
+                .eq('qr_code_data', studentIdText)
+                .single();
+            
+            if (!qrError && qrStudent) {
+                studentData = qrStudent;
+            }
+        }
+        
+        if (!studentData) {
             throw new Error('Student not found. Please check the ID.');
         }
         
         // Process the scan (entry/exit logic) - get the result
-        const scanResult = await handleAttendanceScan(student);
+        const scanResult = await handleAttendanceScan(studentData);
         
         // Show success
-        const gradeLevel = student.classes ? student.classes.grade_level : 'N/A';
-        const section = student.classes ? student.classes.section_name : '';
+        const gradeLevel = studentData.classes ? studentData.classes.grade_level : 'N/A';
+        const section = studentData.classes ? studentData.classes.section_name : '';
         
-        statusIndicator.innerHTML = `<p class="text-green-300">Success! ${student.full_name}</p>`;
+        statusIndicator.innerHTML = `<p class="text-green-300">Success! ${studentData.full_name}</p>`;
         
         // Update UI
         document.getElementById('last-scan').classList.remove('hidden');
-        document.getElementById('scan-student-name').innerText = student.full_name;
+        document.getElementById('scan-student-name').innerText = studentData.full_name;
         document.getElementById('scan-grade-level').innerText = `${gradeLevel} - ${section}`;
         document.getElementById('scan-time').innerText = new Date().toLocaleTimeString();
         
         // Create parent notification for all events
-        await createParentNotification(student, scanResult.direction, scanResult.status);
+        await createParentNotification(studentData, scanResult.direction, scanResult.status);
         
         // Create teacher notification for special cases (Late, Early Exit, Late Exit)
         if (scanResult.status === 'Late' || scanResult.status === 'Early Exit' || scanResult.status === 'Late Exit') {
-            await notifyTeacherFromTeacherModule(student, scanResult.direction, scanResult.status);
+            await notifyTeacherFromTeacherModule(studentData, scanResult.direction, scanResult.status);
         }
         
     } catch (error) {

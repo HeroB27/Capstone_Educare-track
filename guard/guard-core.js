@@ -469,7 +469,7 @@ function isLateExit(scanTime, dismissalTime) {
  */
 async function getStudentById(studentId) {
     try {
-        // Try to find by student_id_text first
+        // First try: Find by student_id_text (e.g., "STU-001")
         const { data, error } = await supabase
             .from('students')
             .select(`
@@ -479,6 +479,7 @@ async function getStudentById(studentId) {
                 qr_code_data,
                 profile_photo_url,
                 class_id,
+                parent_id,
                 status,
                 classes (
                     grade_level,
@@ -488,34 +489,59 @@ async function getStudentById(studentId) {
             .eq('student_id_text', studentId)
             .single();
         
-        if (error) {
-            // If not found by text, try by LRN
-            const { data: data2, error: error2 } = await supabase
-                .from('students')
-                .select(`
-                    id,
-                    student_id_text,
-                    full_name,
-                    qr_code_data,
-                    profile_photo_url,
-                    class_id,
-                    status,
-                    classes (
-                        grade_level,
-                        section_name
-                    )
-                `)
-                .eq('lrn', studentId)
-                .single();
-            
-            if (error2) {
-                console.error('Student not found:', error2);
-                return null;
-            }
-            return data2;
+        if (data && !error) {
+            return data;
         }
         
-        return data;
+        // Second try: Find by qr_code_data (e.g., "EDU-2026-G007-0001")
+        const { data: qrData, error: qrError } = await supabase
+            .from('students')
+            .select(`
+                id,
+                student_id_text,
+                full_name,
+                qr_code_data,
+                profile_photo_url,
+                class_id,
+                parent_id,
+                status,
+                classes (
+                    grade_level,
+                    section_name
+                )
+            `)
+            .eq('qr_code_data', studentId)
+            .single();
+        
+        if (qrData && !qrError) {
+            return qrData;
+        }
+        
+        // Third try: If not found, try by LRN
+        const { data: data2, error: error2 } = await supabase
+            .from('students')
+            .select(`
+                id,
+                student_id_text,
+                full_name,
+                qr_code_data,
+                profile_photo_url,
+                class_id,
+                parent_id,
+                status,
+                classes (
+                    grade_level,
+                    section_name
+                )
+            `)
+            .eq('lrn', studentId)
+            .single();
+        
+        if (error2) {
+            console.error('Student not found:', error2);
+            return null;
+        }
+        return data2;
     } catch (error) {
         console.error('Error fetching student:', error);
         return null;
@@ -1075,3 +1101,15 @@ function playBuzzer() {
         console.log('Audio not available');
     }
 }
+
+// FIX: Unlock browser audio context so the Beep/Buzzer works on the first scan!
+document.body.addEventListener('click', () => {
+    try {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+            console.log("Audio Engine Unlocked");
+        }
+    } catch (e) {
+        // Ignore errors if audio is already unlocked
+    }
+}, { once: true });
