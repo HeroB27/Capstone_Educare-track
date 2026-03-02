@@ -1,6 +1,23 @@
 // teacher-subject-attendance.js
 // Subject Attendance with Status Protection Logic
 
+// FIX: Add currentUser reference to prevent ReferenceError
+var currentUser = typeof checkSession !== 'undefined' ? checkSession('teachers') : null;
+
+// Redirect if not logged in
+if (!currentUser) {
+    window.location.href = '../index.html';
+}
+
+// Show notification function (if not available from core)
+function showNotification(message, type = 'info') {
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+    } else {
+        alert(message);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Check for stored subject load ID (from dashboard navigation)
     const storedSubjectId = sessionStorage.getItem('selectedSubjectLoadId');

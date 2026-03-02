@@ -81,9 +81,15 @@
                         <button onclick="switchView('staff')" id="tab-staff" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Staff & Admins</button>
                         <button onclick="switchView('parents')" id="tab-parents" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Parent - Student</button>
                     </div>
-                    <div class="relative w-64">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                        <input type="text" id="userSearch" oninput="filterUsers()" placeholder="Search accounts..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                    <div class="flex gap-2">
+                        <div class="relative w-64">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                            <input type="text" id="userSearch" oninput="filterUsers()" placeholder="Search accounts..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                        </div>
+                        <button onclick="exportUsersToCSV()" class="px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors flex items-center gap-2" title="Export to CSV">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span class="text-xs font-bold">Export</span>
+                        </button>
                     </div>
                 </div>
                 <table class="w-full text-left">
@@ -153,7 +159,7 @@
 
                 <div id="staff-flow-container" class="hidden space-y-6">
                     <div class="grid grid-cols-1 gap-5">
-                        <select id="s-role" onchange="toggleStaffFields()" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"><option value="teachers">Teacher</option><option value="clinic_staff">Clinic</option><option value="guards">Guard</option></select>
+<select id="s-role" onchange="toggleStaffFields()" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"><option value="admins">Admin</option><option value="teachers">Teacher</option><option value="clinic_staff">Clinic</option><option value="guards">Guard</option></select>
                         <input type="text" id="s-name" placeholder="Full Name" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm">
                         
                         <!-- Teacher-specific fields -->

@@ -151,5 +151,66 @@
             </div>
         </div>
     </div>
+
+    <!-- Add Subject Modal -->
+    <div id="addSubjectModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-violet-900 px-8 py-6 flex justify-between items-center text-white">
+                <h3 class="font-black text-xl tracking-tight uppercase">Add Subject</h3>
+                <button onclick="closeAddSubjectModal()"><i data-lucide="x"></i></button>
+            </div>
+            <div class="p-8 space-y-5">
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Subject Name</label>
+                    <input type="text" id="subjectName" placeholder="e.g. Mathematics, English, Science" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Teacher</label>
+                    <select id="subjectTeacherId" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                        <option value="">Select Teacher</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Start Time</label>
+                        <input type="time" id="subjectStartTime" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">End Time</label>
+                        <input type="time" id="subjectEndTime" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Days</label>
+                    <div class="flex gap-2 mt-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="M">
+                            <span class="text-sm font-bold">Mon</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="T">
+                            <span class="text-sm font-bold">Tue</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="W">
+                            <span class="text-sm font-bold">Wed</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="Th">
+                            <span class="text-sm font-bold">Thu</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="F">
+                            <span class="text-sm font-bold">Fri</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3">
+                <button onclick="closeAddSubjectModal()" class="px-6 py-2 text-gray-500 font-bold uppercase text-xs">Cancel</button>
+                <button onclick="saveSubject()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Add Subject</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

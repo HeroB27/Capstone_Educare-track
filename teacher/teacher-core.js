@@ -281,6 +281,9 @@ async function loadSchedule() {
 }
 
 // 6. Load Homeroom Students with Real-time Gate Status
+// NOTE: If teacher-homeroom.js is loaded, it has a more advanced version with real-time features
+// This version is kept for compatibility with other pages
+if (typeof loadHomeroomStudents !== 'function') {
 async function loadHomeroomStudents() {
     const studentList = document.getElementById('homeroom-student-list');
     const searchInput = document.getElementById('student-search');
@@ -393,6 +396,7 @@ async function loadHomeroomStudents() {
         console.error('Error in loadHomeroomStudents:', err);
     }
 }
+} // End if statement
 
 // 7. Mark Attendance for Homeroom
 async function markAttendance(studentId, status) {
@@ -561,6 +565,7 @@ async function loadSubjectStudents(subjectLoadId) {
 }
 
 // 10. Mark Subject-Specific Attendance
+// UPDATED: Now auto-calculates and updates the main status field based on subject attendance
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
     try {
         const today = new Date().toISOString().split('T')[0];
@@ -568,7 +573,7 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
         // 1. Fetch the existing log to preserve its data
         const { data: existingLog, error: fetchError } = await supabase
             .from('attendance_logs')
-            .select('remarks')
+            .select('remarks, status, time_in')
             .eq('student_id', studentId)
             .eq('log_date', today)
             .single();
@@ -577,15 +582,24 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
 
         // 2. Cleanly update remarks
         let remarks = existingLog?.remarks || '';
-        const remarkRegex = new RegExp(`\\[${subjectName}: (Present|Absent|Excused)\\]`, 'g');
+        // Escape special regex characters in subject name
+        const escapedSubjectName = subjectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const remarkRegex = new RegExp(`\\[${escapedSubjectName}: (Present|Absent|Excused)\\]`, 'g');
         remarks = remarks.replace(remarkRegex, '').trim(); // Remove old status for this subject
         remarks = `${remarks} [${subjectName}: ${newStatus}]`.trim(); // Add new status
 
-        // 3. Upsert the log, preserving original status and time_in if they exist
+        // 3. OPTION A: Auto-calculate overall status from subject attendance
+        // Priority: Excused > Absent > Late > Present
+        const calculatedStatus = calculateOverallStatus(remarks);
+
+        // 4. Upsert the log with updated remarks AND calculated status
         const { error: upsertError } = await supabase.from('attendance_logs').upsert({
             student_id: studentId,
             log_date: today,
-            remarks: remarks
+            remarks: remarks,
+            status: calculatedStatus,
+            // Preserve time_in if it exists (from gate scan)
+            time_in: existingLog?.time_in || null
         }, { 
             onConflict: 'student_id, log_date',
             ignoreDuplicates: false 
@@ -593,7 +607,7 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
 
         if (upsertError) throw upsertError;
 
-        showNotification(`${subjectName} attendance marked as ${newStatus}.`, 'success');
+        showNotification(`${subjectName} attendance marked as ${newStatus}. Overall status: ${calculatedStatus}`, 'success');
         // Re-render the specific list to show the change
         loadSubjectStudents(subjectLoadId);
 
@@ -601,6 +615,32 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
         console.error('Error marking subject attendance:', err);
         showNotification('Failed to mark subject attendance.', "error");
     }
+}
+
+// 10a. Calculate Overall Status from Subject Remarks
+// This function parses the remarks field to determine the overall attendance status
+// Priority: Excused > Absent > Late > Present
+function calculateOverallStatus(remarks) {
+    if (!remarks) return 'Present';
+    
+    // Extract all subject attendance from remarks
+    // Format: "[Math: Present] [Science: Absent] [Filipino: Late]"
+    const subjectRegex = /\[([^\]]+): (Present|Absent|Excused|Late)\]/g;
+    const subjectStatuses = [];
+    let match;
+    
+    while ((match = subjectRegex.exec(remarks)) !== null) {
+        subjectStatuses.push(match[2]); // match[2] is the status (Present, Absent, etc.)
+    }
+    
+    // If no subject statuses found, default to Present
+    if (subjectStatuses.length === 0) return 'Present';
+    
+    // Priority calculation: Excused > Absent > Late > Present
+    if (subjectStatuses.includes('Excused')) return 'Excused';
+    if (subjectStatuses.includes('Absent')) return 'Absent';
+    if (subjectStatuses.includes('Late')) return 'Late';
+    return 'Present';
 }
 
 // 11. Load Clinic Pass Interface
@@ -2122,5 +2162,434 @@ async function submitPasswordChange() {
             const el = document.getElementById(id);
             if(el) el.value = '';
         });
+    }
+}
+
+// =============================================================================
+// NEW FEATURES - Enhanced Teacher Module
+// =============================================================================
+
+// 41. Real-time Dashboard Stats with Auto-refresh
+let statsRefreshInterval = null;
+
+function startRealTimeStats() {
+    // Refresh every 30 seconds
+    if (statsRefreshInterval) clearInterval(statsRefreshInterval);
+    statsRefreshInterval = setInterval(async () => {
+        if (isAdviserMode && homeroomClass) {
+            await loadLiveDashboardStats();
+        }
+    }, 30000);
+}
+
+async function loadLiveDashboardStats() {
+    const presentEl = document.getElementById('present-count');
+    const lateEl = document.getElementById('late-count');
+    const clinicEl = document.getElementById('clinic-count');
+    const excuseEl = document.getElementById('excuse-count');
+    
+    if (!presentEl && !lateEl && !clinicEl && !excuseEl) return;
+    
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+            
+        if (!teacherClass) return;
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get all students in class
+        const { data: students } = await supabase
+            .from('students')
+            .select('id')
+            .eq('class_id', teacherClass.id);
+            
+        const studentIds = students?.map(s => s.id) || [];
+        if (studentIds.length === 0) return;
+        
+        // Get today's attendance
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('status')
+            .eq('log_date', today)
+            .in('student_id', studentIds);
+            
+        // Get clinic visits
+        const { data: clinicVisits } = await supabase
+            .from('clinic_visits')
+            .select('student_id')
+            .gte('time_in', today)
+            .is('time_out', null)
+            .in('student_id', studentIds);
+            
+        const clinicStudentIds = new Set(clinicVisits?.map(cv => cv.student_id) || []);
+        
+        let present = 0, late = 0, absent = 0, excused = 0;
+        logs?.forEach(log => {
+            if (log.status === 'Present' || log.status === 'On Time') present++;
+            else if (log.status === 'Late') late++;
+            else if (log.status === 'Absent') absent++;
+            else if (log.status === 'Excused') excused++;
+        });
+        
+        // Students in clinic (not counted in attendance)
+        const inClinic = clinicStudentIds.size;
+        
+        // Update UI
+        if (presentEl) presentEl.textContent = present;
+        if (lateEl) lateEl.textContent = late;
+        if (clinicEl) clinicEl.textContent = inClinic;
+        if (excuseEl) excuseEl.textContent = excused;
+        
+    } catch (err) {
+        console.error('Error loading live stats:', err);
+    }
+}
+
+// 42. Bulk Attendance Marking
+async function bulkMarkAttendance(status) {
+    const studentIds = getSelectedStudentIds();
+    if (studentIds.length === 0) {
+        showNotification('Please select students first', "error");
+        return;
+    }
+    
+    const confirmMsg = `Mark ${studentIds.length} student(s) as ${status}?`;
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date().toISOString();
+        
+        for (const studentId of studentIds) {
+            const { data: existingLog } = await supabase
+                .from('attendance_logs')
+                .select('time_in, remarks')
+                .eq('student_id', studentId)
+                .eq('log_date', today)
+                .single();
+                
+            let safeTimeIn = null;
+            if (status !== 'Absent') {
+                safeTimeIn = existingLog?.time_in ? existingLog.time_in : now;
+            }
+            
+            await supabase.from('attendance_logs').upsert({
+                student_id: studentId,
+                log_date: today,
+                time_in: safeTimeIn,
+                status: status,
+                remarks: existingLog?.remarks || 'Bulk attendance update'
+            }, { onConflict: 'student_id, log_date' });
+        }
+        
+        showNotification(`${studentIds.length} students marked as ${status}`, "success");
+        clearSelection();
+        await loadHomeroomStudents();
+        
+    } catch (err) {
+        console.error('Error in bulk marking:', err);
+        showNotification("Error marking attendance", "error");
+    }
+}
+
+function getSelectedStudentIds() {
+    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function clearSelection() {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    const selectAll = document.getElementById('select-all-students');
+    if (selectAll) selectAll.checked = false;
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all-students');
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+// 43. Student Attendance History Modal
+async function showAttendanceHistory(studentId, studentName) {
+    const modal = createModal('attendance-history-modal', 'Attendance History');
+    
+    modal.innerHTML = `
+        <div class="p-4">
+            <p class="font-bold text-lg mb-4">${studentName}</p>
+            <div class="mb-4">
+                <label class="text-xs font-bold text-gray-400 uppercase">Date Range</label>
+                <div class="flex gap-2">
+                    <input type="date" id="history-start-date" class="border rounded px-2 py-1 text-sm">
+                    <input type="date" id="history-end-date" class="border rounded px-2 py-1 text-sm">
+                </div>
+            </div>
+            <button onclick="loadStudentHistory('${studentId}')" class="w-full bg-blue-600 text-white py-2 rounded font-bold">Load History</button>
+            <div id="history-results" class="mt-4 max-h-64 overflow-y-auto"></div>
+        </div>
+    `;
+    
+    // Set default dates (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    document.getElementById('history-end-date').value = today.toISOString().split('T')[0];
+    document.getElementById('history-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+    
+    document.body.appendChild(modal);
+    modal.classList.remove('hidden');
+}
+
+async function loadStudentHistory(studentId) {
+    const startDate = document.getElementById('history-start-date').value;
+    const endDate = document.getElementById('history-end-date').value;
+    const resultsDiv = document.getElementById('history-results');
+    
+    if (!startDate || !endDate) {
+        showNotification('Please select date range', "error");
+        return;
+    }
+    
+    try {
+        const { data: logs, error } = await supabase
+            .from('attendance_logs')
+            .select('log_date, status, remarks, time_in, time_out')
+            .eq('student_id', studentId)
+            .gte('log_date', startDate)
+            .lte('log_date', endDate)
+            .order('log_date', { ascending: false });
+            
+        if (error) throw error;
+        
+        if (!logs || logs.length === 0) {
+            resultsDiv.innerHTML = '<p class="text-gray-500 text-center py-4">No attendance records found</p>';
+            return;
+        }
+        
+        // Count stats
+        let present = 0, late = 0, absent = 0, excused = 0;
+        
+        resultsDiv.innerHTML = logs.map(log => {
+            const status = log.status || 'Absent';
+            
+            if (status === 'Present' || status === 'On Time') present++;
+            else if (status === 'Late') late++;
+            else if (status === 'Absent') absent++;
+            else if (status === 'Excused') excused++;
+            
+            const badgeClass = getStatusBadge(status);
+            return `
+                <div class="flex justify-between items-center p-2 border-b">
+                    <div>
+                        <p class="font-bold text-sm">${new Date(log.log_date).toLocaleDateString()}</p>
+                        <p class="text-xs text-gray-500">${log.remarks || '-'}</p>
+                    </div>
+                    <span class="px-2 py-1 rounded text-xs font-bold ${badgeClass}">${status}</span>
+                </div>
+            `;
+        }).join('');
+        
+        // Add summary
+        const total = present + late + absent + excused;
+        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+        
+        resultsDiv.innerHTML = `
+            <div class="bg-gray-50 p-2 rounded mb-2 flex justify-between text-sm font-bold">
+                <span>Total: ${total}</span>
+                <span>Present: ${present}</span>
+                <span>Late: ${late}</span>
+                <span>Absent: ${absent}</span>
+                <span class="text-green-600">Rate: ${rate}%</span>
+            </div>
+        ` + resultsDiv.innerHTML;
+        
+    } catch (err) {
+        console.error('Error loading history:', err);
+        resultsDiv.innerHTML = '<p class="text-red-500">Error loading data</p>';
+    }
+}
+
+// 44. Create Modal Helper
+function createModal(id, title) {
+    let modal = document.getElementById(id);
+    if (modal) modal.remove();
+    
+    modal = document.createElement('div');
+    modal.id = id;
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
+    
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="font-bold text-lg">${title}</h3>
+                <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-content"></div>
+        </div>
+    `;
+    
+    return modal.querySelector('.modal-content');
+}
+
+// 45. Auto-notify Parent on Attendance Change
+async function notifyParentOnAttendance(studentId, status, date) {
+    try {
+        // Get student and parent info
+        const { data: student } = await supabase
+            .from('students')
+            .select('parent_id, full_name')
+            .eq('id', studentId)
+            .single();
+            
+        if (!student?.parent_id) return;
+        
+        const { data: parent } = await supabase
+            .from('parents')
+            .select('full_name')
+            .eq('id', student.parent_id)
+            .single();
+            
+        // Create notification
+        await supabase.from('notifications').insert({
+            recipient_id: student.parent_id,
+            recipient_role: 'parent',
+            title: 'Attendance Update',
+            message: `Your child ${student.full_name} has been marked as ${status} on ${new Date(date).toLocaleDateString()}.`,
+            type: 'attendance_update',
+            is_read: false
+        });
+        
+        console.log('Parent notified of attendance change');
+        
+    } catch (err) {
+        console.error('Error notifying parent:', err);
+    }
+}
+
+// 46. At-Risk Student Alerts
+async function checkAtRiskStudents() {
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+            
+        if (!teacherClass) return [];
+        
+        // Get students with 5+ absences in last 30 days
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('student_id, status')
+            .eq('students.class_id', teacherClass.id)
+            .eq('status', 'Absent')
+            .gte('log_date', thirtyDaysAgo);
+            
+        // Count absences per student
+        const absenceCounts = {};
+        logs?.forEach(log => {
+            absenceCounts[log.student_id] = (absenceCounts[log.student_id] || 0) + 1;
+        });
+        
+        // Filter at-risk (5+ absences)
+        const atRiskStudents = Object.entries(absenceCounts)
+            .filter(([_, count]) => count >= 5)
+            .map(([id, count]) => ({ studentId: id, count }));
+            
+        return atRiskStudents;
+        
+    } catch (err) {
+        console.error('Error checking at-risk students:', err);
+        return [];
+    }
+}
+
+// 47. Quick Search/Filter for Students
+function filterStudentsByStatus(status) {
+    const rows = document.querySelectorAll('#homeroom-student-list tr');
+    
+    rows.forEach(row => {
+        const statusBadge = row.querySelector('[class*="bg-"]');
+        if (!statusBadge) return;
+        
+        if (status === 'all') {
+            row.style.display = '';
+        } else if (statusBadge.textContent.toLowerCase().includes(status.toLowerCase())) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// 48. Export Attendance to CSV
+function exportAttendanceToCSV() {
+    const rows = document.querySelectorAll('#homeroom-student-list tr');
+    let csv = 'Student ID,Name,LRN,Time In,Status\n';
+    
+    rows.forEach(row => {
+        if (row.style.display === 'none') return;
+        
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 5) {
+            const id = cells[0].textContent.trim();
+            const name = cells[1].textContent.trim();
+            const lrn = cells[2].textContent.trim();
+            const timeIn = cells[3].textContent.trim();
+            const status = cells[4].textContent.trim();
+            csv += `"${id}","${name}","${lrn}","${timeIn}","${status}"\n`;
+        }
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+}
+
+// 49. Keyboard Shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + M = Mark Present
+    if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+        e.preventDefault();
+        if (document.getElementById('homeroom-student-list')) {
+            bulkMarkAttendance('Present');
+        }
+    }
+    // Ctrl/Cmd + A = Select All
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && e.shiftKey) {
+        e.preventDefault();
+        toggleSelectAll();
+    }
+    // Escape = Close modal
+    if (e.key === 'Escape') {
+        const modals = document.querySelectorAll('.fixed.z-\\[60\\]');
+        modals.forEach(m => m.remove());
+    }
+});
+
+// 50. Student Medical Alerts (for clinic context)
+async function getStudentMedicalInfo(studentId) {
+    try {
+        const { data: student } = await supabase
+            .from('students')
+            .select('*, parents(*)')
+            .eq('id', studentId)
+            .single();
+            
+        return student;
+    } catch (err) {
+        console.error('Error getting medical info:', err);
+        return null;
     }
 }

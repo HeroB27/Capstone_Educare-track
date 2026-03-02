@@ -80,6 +80,8 @@
                 if (!user) throw new Error("Invalid credentials");
 
                 // CRITICAL FIX: Check if the user account is active
+                // For admins who don't have is_active column, undefined means active
+                // is_active = false means explicitly deactivated
                 if (user.is_active === false) {
                     throw new Error("Your account has been deactivated. Please contact an administrator.");
                 }

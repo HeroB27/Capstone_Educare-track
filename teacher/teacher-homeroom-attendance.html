@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homeroom Attendance - Educare Track</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="../assets/supabase-client.js"></script>
+    <script src="teacher-core.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); }
+        .status-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .status-orange { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+        .status-red { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .status-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    <!-- Sidebar -->
+    <aside class="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-40">
+        <div class="p-6 border-b border-gray-100">
+            <h1 class="text-xl font-black text-blue-600">Educare Track</h1>
+            <p class="text-xs text-gray-400 font-medium">Teacher Portal</p>
+        </div>
+        <nav class="p-4 space-y-1">
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-home w-5"></i> Dashboard
+            </a>
+            <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-users w-5"></i> Homeroom
+            </a>
+            <a href="teacher-homeroom-attendance.html" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-600 rounded-xl transition-all font-bold">
+                <i class="fas fa-table w-5"></i> Attendance Detail
+            </a>
+            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-book w-5"></i> Subject Attendance
+            </a>
+            <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-user-nurse w-5"></i> Clinic Pass
+            </a>
+            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-envelope w-5"></i> Excuse Letters
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-chart-bar w-5"></i> Analytics
+            </a>
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-bullhorn w-5"></i> Announcements
+            </a>
+            <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                <i class="fas fa-cog w-5"></i> Settings
+            </a>
+            <div id="nav-gatekeeper-mode" class="hidden">
+                <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 rounded-xl transition-all">
+                    <i class="fas fa-torii-gate w-5"></i> Gatekeeper Mode
+                </a>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 p-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h2 class="text-2xl font-black text-gray-800">Homeroom Attendance Detail</h2>
+                <p class="text-gray-500 font-medium" id="advisory-badge">Loading...</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-sm font-bold text-gray-500" id="teacher-name">Teacher</span>
+            </div>
+        </header>
+
+        <!-- Date Selection -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Select Date</label>
+                    <input type="date" id="selected-date" class="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="loadDailyAttendance()" class="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all">
+                        Load Daily View
+                    </button>
+                    <button onclick="loadWeeklyAttendance()" class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 transition-all">
+                        Weekly View
+                    </button>
+                    <button onclick="loadMonthlyAttendance()" class="px-6 py-2 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-all">
+                        Monthly View
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Attendance Table -->
+        <div id="daily-view" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-4">Daily Attendance - Subject Breakdown</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full" id="daily-attendance-table">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Gate Status</th>
+                            <!-- Subject columns will be added dynamically -->
+                        </tr>
+                    </thead>
+                    <tbody id="daily-attendance-body">
+                        <tr>
+                            <td colspan="10" class="px-4 py-8 text-center text-gray-400">Select a date to view attendance</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Weekly/Monthly Attendance Table -->
+        <div id="summary-view" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-gray-800" id="summary-title">Weekly Attendance Summary</h3>
+                <button onclick="exportAttendance()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all">
+                    <i class="fas fa-download mr-2"></i> Export CSV
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full" id="summary-table">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Student</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-green-600 uppercase tracking-wider">Present</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-orange-600 uppercase tracking-wider">Late</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-red-600 uppercase tracking-wider">Absent</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-blue-600 uppercase tracking-wider">Clinic</th>
+                            <th class="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">Attendance Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-body">
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-400">Select a view to see summary</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <h4 class="font-bold text-gray-600 text-sm mb-3">Legend</h4>
+            <div class="flex flex-wrap gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 rounded-lg text-xs font-bold status-green">Present</span>
+                    <span class="text-xs text-gray-500">On Time & Present</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 rounded-lg text-xs font-bold status-orange">Late</span>
+                    <span class="text-xs text-gray-500">Late Arrival</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 rounded-lg text-xs font-bold status-red">Absent</span>
+                    <span class="text-xs text-gray-500">Absent</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="px-3 py-1 rounded-lg text-xs font-bold status-blue">Clinic</span>
+                    <span class="text-xs text-gray-500">Absent but in Clinic</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="teacher-homeroom-attendance.js"></script>
+</body>
+</html>

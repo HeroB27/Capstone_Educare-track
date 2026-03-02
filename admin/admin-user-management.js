@@ -16,12 +16,34 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- ID ENGINE ---
+// Generates unique IDs for all user types following the naming convention
+// Format: {PREFIX}-{YEAR}-{LAST4}-{SUFFIX}
+
+// PHASE 1 FIX: Use crypto.getRandomValues() instead of Math.random() for secure ID generation
+function generateSecureSuffix(length = 4) {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    const hex = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+    return hex.substring(0, length).toUpperCase();
+}
+
 function generateID(role, seedValue) {
     const year = new Date().getFullYear();
     const last4 = seedValue.toString().slice(-4);
-    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    // FIX: Use secure random suffix
+    const suffix = generateSecureSuffix(4);
+    
+    // Student ID: EDU-{year}-{last4LRN}-{suffix}
     if (role === 'students') return `EDU-${year}-${last4}-${suffix}`;
-    const prefixes = { admins: 'ADM', teachers: 'TCH', guards: 'GRD', clinic_staff: 'CLC', parents: 'PAR' };
+    
+    // All other roles follow: {PREFIX}-{year}-{last4Phone}-{suffix}
+    const prefixes = { 
+        teachers: 'TCH', 
+        guards: 'GRD', 
+        clinic_staff: 'CLC', 
+        parents: 'PAR',
+        admins: 'ADM'  // Added Admin ID support
+    };
     return `${prefixes[role] || 'USR'}-${year}-${last4}-${suffix}`;
 }
 
@@ -177,7 +199,7 @@ function showStaffConfirmation() {
         return false;
     }
     
-    let roleLabel = role === 'teachers' ? 'Teacher' : role === 'clinic_staff' ? 'Clinic Staff' : 'Guard';
+    let roleLabel = role === 'admins' ? 'Admin' : role === 'teachers' ? 'Teacher' : role === 'clinic_staff' ? 'Clinic Staff' : 'Guard';
     let extraInfo = '';
     
     if (role === 'teachers') {
@@ -213,7 +235,7 @@ async function submitStaffFinal() {
     
     if (!name || !phone || !username || !password) return showNotification("All fields are required.", "error");
 
-    const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : 'clinic_id_text';
+    const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : role === 'clinic_staff' ? 'clinic_id_text' : role === 'admins' ? 'admin_id_text' : null;
     const payload = { 
         full_name: name, 
         contact_number: phone, 
@@ -301,25 +323,58 @@ async function openEditModal(table, id) {
     document.getElementById('edit-address').value = user.address || '';
     document.getElementById('editUserModal').classList.remove('hidden');
 
-    // Dynamically inject Gatekeeper toggle for teachers
+    // Dynamically inject role-specific fields and Gatekeeper toggle
     const gatekeeperContainer = document.getElementById('gatekeeper-toggle-container');
     if (gatekeeperContainer) gatekeeperContainer.remove(); // Clean up previous injections
+    
+    const roleSpecificContainer = document.getElementById('role-specific-fields-container');
+    if (roleSpecificContainer) roleSpecificContainer.remove(); // Clean up previous injections
+
+    // Get the main form area to inject fields into
+    const formArea = document.querySelector('#editUserModal .space-y-8');
+    if (!formArea) return;
 
     if (table === 'teachers') {
-        const addressField = document.getElementById('edit-address');
-        const container = document.createElement('div');
-        container.id = 'gatekeeper-toggle-container';
-        container.className = 'mt-4 pt-4 border-t border-gray-100';
-        container.innerHTML = `
-            <label class="flex items-center justify-between cursor-pointer">
+        // Inject email and department fields
+        const roleFields = document.createElement('div');
+        roleFields.id = 'role-specific-fields-container';
+        roleFields.className = 'space-y-4';
+        roleFields.innerHTML = `
+            <div class="flex items-center gap-2 mb-2"><i data-lucide="mail" class="w-4 h-4 text-violet-600"></i><h4 class="font-black text-gray-800 uppercase tracking-widest text-[11px]">Teacher Details</h4></div>
+            <div class="relative"><i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="email" id="edit-email" placeholder="Email Address" value="${user.email || ''}" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
+            <div class="relative">
+                <i data-lucide="book-open" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                <select id="edit-department" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm">
+                    <option value="">Select Department</option>
+                    <option value="English" ${user.department === 'English' ? 'selected' : ''}>English</option>
+                    <option value="Mathematics" ${user.department === 'Mathematics' ? 'selected' : ''}>Mathematics</option>
+                    <option value="Science" ${user.department === 'Science' ? 'selected' : ''}>Science</option>
+                    <option value="Filipino" ${user.department === 'Filipino' ? 'selected' : ''}>Filipino</option>
+                    <option value="Araling Panlipunan" ${user.department === 'Araling Panlipunan' ? 'selected' : ''}>Araling Panlipunan</option>
+                    <option value="MAPEH" ${user.department === 'MAPEH' ? 'selected' : ''}>MAPEH</option>
+                    <option value="TLE" ${user.department === 'TLE' ? 'selected' : ''}>TLE</option>
+                    <option value="Computer" ${user.department === 'Computer' ? 'selected' : ''}>Computer</option>
+                    <option value="Physical Education" ${user.department === 'Physical Education' ? 'selected' : ''}>Physical Education</option>
+                    <option value="Values Education" ${user.department === 'Values Education' ? 'selected' : ''}>Values Education</option>
+                </select>
+            </div>
+            <label class="flex items-center justify-between cursor-pointer mt-4 pt-4 border-t border-gray-100">
                 <span class="font-bold text-gray-700">Assign as Gatekeeper</span>
                 <div class="relative">
-                    <input type="checkbox" id="edit-gatekeeper" class="sr-only peer">
+                    <input type="checkbox" id="edit-gatekeeper" class="sr-only peer" ${user.is_gatekeeper ? 'checked' : ''}>
                     <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
                 </div>
             </label>`;
-        addressField.parentElement.appendChild(container);
-        document.getElementById('edit-gatekeeper').checked = user.is_gatekeeper || false;
+        formArea.appendChild(roleFields);
+    } else if (table === 'clinic_staff') {
+        // Inject role_title field
+        const roleFields = document.createElement('div');
+        roleFields.id = 'role-specific-fields-container';
+        roleFields.className = 'space-y-4';
+        roleFields.innerHTML = `
+            <div class="flex items-center gap-2 mb-2"><i data-lucide="stethoscope" class="w-4 h-4 text-violet-600"></i><h4 class="font-black text-gray-800 uppercase tracking-widest text-[11px]">Clinic Staff Details</h4></div>
+            <div class="relative"><i data-lucide="user-md" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-role-title" placeholder="Role Title (e.g., Nurse, School Physician)" value="${user.role_title || ''}" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>`;
+        formArea.appendChild(roleFields);
     }
 
     if (window.lucide) lucide.createIcons();
@@ -344,10 +399,23 @@ async function saveUserEdit() {
         updated.address = document.getElementById('edit-address').value;
     }
 
-    // UPDATED: Handle the gatekeeper toggle for teachers
-    if (table === 'teachers' && document.getElementById('edit-gatekeeper')) {
-        updated.is_gatekeeper = document.getElementById('edit-gatekeeper').checked;
+    // FIX #3: Handle role-specific fields for teachers (email, department, is_gatekeeper)
+    if (table === 'teachers') {
+        const emailInput = document.getElementById('edit-email');
+        const deptInput = document.getElementById('edit-department');
+        const gatekeeperInput = document.getElementById('edit-gatekeeper');
+        
+        if (emailInput) updated.email = emailInput.value;
+        if (deptInput) updated.department = deptInput.value;
+        if (gatekeeperInput) updated.is_gatekeeper = gatekeeperInput.checked;
     }
+    
+    // FIX #3: Handle role-specific fields for clinic_staff (role_title)
+    if (table === 'clinic_staff') {
+        const roleTitleInput = document.getElementById('edit-role-title');
+        if (roleTitleInput) updated.role_title = roleTitleInput.value;
+    }
+    
     try {
         await supabase.from(table).update(updated).eq('id', id);
         if (table === 'parents' && (userOrig.full_name !== updated.full_name || userOrig.contact_number !== updated.contact_number || userOrig.address !== updated.address)) {
@@ -542,6 +610,45 @@ function injectCloseButtons() {
         }
     });
     if (window.lucide) lucide.createIcons();
+}
+
+// PHASE 3: Data Export Functions
+function exportUsersToCSV() {
+    const filtered = getFilteredUsers();
+    if (filtered.length === 0) {
+        showNotification("No users to export", "error");
+        return;
+    }
+    
+    const headers = ["Name", "Username", "Role", "Status", "Contact Number"];
+    const rows = filtered.map(u => [
+        u.full_name || '',
+        u.username || '',
+        u.role || '',
+        u.is_active !== false ? 'Active' : 'Inactive',
+        u.contact_number || ''
+    ]);
+    
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${cell}"`).join(","))
+        .join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `educare_users_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    showNotification(`Exported ${filtered.length} users successfully!`, "success");
+}
+
+function getFilteredUsers() {
+    const q = document.getElementById('userSearch')?.value.toLowerCase() || '';
+    return allUsers.filter(u => {
+        const tabMatch = (currentView === 'staff') ? u.role !== 'Parent' : u.role === 'Parent';
+        const searchMatch = u.full_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q);
+        return tabMatch && searchMatch;
+    });
 }
 
 function injectPasswordGenerators() {

@@ -78,7 +78,7 @@ function calculateSuspensionRules() {
 }
 
 // THE DUAL-SAVE LOGIC
-async function saveLogicSuspension() {
+async function saveLogicSuspension(event) {
     const btn = event.currentTarget;
     const originalText = btn.innerHTML;
     setLoading(btn, true, 'Processing...');

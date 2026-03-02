@@ -316,14 +316,44 @@ async function getLateThreshold(gradeLevel) {
     return defaultLateThresholds[gradeLevel] || '07:45';
 }
 
+// Compare times in HH:MM format (properly handles string comparison)
+function compareTimes(time1, time2) {
+    // Convert HH:MM to minutes for proper comparison
+    const toMinutes = (time) => {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+    
+    const mins1 = toMinutes(time1);
+    const mins2 = toMinutes(time2);
+    
+    return mins1 - mins2; // Returns negative if time1 < time2
+}
+
 // Check if student is late
 function isLate(scanTime, gradeLevel, threshold) {
     // threshold should be in HH:MM format
-    return scanTime > threshold;
+    return compareTimes(scanTime, threshold) > 0;
 }
 
 // Check if student is leaving early
 function isEarlyExit(scanTime, dismissalTime) {
     // If scan time is before dismissal time, it's early exit
-    return scanTime < dismissalTime;
+    return compareTimes(scanTime, dismissalTime) < 0;
+}
+
+// Additional: Validate student ID format before database query
+function validateStudentId(studentId) {
+    if (!studentId || typeof studentId !== 'string') {
+        return { valid: false, message: 'Student ID is required' };
+    }
+    
+    // Common student ID formats: EDU-2026-XXXX-XXXX or just alphanumeric
+    const cleanedId = studentId.trim();
+    
+    if (cleanedId.length < 3) {
+        return { valid: false, message: 'Student ID is too short' };
+    }
+    
+    return { valid: true, message: 'Valid' };
 }

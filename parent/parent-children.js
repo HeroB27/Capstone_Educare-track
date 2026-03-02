@@ -370,10 +370,94 @@ async function getActiveClinicVisit(childId) {
     }
 }
 
+// ============================================
+// PHASE 2 FEATURE: Compare Children View
+// ============================================
+
+/**
+ * Show comparison view for all children
+ */
+async function showCompareChildren() {
+    // Show loading
+    document.getElementById('compare-modal').classList.remove('hidden');
+    document.getElementById('compare-content').innerHTML = `
+        <div class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
+        </div>
+    `;
+
+    // Fetch stats for all children
+    const childrenStats = await Promise.all(childrenData.map(async (child) => {
+        const stats = await getChildAttendanceStats(child.id);
+        const todayStatus = await getChildTodayStatus(child.id);
+        return { ...child, ...stats, todayStatus };
+    }));
+
+    // Calculate totals
+    const totalPresent = childrenStats.reduce((sum, c) => sum + c.present, 0);
+    const totalLate = childrenStats.reduce((sum, c) => sum + c.late, 0);
+    const totalAbsent = childrenStats.reduce((sum, c) => sum + c.absent, 0);
+    const totalDays = totalPresent + totalLate + totalAbsent;
+    const overallRate = totalDays > 0 ? Math.round((totalPresent / totalDays) * 100) : 100;
+
+    const container = document.getElementById('compare-content');
+    container.innerHTML = `
+        <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-4 mb-4 border border-green-200">
+            <h4 class="font-bold text-green-800 mb-2">Overall Summary</h4>
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <div><p class="text-2xl font-bold text-green-600">${overallRate}%</p><p class="text-xs text-green-700">Rate</p></div>
+                <div><p class="text-2xl font-bold text-green-600">${totalPresent}</p><p class="text-xs text-green-700">Present</p></div>
+                <div><p class="text-2xl font-bold text-yellow-600">${totalLate}</p><p class="text-xs text-yellow-700">Late</p></div>
+                <div><p class="text-2xl font-bold text-red-600">${totalAbsent}</p><p class="text-xs text-red-700">Absent</p></div>
+            </div>
+        </div>
+        <div class="space-y-3">
+            ${childrenStats.map(child => {
+                const childDays = child.present + child.late + child.absent;
+                const childRate = childDays > 0 ? Math.round((child.present / childDays) * 100) : 100;
+                const statusColor = child.todayStatus === 'inside' ? 'bg-green-100 text-green-700' : child.todayStatus === 'outside' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-500';
+                const statusText = child.todayStatus === 'inside' ? 'Inside' : child.todayStatus === 'outside' ? 'Outside' : 'Unknown';
+                return `
+                    <div class="bg-white rounded-xl p-4 border border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="h-10 w-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">${getInitials(child.full_name)}</div>
+                                <div><p class="font-bold text-gray-800">${child.full_name}</p><p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.section_name}</p></div>
+                            </div>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${statusColor}">${statusText}</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 text-center text-sm">
+                            <div class="bg-green-50 rounded-lg p-2"><p class="font-bold text-green-700">${child.present}</p><p class="text-xs text-green-600">Present</p></div>
+                            <div class="bg-yellow-50 rounded-lg p-2"><p class="font-bold text-yellow-700">${child.late}</p><p class="text-xs text-yellow-600">Late</p></div>
+                            <div class="bg-red-50 rounded-lg p-2"><p class="font-bold text-red-700">${child.absent}</p><p class="text-xs text-red-600">Absent</p></div>
+                            <div class="bg-blue-50 rounded-lg p-2"><p class="font-bold text-blue-700">${childRate}%</p><p class="text-xs text-blue-600">Rate</p></div>
+                        </div>
+                    </div>`;
+            }).join('')}
+        </div>
+        <div class="mt-4 flex gap-2">
+            <button onclick="closeCompareModal(); navigateTo('attendance');" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700">View Details</button>
+        </div>`;
+}
+
+/**
+ * Close compare modal
+ */
+function closeCompareModal() {
+    document.getElementById('compare-modal').classList.add('hidden');
+}
+
 // Close modal on backdrop click
 document.getElementById('child-modal')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
         closeModal();
+    }
+});
+
+// Close compare modal on backdrop click
+document.getElementById('compare-modal')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        closeCompareModal();
     }
 });
 

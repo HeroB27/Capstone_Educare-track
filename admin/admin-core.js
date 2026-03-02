@@ -26,15 +26,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadDashboardStats() {
     const today = new Date().toISOString().split('T')[0];
+    const todayStart = today + 'T00:00:00';
+    
     try {
         // Parallel execution for maximum speed
+        // PHASE 1 FIX: Count both "Present" AND "On Time" as present
         const [teachers, students, present, late, absent, clinic] = await Promise.all([
             supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Enrolled'),
-            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Present'),
+            // FIX: Count both Present and On Time as present
+            supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).in('status', ['Present', 'On Time']),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Late'),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Absent'),
-            supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null)
+            // FIX: Only count today's clinic visits (not all visits without time_out)
+            supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null).gte('time_in', todayStart)
         ]);
 
         document.getElementById('stat-total-teachers').innerText = teachers.count || 0;

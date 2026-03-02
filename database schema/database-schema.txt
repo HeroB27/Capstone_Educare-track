@@ -7,6 +7,7 @@ CREATE TABLE public.admins (
   password text NOT NULL,
   full_name text,
   contact_number text,
+  is_active boolean DEFAULT true,  -- FIX: Added is_active column for account deactivation
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );

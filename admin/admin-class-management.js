@@ -69,19 +69,65 @@ async function openSubjectLoad(id, section) {
 
 async function loadSubjectList(classId) {
     const { data } = await supabase.from('subject_loads').select('*, teachers(full_name)').eq('class_id', classId);
-    document.getElementById('subjectList').innerHTML = data?.map(s => `
+    document.getElementById('subjectList').innerHTML = data?.map(s => {
+        // Format time and days
+        const startTime = s.schedule_time_start ? s.schedule_time_start.substring(0, 5) : '';
+        const endTime = s.schedule_time_end ? s.schedule_time_end.substring(0, 5) : '';
+        const timeDisplay = startTime && endTime ? `${startTime} - ${endTime}` : 'No schedule';
+        const daysDisplay = s.schedule_days || 'No days set';
+        
+        return `
         <div class="flex justify-between items-center p-4 bg-white border rounded-xl mb-2">
-            <div><p class="font-bold text-gray-800">${s.subject_name}</p><p class="text-xs text-violet-600 font-bold uppercase">${s.teachers?.full_name}</p></div>
+            <div>
+                <p class="font-bold text-gray-800">${s.subject_name}</p>
+                <p class="text-xs text-violet-600 font-bold uppercase">${s.teachers?.full_name}</p>
+                <p class="text-xs text-gray-500 mt-1">📅 ${daysDisplay} | ⏰ ${timeDisplay}</p>
+            </div>
             <button onclick="deleteSubject(${s.id})" class="text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-        </div>`).join('') || '';
+        </div>`;
+    }).join('') || '<p class="text-center text-gray-400 py-4">No subjects assigned yet.</p>';
     lucide.createIcons();
 }
 
 async function saveSubject() {
-    const payload = { class_id: currentOpenClass, subject_name: document.getElementById('subjectName').value, teacher_id: document.getElementById('subjectTeacherId').value };
+    const subjectName = document.getElementById('subjectName').value;
+    const teacherId = document.getElementById('subjectTeacherId').value;
+    const startTime = document.getElementById('subjectStartTime').value;
+    const endTime = document.getElementById('subjectEndTime').value;
+    
+    if (!subjectName) {
+        showNotification('Please enter a subject name.', 'error');
+        return;
+    }
+    
+    if (!teacherId) {
+        showNotification('Please select a teacher.', 'error');
+        return;
+    }
+    
+    // Get selected days
+    const dayCheckboxes = document.querySelectorAll('.day-checkbox:checked');
+    const days = Array.from(dayCheckboxes).map(cb => cb.value).join('');
+    
+    const payload = {
+        class_id: currentOpenClass,
+        subject_name: subjectName,
+        teacher_id: teacherId,
+        schedule_time_start: startTime || null,
+        schedule_time_end: endTime || null,
+        schedule_days: days || null
+    };
+    
     const { error } = await supabase.from('subject_loads').insert([payload]);
     if (!error) { 
         closeAddSubjectModal(); 
+        // Clear form
+        document.getElementById('subjectName').value = '';
+        document.getElementById('subjectTeacherId').value = '';
+        document.getElementById('subjectStartTime').value = '';
+        document.getElementById('subjectEndTime').value = '';
+        document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
+        
         loadSubjectList(currentOpenClass); 
         showNotification("Subject added successfully", "success");
     } else {
@@ -245,7 +291,11 @@ async function saveClass() {
         loadClasses(selectedGrade);
     }
 }
-function openAddSubjectModal() { document.getElementById('addSubjectModal').classList.remove('hidden'); }
+async function openAddSubjectModal() { 
+    // Ensure teachers are loaded in the dropdown
+    await loadTeachers();
+    document.getElementById('addSubjectModal').classList.remove('hidden'); 
+}
 function closeAddSubjectModal() { document.getElementById('addSubjectModal').classList.add('hidden'); }
 function closeSubjectLoadModal() { document.getElementById('subjectLoadModal').classList.add('hidden'); }
 

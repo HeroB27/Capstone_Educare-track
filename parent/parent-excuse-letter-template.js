@@ -232,44 +232,6 @@ async function submitExcuse(event) {
 async function notifyTeacherOfExcuse(studentId, dateAbsent) {
     try {
         // Get student's class adviser
-        const { data: studentData } = await supabase
-            .from('students')
-            .select('full_name, classes(adviser_id)')
-            .eq('id', studentId)
-            .single();
-
-        if (!studentData?.classes?.adviser_id) {
-            console.log('No adviser assigned for this student');
-            return;
-        }
-
-        // Get child name for notification
-        const childName = allChildren.find(c => c.id == studentId)?.full_name || 'Student';
-
-        // Insert notification for teacher
-        await supabase.from('notifications').insert({
-            recipient_id: studentData.classes.adviser_id,
-            recipient_role: 'teacher',
-            title: 'New Excuse Letter',
-            message: `${currentUser.full_name} submitted an excuse letter for ${childName} on ${dateAbsent}. Please review.`,
-            type: 'excuse_letter',
-            is_read: false,
-            created_at: new Date().toISOString()
-        });
-
-        console.log('Teacher notified successfully');
-
-    } catch (err) {
-        console.error('Error notifying teacher:', err);
-    }
-}
-
-/**
- * Notify teacher of submitted excuse letter
- */
-async function notifyTeacherOfExcuse(studentId, dateAbsent) {
-    try {
-        // Get student's class adviser
         const { data: studentData, error: studentError } = await supabase
             .from('students')
             .select('full_name, classes(adviser_id)')
@@ -405,13 +367,6 @@ function renderHistory(filter = 'all') {
                     <span>${getRelativeTime(item.created_at)}</span>
                 </div>
                 ${item.image_proof_url ? `
-                    <a href="${item.image_proof_url}" target="_blank" class="mt-2 inline-flex items-center gap-1 text-xs text-green-600 hover:underline">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                        </svg>
-                        View Proof
-                    </a>
                     <a href="${item.image_proof_url}" target="_blank" class="mt-2 inline-flex items-center gap-1 text-xs text-green-600 hover:underline">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>

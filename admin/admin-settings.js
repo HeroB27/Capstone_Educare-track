@@ -5,9 +5,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!checkSession('admins')) return;
     }
     
-    // Load existing thresholds and notification settings
     await loadAllSettings();
-    loadPasswordResetBadge(); // For the new tab badge
+    loadPasswordResetBadge();
     injectDeviceSettingsUI();
     injectPasswordChangeUI();
     injectStyles();
@@ -33,13 +32,10 @@ function switchTab(tabId) {
         activeBtn.classList.remove('border-transparent', 'text-gray-400');
     }
 
-    // Load content for the password reset tab when it's clicked
     if (tabId === 'password-resets') {
         loadPasswordResets();
     }
 }
-
-// --- DB INTERACTION: SETTINGS TABLE ---
 
 async function loadAllSettings() {
     try {
@@ -71,30 +67,32 @@ async function performBulkUpsert(keys) {
     if (error) throw error;
 }
 
-async function saveThresholds() {
-    const btn = event.currentTarget;
-    const originalText = btn.innerText;
-    btn.innerText = "Syncing...";
+// FIXED: Added optional chaining for event parameter
+async function saveThresholds(event) {
+    const btn = event?.currentTarget;
+    const originalText = btn?.innerText || "Save Thresholds";
+    if (btn) btn.innerText = "Syncing...";
     try {
         await performBulkUpsert(['am_gate_open', 'am_late_threshold', 'pm_dismissal_time', 'pm_early_cutoff']);
         showNotification("Gate Logic Thresholds Saved!", "success");
     } catch (e) { 
         showNotification("Update failed: " + e.message, "error"); 
     }
-    btn.innerText = originalText;
+    if (btn) btn.innerText = originalText;
 }
 
-async function saveNotificationSettings() {
-    const btn = event.currentTarget;
-    const originalText = btn.innerText;
-    btn.innerText = "Saving...";
+// FIXED: Added optional chaining for event parameter
+async function saveNotificationSettings(event) {
+    const btn = event?.currentTarget;
+    const originalText = btn?.innerText || "Save Toggles";
+    if (btn) btn.innerText = "Saving...";
     try {
         await performBulkUpsert(['notify_late', 'notify_absent']);
         showNotification("Notification Alerts Updated!", "success");
     } catch (e) { 
         showNotification("Update failed: " + e.message, "error"); 
     }
-    btn.innerText = originalText;
+    if (btn) btn.innerText = originalText;
 }
 
 function injectDeviceSettingsUI() {
@@ -104,12 +102,12 @@ function injectDeviceSettingsUI() {
     const html = `
         <div class="mt-8 pt-6 border-t border-gray-100">
             <h3 class="text-lg font-bold text-gray-800 mb-2">Device Preferences</h3>
-            <p class="text-sm text-gray-500 mb-4">These settings are saved on this device only and will not sync across computers.</p>
+            <p class="text-sm text-gray-500 mb-4">These settings are saved on this device only.</p>
             <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div>
                         <h4 class="font-bold text-gray-800">Do Not Disturb</h4>
-                        <p class="text-sm text-gray-500">Mute all notification sounds and vibrations on this device.</p>
+                        <p class="text-sm text-gray-500">Mute all notification sounds.</p>
                     </div>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="dnd_enabled" onchange="saveDevicePreferences()" class="sr-only peer">
@@ -132,14 +130,12 @@ function saveDevicePreferences() {
 }
 
 function injectPasswordChangeUI() {
-    // Inject Change Password Button
     const btn = document.createElement('button');
     btn.className = 'fixed bottom-6 left-6 px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg hover:bg-gray-50 transition-all z-40 flex items-center gap-2';
     btn.innerHTML = '<i data-lucide="lock" class="w-4 h-4"></i> Change Password';
     btn.onclick = () => document.getElementById('changePasswordModal').classList.remove('hidden');
     document.body.appendChild(btn);
 
-    // Inject Modal
     const modal = document.createElement('div');
     modal.id = 'changePasswordModal';
     modal.className = 'fixed inset-0 bg-black/50 z-[70] hidden flex items-center justify-center backdrop-blur-sm';
@@ -184,7 +180,13 @@ async function submitPasswordChange() {
 
     const { error: updateErr } = await supabase.from('admins').update({ password: newPass }).eq('id', user.id);
     if(updateErr) showNotification(updateErr.message, "error");
-    else { showNotification("Password updated successfully", "success"); document.getElementById('changePasswordModal').classList.add('hidden'); document.getElementById('cp-current').value=''; document.getElementById('cp-new').value=''; document.getElementById('cp-confirm').value=''; }
+    else { 
+        showNotification("Password updated successfully", "success"); 
+        document.getElementById('changePasswordModal').classList.add('hidden'); 
+        document.getElementById('cp-current').value=''; 
+        document.getElementById('cp-new').value=''; 
+        document.getElementById('cp-confirm').value=''; 
+    }
 }
 
 async function loadPasswordResetBadge() {
@@ -204,7 +206,7 @@ async function loadPasswordResetBadge() {
 
             badge.innerText = count;
             badge.classList.toggle('hidden', count === 0);
-        } catch (e) { console.error("Error loading password reset badge:", e); }
+        } catch (e) { console.error("Error loading badge:", e); }
     };
 
     await fetchCount();
@@ -229,7 +231,6 @@ async function loadPasswordResets() {
         .eq('is_read', false);
 
     if (query) {
-        // The username is in the message, so we search there.
         queryBuilder = queryBuilder.ilike('message', `%${query}%`);
     }
 
@@ -261,12 +262,12 @@ async function resolvePasswordRequest(id) {
     if (error) showNotification("Failed to resolve request.", "error");
     else {
         showNotification("Request marked as resolved.", "success");
-        loadPasswordResets(); // Refresh the list
+        loadPasswordResets();
     }
 }
 
 async function deleteAllResolved() {
-    if (!confirm("Are you sure you want to delete all resolved password reset requests? This action cannot be undone.")) return;
+    if (!confirm("Are you sure you want to delete all resolved requests?")) return;
 
     try {
         const { error } = await supabase
@@ -279,7 +280,7 @@ async function deleteAllResolved() {
         if (error) throw error;
         showNotification("All resolved requests have been deleted.", "success");
     } catch (e) {
-        showNotification("Error deleting requests: " + e.message, "error");
+        showNotification("Error: " + e.message, "error");
     }
 }
 
@@ -302,7 +303,6 @@ function showNotification(msg, type='info', callback=null) {
 
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
         if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();

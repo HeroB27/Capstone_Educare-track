@@ -14,7 +14,10 @@
 // ============================================================================
 let homeroomStudents = [];
 let filteredStudents = [];
-let todayAttendance = {}; // Pre-fetched attendance data for all students
+
+// FIXED: Store ALL attendance records as array instead of overwriting
+// This prevents the "Double Identity" bug where gate attendance gets overwritten by subject teacher attendance
+let todayAttendance = {}; // Now stores array of records per student_id
 let todayClinicVisits = {}; // Pre-fetched clinic visit data for all students
 
 // ============================================================================
@@ -43,8 +46,7 @@ async function loadHomeroomClass() {
     try {
         const { data: homeroom, error } = await supabase
             .from('classes')
-            .select(`
-                *,
+            .select(` *,
                 teachers(full_name)
             `)
             .eq('adviser_id', currentUser.id)
@@ -100,8 +102,7 @@ async function loadStudents() {
         // Load students in this class
         const { data: students, error } = await supabase
             .from('students')
-            .select(`
-                *,
+            .select(` *,
                 classes!inner(grade_level, section_name)
             `)
             .eq('class_id', homeroom.id)
@@ -136,7 +137,8 @@ async function loadStudents() {
 
 /**
  * Pre-fetch today's attendance and clinic visits for all students
- * This improves performance by doing a single query instead of N+1 queries
+ * FIXED: Now stores ALL attendance records per student (not just the last one)
+ * This fixes the "Double Identity" bug where gate attendance gets overwritten
  */
 async function preFetchTodayData() {
     const today = new Date().toISOString().split('T')[0];
@@ -147,13 +149,18 @@ async function preFetchTodayData() {
     // Fetch today's attendance
     const { data: attendance } = await supabase
         .from('attendance_logs')
-        .select('student_id, status, time_in')
+        .select('student_id, status, time_in, source')
         .eq('log_date', today)
         .in('student_id', studentIds);
     
-    // Build attendance lookup
+    // FIXED: Build attendance lookup - store ALL records as array per student_id
+    // This preserves both gate attendance AND subject teacher attendance
+    todayAttendance = {};
     attendance?.forEach(record => {
-        todayAttendance[record.student_id] = record;
+        if (!todayAttendance[record.student_id]) {
+            todayAttendance[record.student_id] = [];
+        }
+        todayAttendance[record.student_id].push(record);
     });
     
     // Fetch today's clinic visits (status = 'Checked In' and no time_out)
@@ -172,25 +179,29 @@ async function preFetchTodayData() {
 
 /**
  * Update statistics
+ * FIXED: Now works with arrays of attendance records
  */
 async function updateStats() {
-    const today = new Date().toISOString().split('T')[0];
-    
     const total = homeroomStudents.length;
     
-    // Count from pre-fetched data
+    // Count from pre-fetched data (now using arrays)
     let present = 0;
     let absent = 0;
     
     homeroomStudents.forEach(student => {
-        const att = todayAttendance[student.id];
-        if (att && (att.status === 'On Time' || att.status === 'Excused')) {
-            present++;
+        const records = todayAttendance[student.id];
+        if (records && records.length > 0) {
+            // Get the most recent record (last in array)
+            const latestRecord = records[records.length - 1];
+            if (latestRecord.status === 'On Time' || latestRecord.status === 'Excused') {
+                present++;
+            } else if (latestRecord.status === 'Absent') {
+                absent++;
+            }
         }
     });
     
     // For absent, we need to check which students don't have any record
-    // or have 'Absent' status
     const attendedIds = new Set(Object.keys(todayAttendance));
     absent = homeroomStudents.filter(s => !attendedIds.has(String(s.id))).length;
     
@@ -268,6 +279,7 @@ function renderStudents() {
 
 /**
  * Get status badge for student (synchronous - uses pre-fetched data)
+ * FIXED: Now handles multiple attendance records
  */
 function getStatusBadge(studentId) {
     // Check clinic visits first (from pre-fetched data)
@@ -275,14 +287,16 @@ function getStatusBadge(studentId) {
         return '<span class="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full font-medium">In Clinic</span>';
     }
     
-    // Check attendance (from pre-fetched data)
-    const att = todayAttendance[studentId];
+    // Check attendance (from pre-fetched data - now array)
+    const records = todayAttendance[studentId];
     
-    if (!att) {
+    if (!records || records.length === 0) {
         return '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">No Record</span>';
     }
     
-    const status = att.status;
+    // Get the most recent record
+    const latestRecord = records[records.length - 1];
+    const status = latestRecord.status;
     
     if (status === 'On Time') {
         return '<span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium">Present</span>';

@@ -442,10 +442,127 @@ function changeMonth(delta) {
     loadAttendanceCalendar();
 }
 
+// ============================================
+// PHASE 1 FEATURE: CSV Export
+// ============================================
+
+/**
+ * Export attendance data to CSV
+ */
+function exportToCSV() {
+    if (!currentChild || Object.keys(attendanceData).length === 0) {
+        alert('No attendance data to export');
+        return;
+    }
+
+    // Get all dates from attendanceData
+    const dates = Object.keys(attendanceData).sort();
+    
+    // CSV Header
+    let csv = 'Date,Status,Time In,Time Out,Remarks\n';
+    
+    // Add data rows
+    dates.forEach(date => {
+        const log = attendanceData[date];
+        const status = log.status || 'Unknown';
+        const timeIn = log.time_in ? formatTime(log.time_in) : '';
+        const timeOut = log.time_out ? formatTime(log.time_out) : '';
+        // Escape remarks for CSV
+        const remarks = log.remarks ? `"${log.remarks.replace(/"/g, '""')}"` : '';
+        
+        csv += `${date},${status},${timeIn},${timeOut},${remarks}\n`;
+    });
+
+    // Create download link
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Set filename with child name and date range
+    const childName = currentChild.full_name.replace(/[^a-z0-9]/gi, '_');
+    const monthYear = currentViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    link.setAttribute('href', url);
+    link.setAttribute('download', `attendance_${childName}_${monthYear}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ============================================
+// PHASE 1 FEATURE: Subject Remarks Parser
+// ============================================
+
+/**
+ * Parse remarks field to extract subject-specific attendance
+ * Format: "[SubjectName: Status]" e.g., "[Math: Present] [Science: Absent]"
+ */
+function parseSubjectRemarks(remarks) {
+    if (!remarks) return [];
+    
+    const subjects = [];
+    const regex = /\[([^:]+): (Present|Absent|Excused|Late)\]/g;
+    let match;
+    
+    while ((match = regex.exec(remarks)) !== null) {
+        subjects.push({
+            subject: match[1].trim(),
+            status: match[2].trim()
+        });
+    }
+    
+    return subjects;
+}
+
+/**
+ * Get human-readable subject remarks for display
+ */
+function getSubjectRemarksHtml(remarks) {
+    const subjects = parseSubjectRemarks(remarks);
+    
+    if (subjects.length === 0) {
+        return '';
+    }
+    
+    let html = '<div class="mt-3 pt-3 border-t"><p class="text-sm font-medium text-gray-500 mb-2">Subject Attendance:</p><div class="flex flex-wrap gap-2">';
+    
+    subjects.forEach(subj => {
+        let badgeClass = '';
+        let icon = '';
+        
+        switch (subj.status) {
+            case 'Present':
+                badgeClass = 'bg-green-100 text-green-700';
+                icon = '✓';
+                break;
+            case 'Late':
+                badgeClass = 'bg-yellow-100 text-yellow-700';
+                icon = '⏰';
+                break;
+            case 'Absent':
+                badgeClass = 'bg-red-100 text-red-700';
+                icon = '✗';
+                break;
+            case 'Excused':
+                badgeClass = 'bg-purple-100 text-purple-700';
+                icon = '📝';
+                break;
+            default:
+                badgeClass = 'bg-gray-100 text-gray-700';
+        }
+        
+        html += `<span class="px-2 py-1 rounded-full text-xs font-medium ${badgeClass}">${icon} ${subj.subject}: ${subj.status}</span>`;
+    });
+    
+    html += '</div></div>';
+    return html;
+}
+
 // Make functions available globally
 window.loadAttendanceCalendar = loadAttendanceCalendar;
 window.changeMonth = changeMonth;
 window.switchChildFromSelector = switchChildFromSelector;
+window.exportToCSV = exportToCSV;
 
 /**
  * Get status color for attendance status

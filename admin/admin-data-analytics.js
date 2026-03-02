@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /**
  * Load all analytics data from Supabase based on date range
  */
-async function loadAnalyticsData() {
+async function loadAnalyticsData(event) {
     const btn = event?.currentTarget;
     if (btn) {
         btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
@@ -89,6 +89,7 @@ async function loadAnalyticsData() {
 /**
  * Fetch attendance trend over time grouped by date
  * Queries attendance_logs and joins with excuse_letters to identify excused absences
+ * UPDATED: Now also parses remarks field for subject-specific attendance
  */
 async function fetchAttendanceTrend(dateStart, dateEnd) {
     // Fetch all attendance logs within date range
@@ -98,6 +99,7 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
             id,
             log_date,
             status,
+            remarks,
             student_id,
             excuse_letters (
                 status
@@ -120,16 +122,20 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
             dateGroups[date] = { Present: 0, Late: 0, Absent: 0, Excused: 0 };
         }
 
-        // Check if excused (from excuse_letters with approved status)
+        // OPTION B: Check if excused (from excuse_letters with approved status)
         const isExcused = log.excuse_letters && 
             Array.isArray(log.excuse_letters) && 
             log.excuse_letters.some(e => e.status === 'Approved');
 
-        const status = log.status || 'Absent';
+        // OPTION B: Parse remarks field for subject-specific attendance
+        // This gives us the ACTUAL overall status based on subject attendance
+        const calculatedStatus = calculateStatusFromRemarks(log.remarks, log.status);
+        
+        const status = calculatedStatus; // Use calculated status from remarks
         
         if (isExcused) {
             dateGroups[date].Excused++;
-        } else if (status === 'Present') {
+        } else if (status === 'Present' || status === 'On Time') {
             dateGroups[date].Present++;
         } else if (status === 'Late') {
             dateGroups[date].Late++;
@@ -150,6 +156,39 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
         absent: sortedDates.map(d => dateGroups[d].Absent),
         excused: sortedDates.map(d => dateGroups[d].Excused)
     };
+}
+
+/**
+ * OPTION B: Calculate overall status from remarks field
+ * This function parses the remarks field to determine the actual attendance status
+ * Priority: Excused > Absent > Late > Present
+ */
+function calculateStatusFromRemarks(remarks, defaultStatus) {
+    // If no remarks, use the default status from the status field
+    if (!remarks || remarks.trim() === '') {
+        return defaultStatus || 'Present';
+    }
+    
+    // Extract all subject attendance from remarks
+    // Format: "[Math: Present] [Science: Absent] [Filipino: Late]"
+    const subjectRegex = /\[([^\]]+): (Present|Absent|Excused|Late)\]/g;
+    const subjectStatuses = [];
+    let match;
+    
+    while ((match = subjectRegex.exec(remarks)) !== null) {
+        subjectStatuses.push(match[2]); // match[2] is the status (Present, Absent, etc.)
+    }
+    
+    // If no subject statuses found in remarks, use default status
+    if (subjectStatuses.length === 0) {
+        return defaultStatus || 'Present';
+    }
+    
+    // Priority calculation: Excused > Absent > Late > Present
+    if (subjectStatuses.includes('Excused')) return 'Excused';
+    if (subjectStatuses.includes('Absent')) return 'Absent';
+    if (subjectStatuses.includes('Late')) return 'Late';
+    return 'Present';
 }
 
 /**
