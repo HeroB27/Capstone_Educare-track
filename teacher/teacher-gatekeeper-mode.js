@@ -15,6 +15,10 @@ let html5QrcodeScanner;
 let lastScanResult = null;
 const SCAN_DEBOUNCE_MS = 3000; // 3 seconds between scans of the same ID
 
+// NEW: QR Code format validation regex
+// Matches: EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G001-A1B2)
+const SCAN_REGEX = /^EDU-\d{4}-[GK]\d{1,3}-[A-Z0-9]{4}$/;
+
 // DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
     initializeDateTime();
@@ -44,6 +48,12 @@ function initializeScanner() {
     }
 
     function onScanSuccess(decodedText, decodedResult) {
+        // Validate QR code format first
+        if (!validateStudentId(decodedText)) {
+            showNotification('Invalid QR Code format. Please scan a valid ID.', 'error');
+            return;
+        }
+        
         if (lastScanResult === decodedText) {
             return;
         }
@@ -72,248 +82,237 @@ async function processScan(studentIdText) {
     statusIndicator.innerHTML = `<p class="text-sm text-yellow-300">Processing: ${studentIdText}</p>`;
     
     try {
+        // 1. Check if today is a holiday/suspended day
+        const today = new Date().toISOString().split('T')[0];
+        const holidayCheck = await checkIsHoliday(today);
+        
+        if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
+            showNotification(`School is suspended today: ${holidayCheck.description}`, 'error');
+            return;
+        }
+
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, classes(grade_level, section_name)')
+            .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
             .eq('student_id_text', studentIdText)
             .single();
-
-        if (studentError || !student) throw new Error('Student ID not found.');
-
-        // Get student grade level
-        const gradeLevel = student.classes?.grade_level;
-        if (!gradeLevel) {
-            throw new Error('Student grade level not found. Please contact administrator.');
+        
+        if (studentError || !student) {
+            throw new Error('Student not found. Please check the ID.');
         }
         
-        const today = new Date().toISOString().split('T')[0];
-        const { data: lastLog, error: logError } = await supabase
-            .from('attendance_logs')
-            .select('*')
-            .eq('student_id', student.id)
-            .eq('log_date', today)
-            .is('time_out', null)
-            .maybeSingle();
-
-        if (logError) throw logError;
-
-        const now = new Date();
-        const scanTime = now.toTimeString().split(' ')[0].substring(0, 5);
-        let action, status, logData;
-
-        if (lastLog) {
-            action = 'EXIT';
-            const dismissalTime = await getDismissalTime(gradeLevel);
-            status = isEarlyExit(scanTime, dismissalTime) ? 'Early Exit' : 'Normal Exit';
-            
-            logData = await supabase
-                .from('attendance_logs')
-                .update({ time_out: now.toISOString(), status: status })
-                .eq('id', lastLog.id)
-                .select()
-                .single();
-
-        } else {
-            action = 'ENTRY';
-            const lateThreshold = await getLateThreshold(gradeLevel);
-            status = isLate(scanTime, gradeLevel, lateThreshold) ? 'Late' : 'On Time';
-
-            logData = await supabase
-                .from('attendance_logs')
-                .insert({
-                    student_id: student.id,
-                    log_date: today,
-                    time_in: now.toISOString(),
-                    status: status
-                })
-                .select()
-                .single();
+        // Process the scan (entry/exit logic) - get the result
+        const scanResult = await handleAttendanceScan(student);
+        
+        // Show success
+        const gradeLevel = student.classes ? student.classes.grade_level : 'N/A';
+        const section = student.classes ? student.classes.section_name : '';
+        
+        statusIndicator.innerHTML = `<p class="text-green-300">Success! ${student.full_name}</p>`;
+        
+        // Update UI
+        document.getElementById('last-scan').classList.remove('hidden');
+        document.getElementById('scan-student-name').innerText = student.full_name;
+        document.getElementById('scan-grade-level').innerText = `${gradeLevel} - ${section}`;
+        document.getElementById('scan-time').innerText = new Date().toLocaleTimeString();
+        
+        // Create parent notification for all events
+        await createParentNotification(student, scanResult.direction, scanResult.status);
+        
+        // Create teacher notification for special cases (Late, Early Exit, Late Exit)
+        if (scanResult.status === 'Late' || scanResult.status === 'Early Exit' || scanResult.status === 'Late Exit') {
+            await notifyTeacherFromTeacherModule(student, scanResult.direction, scanResult.status);
         }
         
-        if (logData.error) throw logData.error;
-
-        updateLastScanUI(student, action, status, scanTime);
-        playAudioFeedback(status);
-        showToast(`${student.full_name} scanned ${action.toLowerCase()} successfully.`, 'success');
-
     } catch (error) {
-        console.error('Scan processing error:', error);
-        updateLastScanUI(null, 'ERROR', error.message, new Date().toTimeString().split(' ')[0].substring(0, 5));
-        playAudioFeedback('error');
-        showToast(error.message, 'error');
-    } finally {
-        statusIndicator.innerHTML = `<p class="text-sm text-slate-300">Ready to scan next student ID</p>`;
+        console.error('Scan error:', error);
+        statusIndicator.innerHTML = `<p class="text-red-300">Error: ${error.message}</p>`;
+        document.getElementById('last-scan').classList.remove('hidden');
+        document.getElementById('scan-student-name').innerText = 'Error';
+        document.getElementById('scan-grade-level').innerText = error.message;
     }
 }
 
-// UI Update function
-function updateLastScanUI(student, action, status, time) {
-    const lastScanEl = document.getElementById('last-scan');
-    const studentNameEl = document.getElementById('scan-student-name');
-    const statusEl = document.getElementById('scan-status');
-    const timeEl = document.getElementById('scan-time');
-    const actionEl = document.getElementById('scan-action');
-
-    lastScanEl.classList.remove('hidden');
+// Handle attendance scan logic
+async function handleAttendanceScan(student) {
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     
-    if (student) {
-        studentNameEl.textContent = student.full_name;
-        statusEl.textContent = status;
-        timeEl.textContent = `Time: ${time}`;
-        actionEl.textContent = action;
-        
-        let actionColor = 'bg-green-600';
-        if (action === 'EXIT') actionColor = 'bg-blue-600';
-        if (action === 'ERROR') actionColor = 'bg-red-600';
-        actionEl.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${actionColor}`;
-        
-        let statusColor = 'text-green-400';
-        if (status === 'Late' || status === 'Early Exit') statusColor = 'text-yellow-400';
-        if (action === 'ERROR') statusColor = 'text-red-400';
-        statusEl.className = `text-lg font-medium ${statusColor}`;
+    // Get grade level for threshold calculation
+    const gradeLevel = student.classes ? student.classes.grade_level : null;
+    
+    // Check existing log for today
+    const { data: existingLog } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('student_id', student.id)
+        .eq('log_date', today)
+        .order('time_in', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    
+    let status = 'On Time';
+    let direction = 'ENTRY';
+    
+    // Determine if late
+    if (existingLog?.time_in && !existingLog.time_out) {
+        // Student is already on campus - this is an exit
+        direction = 'EXIT';
 
+        // FIX: Implement "Morning Lock" to prevent accidental exits.
+        // Exits are disabled before 10:00 AM unless authorized.
+        const MORNING_LOCK_UNTIL_HOUR = 10;
+        if (now.getHours() < MORNING_LOCK_UNTIL_HOUR) {
+            throw new Error('Exit scans are disabled during morning entry hours.');
+        }
+
+        await supabase
+            .from('attendance_logs')
+            .update({ time_out: now.toISOString(), status: 'Normal Exit' }) // Status will be recalculated later if needed
+            .eq('id', existingLog.id);
     } else {
-        studentNameEl.textContent = 'Scan Error';
-        statusEl.textContent = status; // The error message
-        timeEl.textContent = `Time: ${time}`;
-        actionEl.textContent = 'ERROR';
-        actionEl.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase bg-red-600';
-        statusEl.className = 'text-lg font-medium text-red-400';
+        // New entry - check if late
+        const lateThreshold = await getLateThreshold(gradeLevel);
+        if (compareTimes(currentTime, lateThreshold) > 0) {
+            status = 'Late';
+        }
+        
+        await supabase
+            .from('attendance_logs')
+            .insert({
+                student_id: student.id,
+                log_date: today,
+                time_in: now.toISOString(),
+                status: status
+            });
     }
-}
-
-// Audio feedback
-function playAudioFeedback(status) {
-    let audioId = 'audio-success';
-    if (status === 'Late' || status === 'Early Exit') {
-        audioId = 'audio-late';
-    } else if (status === 'error') {
-        audioId = 'audio-error';
-    }
-    document.getElementById(audioId)?.play().catch(e => console.warn("Audio play failed:", e));
-}
-
-// Toast notifications
-function showToast(message, type = 'success') {
-    const toastId = type === 'success' ? 'toast-success' : 'toast-error';
-    const toast = document.getElementById(toastId);
     
-    if (toast) {
-        toast.innerHTML = message;
-        toast.classList.remove('translate-y-24', 'opacity-0');
-        setTimeout(() => {
-            toast.classList.add('translate-y-24', 'opacity-0');
-        }, 3000);
-    }
+    // Return direction and status for notifications
+    return { direction, status };
 }
 
-// Manual Entry Modal
-function showManualEntry() {
-    document.getElementById('manual-entry-modal').classList.remove('hidden');
-    document.getElementById('manual-entry-modal').classList.add('flex');
-    document.getElementById('manual-student-id').focus();
-}
-
-function closeManualEntry() {
-    document.getElementById('manual-entry-modal').classList.add('hidden');
-    document.getElementById('manual-entry-modal').classList.remove('flex');
-}
-
-function submitManualEntry() {
-    const studentId = document.getElementById('manual-student-id').value.trim();
-    if (studentId) {
-        processScan(studentId).then(() => {
-            // Clear the input after successful submission
-            document.getElementById('manual-student-id').value = '';
+/**
+ * Create notification for parent about scan (Teacher Module)
+ */
+async function createParentNotification(student, direction, status) {
+    try {
+        if (!student.parent_id) {
+            console.warn('Cannot create notification: no parent_id');
+            return;
+        }
+        
+        const action = direction === 'ENTRY' ? 'entered' : 'exited';
+        const time = new Date().toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
         });
+        
+        const message = `Your child, ${student.full_name}, ${action} at ${time} (${status})`;
+        
+        const { error } = await supabase
+            .from('notifications')
+            .insert({
+                recipient_id: student.parent_id,
+                recipient_role: 'parent',
+                title: direction === 'ENTRY' ? 'Arrival Alert' : 'Departure Alert',
+                message: message,
+                type: direction === 'ENTRY' ? 'arrival' : 'departure'
+            });
+        
+        if (error) {
+            console.error('Error creating parent notification:', error);
+        }
+    } catch (error) {
+        console.error('Error in createParentNotification:', error);
     }
-    closeManualEntry();
 }
 
-// ============================================
-// MISSING HELPER FUNCTIONS FOR GATEKEEPER MODE
-// ============================================
-
-// Get dismissal time based on grade level
-async function getDismissalTime(gradeLevel) {
-    // Default dismissal times by grade level
-    const defaultDismissalTimes = {
-        'Kinder': '14:30',
-        'Grade 1': '15:00',
-        'Grade 2': '15:00',
-        'Grade 3': '15:00',
-        'Grade 4': '15:30',
-        'Grade 5': '15:30',
-        'Grade 6': '15:30',
-        'Grade 7': '16:00',
-        'Grade 8': '16:00',
-        'Grade 9': '16:00',
-        'Grade 10': '16:00',
-        'Grade 11': '16:30',
-        'Grade 12': '16:30'
-    };
-    
-    // Try to get from grade_schedules table
+/**
+ * Create notification for teacher about special attendance events (Teacher Module)
+ */
+async function notifyTeacherFromTeacherModule(student, direction, status) {
     try {
-        const { data: schedule, error } = await supabase
-            .from('grade_schedules')
-            .select('end_time')
-            .eq('grade_level', gradeLevel)
+        if (!student.class_id) {
+            console.warn('Cannot notify teacher: no class_id');
+            return;
+        }
+        
+        // Get teacher assigned to this class
+        const { data: classData, error: classError } = await supabase
+            .from('classes')
+            .select('teacher_id')
+            .eq('id', student.class_id)
             .single();
         
-        if (!error && schedule && schedule.end_time) {
-            // Convert time to HH:MM format
-            const endTime = schedule.end_time;
-            if (typeof endTime === 'string') {
-                return endTime.substring(0, 5);
+        if (classError || !classData || !classData.teacher_id) {
+            console.warn('Cannot notify teacher: no teacher assigned to class');
+            return;
+        }
+        
+        const time = new Date().toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+        });
+        
+        const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
+        const section = student.classes ? student.classes.section_name : '';
+        
+        let title = '';
+        let message = '';
+        
+        if (status === 'Late') {
+            title = 'Late Arrival Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) arrived LATE at ${time}`;
+        } else if (status === 'Early Exit') {
+            title = 'Early Exit Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) left EARLY at ${time}`;
+        } else if (status === 'Late Exit') {
+            title = 'Late Exit Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) left LATE at ${time}`;
+        }
+        
+        if (title && message) {
+            const { error } = await supabase
+                .from('notifications')
+                .insert({
+                    recipient_id: classData.teacher_id,
+                    recipient_role: 'teacher',
+                    title: title,
+                    message: message,
+                    type: 'attendance_alert'
+                });
+            
+            if (error) {
+                console.error('Error creating teacher notification:', error);
             }
         }
-    } catch (e) {
-        console.warn('Could not fetch grade schedule, using default:', e);
+    } catch (error) {
+        console.error('Error in notifyTeacherFromTeacherModule:', error);
     }
-    
-    // Return default or fallback
-    return defaultDismissalTimes[gradeLevel] || '15:30';
 }
 
-// Get late threshold based on grade level
+// Get late threshold for grade level
 async function getLateThreshold(gradeLevel) {
-    // Default late thresholds (typically 15 min after start time)
-    const defaultLateThresholds = {
-        'Kinder': '07:45',
-        'Grade 1': '07:45',
-        'Grade 2': '07:45',
-        'Grade 3': '07:45',
-        'Grade 4': '07:45',
-        'Grade 5': '07:45',
-        'Grade 6': '07:45',
-        'Grade 7': '07:30',
-        'Grade 8': '07:30',
-        'Grade 9': '07:30',
-        'Grade 10': '07:30',
-        'Grade 11': '07:30',
-        'Grade 12': '07:30'
-    };
-    
-    // Try to get from grade_schedules table
-    try {
-        const { data: schedule, error } = await supabase
-            .from('grade_schedules')
-            .select('late_threshold')
-            .eq('grade_level', gradeLevel)
-            .single();
-        
-        if (!error && schedule && schedule.late_threshold) {
-            const lateThreshold = schedule.late_threshold;
-            if (typeof lateThreshold === 'string') {
-                return lateThreshold.substring(0, 5);
-            }
-        }
-    } catch (e) {
-        console.warn('Could not fetch grade schedule, using default:', e);
+    // FIX: Use the centralized getLateThreshold function from general-core.js
+    // This ensures it respects the global settings configured by the admin.
+    if (typeof window.getLateThreshold === 'function') {
+        return await window.getLateThreshold(gradeLevel);
     }
-    
-    return defaultLateThresholds[gradeLevel] || '07:45';
+    // Fallback if core function is not available
+    return '08:00';
+}
+
+// Get dismissal time for grade level
+async function getDismissalTime(gradeLevel) {
+    // FIX: Use the centralized getDismissalTime function from general-core.js
+    if (typeof window.getDismissalTime === 'function') {
+        return window.getDismissalTime(gradeLevel);
+    }
+    // Fallback
+    return '15:00';
 }
 
 // Compare times in HH:MM format (properly handles string comparison)
@@ -345,15 +344,21 @@ function isEarlyExit(scanTime, dismissalTime) {
 // Additional: Validate student ID format before database query
 function validateStudentId(studentId) {
     if (!studentId || typeof studentId !== 'string') {
-        return { valid: false, message: 'Student ID is required' };
+        return false;
     }
     
-    // Common student ID formats: EDU-2026-XXXX-XXXX or just alphanumeric
-    const cleanedId = studentId.trim();
-    
-    if (cleanedId.length < 3) {
-        return { valid: false, message: 'Student ID is too short' };
-    }
-    
-    return { valid: true, message: 'Valid' };
+    // Validate format: EDU-YYYY-LLLL-XXXX
+    return SCAN_REGEX.test(studentId.trim());
 }
+
+// FIX: Unlock browser audio context for scanner beeps
+document.body.addEventListener('click', () => {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    } catch (e) {
+        // Audio not supported or already unlocked
+    }
+}, { once: true }); // Only runs once per page load

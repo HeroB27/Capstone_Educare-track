@@ -14,8 +14,8 @@ var currentUser = checkSession('guards');
 // ============================================================================
 let html5QrcodeScanner = null;
 let lastScanTime = 0;
-const ANTI_DUPLICATE_THRESHOLD = 60000; // 60 seconds in milliseconds
-const SCAN_REGEX = /^EDU-\d{4}-\d{4}-[A-Z0-9]{4}$/;
+const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes in milliseconds
+const SCAN_REGEX = /^EDU-\d{4}-[GK]\d{3}-[A-Z0-9]{4}$/;
 
 // NEW: Debounce variables for machine-gun protection
 let isProcessingScan = false;
@@ -138,7 +138,8 @@ function setupUsbScanner() {
 async function onScanSuccess(decodedText, decodedResult) {
     // Anti-duplicate check: Ignore scans too close together
     const now = Date.now();
-    if (now - lastScanTime < ANTI_DUPLICATE_THRESHOLD) {
+if (now - lastScanTime < ANTI_DUPLICATE_THRESHOLD) {
+        triggerScanFeedback(false, 'Duplicate scan - please wait 2 minutes', 'DUPLICATE', '');
         console.log('Scan ignored: too close to previous scan');
         return;
     }
@@ -175,7 +176,7 @@ function onScanFailure(error) {
 
 /**
  * Validate QR code format using regex
- * Format: EDU-XXXX-XXXX-XXXX (e.g., EDU-2024-0001-A1B2)
+ * Format: EDU-{YYYY}-{LLLL}-{XXXX} (e.g., EDU-2026-G001-A1B2)
  */
 function validateQRCode(qrCode) {
     return SCAN_REGEX.test(qrCode);
@@ -183,14 +184,14 @@ function validateQRCode(qrCode) {
 
 /**
  * Extract student ID from QR code
- * QR format: EDU-{year}-{sequence}-{code}
+ * QR format: EDU-{year}-{gradeLevelCode}-{uniqueId}
+ * Example: EDU-2026-G001-A1B2 -> returns "A1B2" (the unique suffix)
  */
 function extractStudentId(qrCode) {
-    // Example: EDU-2024-0001-A1B2 -> extract numeric sequence
     const parts = qrCode.split('-');
     if (parts.length === 4) {
-        // Return the sequence number (e.g., "0001")
-        return parts[2];
+        // Return the unique identifier (e.g., "A1B2") - NOT the grade level code
+        return parts[3];
     }
     return null;
 }
@@ -210,7 +211,8 @@ async function handleScan(studentId, qrCode) {
         showLoading(true);
 
         // 1. Check if today is a holiday/suspended day
-        const today = new Date().toISOString().split('T')[0];
+        // FIX: Use timezone-aware function to prevent "Morning UTC Trap"
+        const today = getLocalISOString();
         const holidayCheck = await checkIsHoliday(today);
         
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
@@ -232,6 +234,13 @@ async function handleScan(studentId, qrCode) {
         // Determine tap direction (ENTRY or EXIT)
         const direction = determineTapDirection(lastLog);
         
+        // --- WORKFLOW IMPROVEMENT: Status Protection ---
+        // If the student is already marked 'Excused' for the day, do not overwrite it.
+        if (lastLog?.status === 'Excused' && direction === 'ENTRY') {
+            showWarning(`${student.full_name} is already marked as Excused.`);
+            return; // Stop processing to protect the excused status.
+        }
+
         // 4. Calculate status based on direction and time
         const now = new Date();
         const scanTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM format
@@ -260,7 +269,28 @@ async function handleScan(studentId, qrCode) {
         // 7. Create notification for parent
         await createNotification(studentId, direction, statusInfo.status);
 
-        // 8. Display result
+// 7b. Create teacher notification for special cases (Late, Early Exit, Late Exit)
+        if (statusInfo.status === 'Late' || statusInfo.status === 'Early Exit' || statusInfo.status === 'Late Exit') {
+            await notifyTeacher(student, direction, statusInfo.status);
+        }
+
+        // PHASE 4: Advanced Attendance Tracking
+        // 8. Check for partial absence (Morning/Afternoon Absent)
+        if (typeof checkPartialAbsence === 'function') {
+            await checkPartialAbsence(student.id, direction, statusInfo.status);
+        }
+
+        // 9. Detect unusual attendance patterns
+        if (typeof detectAttendancePatterns === 'function') {
+            await detectAttendancePatterns(student, direction, statusInfo.status);
+        }
+
+        // 10. Create admin alerts for concerning patterns
+        if (typeof createAdminAlert === 'function') {
+            await createAdminAlert(student, direction, statusInfo.status);
+        }
+
+        // 11. Display result
         displayScanResult(student, direction, statusInfo, scanTime);
 
         // 9. Update recent scans list
@@ -281,8 +311,8 @@ async function handleScan(studentId, qrCode) {
  */
 async function getLastLogToday(studentId) {
     try {
-        const today = new Date().toISOString().split('T')[0];
-        
+        // FIX: Use timezone-aware function
+        const today = getLocalISOString();
         // Get all logs for today, ordered by time
         const { data, error } = await supabase
             .from('attendance_logs')
@@ -519,7 +549,8 @@ async function getGradeLevel(classId) {
  * Save attendance log to database
  */
 async function saveAttendanceLog(studentId, direction, status) {
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Use timezone-aware function
+    const today = getLocalISOString();
     const now = new Date();
     
     try {
@@ -637,6 +668,76 @@ async function createNotification(studentId, direction, status) {
         }
     } catch (error) {
         console.error('Error in createNotification:', error);
+    }
+}
+
+/**
+ * Create notification for teacher about special attendance events
+ * Notifies for: Late, Early Exit, Late Exit
+ * @param {object} student - Student object with class info
+ * @param {string} direction - 'ENTRY' or 'EXIT'
+ * @param {string} status - Current attendance status
+ */
+async function notifyTeacher(student, direction, status) {
+    try {
+        // Get the homeroom teacher for this student's class
+        if (!student.class_id) {
+            console.warn('Cannot notify teacher: no class_id');
+            return;
+        }
+        
+        // Get teacher assigned to this class
+        const { data: classData, error: classError } = await supabase
+            .from('classes')
+            .select('teacher_id')
+            .eq('id', student.class_id)
+            .single();
+        
+        if (classError || !classData || !classData.teacher_id) {
+            console.warn('Cannot notify teacher: no teacher assigned to class');
+            return;
+        }
+        
+        const time = new Date().toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true 
+        });
+        
+        const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
+        const section = student.classes ? student.classes.section_name : '';
+        
+        let title = '';
+        let message = '';
+        
+        if (status === 'Late') {
+            title = 'Late Arrival Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) arrived LATE at ${time}`;
+        } else if (status === 'Early Exit') {
+            title = 'Early Exit Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) left EARLY at ${time}`;
+        } else if (status === 'Late Exit') {
+            title = 'Late Exit Alert';
+            message = `${student.full_name} (${gradeLevel} - ${section}) left LATE at ${time}`;
+        }
+        
+        if (title && message) {
+            const { error } = await supabase
+                .from('notifications')
+                .insert({
+                    recipient_id: classData.teacher_id,
+                    recipient_role: 'teacher',
+                    title: title,
+                    message: message,
+                    type: 'attendance_alert'
+                });
+            
+            if (error) {
+                console.error('Error creating teacher notification:', error);
+            }
+        }
+    } catch (error) {
+        console.error('Error in notifyTeacher:', error);
     }
 }
 
@@ -789,7 +890,7 @@ function formatTime(time24) {
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
 
-// ===========================================================================-
+// ===========================================================================-=
 // EXPORT FOR USE IN OTHER MODULES
 // ============================================================================
 if (typeof module !== 'undefined' && module.exports) {
@@ -825,7 +926,8 @@ async function processQRScan(qrCodeData) {
     scanCooldowns.set(qrCodeData, now);
 
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // FIX: Use timezone-aware function
+        const today = getLocalISOString();
         const currentTime = new Date().toISOString();
 
         // 2. Find the Student by QR Data

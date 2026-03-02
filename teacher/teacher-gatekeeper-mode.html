@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIX: Add missing scanner library -->
     <title>Gatekeeper Mode - Educare Teacher</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -116,14 +117,14 @@
     </div>
     
     <!-- Toast Notifications -->
+    <!-- FIX: Add missing toast and audio elements -->
     <div id="toast-success" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-24 opacity-0 flex items-center gap-3"></div>
     <div id="toast-error" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-24 opacity-0 flex items-center gap-3"></div>
     
     <!-- Audio Elements - Placeholder for actual sound files -->
-    <!-- TODO: Replace src with actual audio file paths (e.g., ../assets/sounds/success.mp3) -->
-    <audio id="audio-success" preload="auto"></audio>
-    <audio id="audio-error" preload="auto"></audio>
-    <audio id="audio-late" preload="auto"></audio>
+    <audio id="audio-success" src="../assets/sounds/success.mp3" preload="auto"></audio>
+    <audio id="audio-error" src="../assets/sounds/error.mp3" preload="auto"></audio>
+    <audio id="audio-late" src="../assets/sounds/alert.mp3" preload="auto"></audio>
 
 </body>
 </html>
