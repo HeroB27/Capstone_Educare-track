@@ -63,6 +63,17 @@ ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();
 ALTER TABLE public.announcements
 ADD COLUMN IF NOT EXISTS priority text;
 
+-- Add type column for General/Emergency/Event categorization
+ALTER TABLE public.announcements
+ADD COLUMN IF NOT EXISTS type text DEFAULT 'General';
+
+-- Add scheduling and targeting columns
+ALTER TABLE public.announcements
+ADD COLUMN IF NOT EXISTS scheduled_at timestamp with time zone,
+ADD COLUMN IF NOT EXISTS target_teachers boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS target_parents boolean DEFAULT true,
+ADD COLUMN IF NOT EXISTS target_students boolean DEFAULT true;
+
 -- Add posted_by_admin_id column to track which admin posted the announcement
 ALTER TABLE public.announcements
 ADD COLUMN IF NOT EXISTS posted_by_admin_id bigint REFERENCES public.admins(id);
@@ -119,11 +130,10 @@ FROM information_schema.columns
 WHERE table_schema = 'public' 
 AND table_name IN ('clinic_visits', 'excuse_letters', 'announcements', 'notifications', 'teachers', 'students')
 AND column_name IN ('parent_notified', 'parent_notified_at', 'teacher_approval', 'teacher_remarks', 
-                    'updated_at', 'priority', 'is_urgent', 'scheduled_at', 'sender_id', 'batch_id',
+                    'updated_at', 'priority', 'type', 'is_urgent', 'scheduled_at', 'sender_id', 'batch_id',
                     'is_gatekeeper', 'qr_code_data', 'profile_photo_url', 'is_active')
 ORDER BY table_name, column_name;
 
 -- ============================================================================
 -- END OF COMPREHENSIVE SCHEMA FIX
 -- ============================================================================
-

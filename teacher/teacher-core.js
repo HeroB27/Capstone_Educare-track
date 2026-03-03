@@ -1700,11 +1700,13 @@ async function loadExistingAnnouncements() {
     if (!list) return;
     
     try {
+        const now = new Date().toISOString();
         // Fetch announcements where teacher is the recipient
         const { data, error } = await supabase
             .from('announcements')
             .select('*')
             .eq('target_teachers', true)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false });
         
         if (error) throw error;
@@ -1715,9 +1717,15 @@ async function loadExistingAnnouncements() {
         }
         
         list.innerHTML = data.map(ann => `
-            <div class="p-4 bg-blue-50 rounded-xl border border-blue-100 mb-3">
+            <div class="p-4 bg-white rounded-xl border border-gray-100 mb-3 shadow-sm">
                 <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-bold text-gray-800">${ann.title || 'Untitled'}</h4>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                            ann.type === 'Emergency' ? 'bg-red-100 text-red-600' : 
+                            ann.type === 'Event' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                        }">${ann.type || 'General'}</span>
+                        <h4 class="font-bold text-gray-800">${ann.title || 'Untitled'}</h4>
+                    </div>
                     <span class="text-xs text-gray-500">${new Date(ann.created_at).toLocaleDateString()}</span>
                 </div>
                 <p class="text-sm text-gray-600">${ann.content || ''}</p>
@@ -2095,12 +2103,17 @@ function showNotification(msg, type='info', callback=null) {
 
 // 35. Show Confirmation Modal
 function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm & Send') {
+function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm & Send', type = 'info') {
     const existing = document.getElementById('confirmation-modal');
     if (existing) existing.remove();
 
     const modal = document.createElement('div');
     modal.id = 'confirmation-modal';
     modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in p-4';
+
+    let btnClass = 'bg-blue-600 hover:bg-blue-700';
+    if (type === 'danger') btnClass = 'bg-red-600 hover:bg-red-700';
+    if (type === 'warning') btnClass = 'bg-amber-500 hover:bg-amber-600';
 
     modal.innerHTML = `
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
@@ -2111,6 +2124,7 @@ function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm
             <div class="p-4 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
                 <button id="confirm-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-300 transition-all">Cancel</button>
                 <button id="confirm-action-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-all">${confirmText}</button>
+                <button id="confirm-action-btn" class="px-4 py-2 ${btnClass} text-white rounded-lg font-semibold text-sm transition-all">${confirmText}</button>
             </div>
         </div>`;
 
@@ -2238,12 +2252,21 @@ async function submitPasswordChange() {
     const user = checkSession('teachers');
     if(!user) return;
 
-    const { data, error } = await supabase.from('teachers').select('id').eq('id', user.id).eq('password', current).single();
+    const { data, error } = await supabase.from('teachers').select('id, full_name').eq('id', user.id).eq('password', current).single();
     if(error || !data) return showNotification("Incorrect current password.", "error");
 
     const { error: updateErr } = await supabase.from('teachers').update({ password: newPass }).eq('id', user.id);
     if(updateErr) showNotification(updateErr.message, "error");
     else { 
+        // Notify admin about password change
+        await supabase.from('notifications').insert({
+            recipient_role: 'admins',
+            title: 'Password Change',
+            message: `Teacher "${data.full_name}" has changed their password.`,
+            type: 'system_alert',
+            is_read: false
+        });
+        
         showNotification("Password updated successfully!", "success"); 
         ['cp-current', 'cp-new', 'cp-confirm'].forEach(id => {
             const el = document.getElementById(id);

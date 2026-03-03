@@ -6,9 +6,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!checkSession('admins')) return;
     }
     
-    // Load all settings from the database into the inputs
     await loadAllSettings();
+    await loadSuspensions();
     injectStyles();
+    
+    const satToggle = document.getElementById('weekend_saturday_enabled');
+    if (satToggle) {
+        satToggle.addEventListener('change', handleSaturdayToggle);
+    }
 });
 
 // 2. Load Settings from Supabase
@@ -17,7 +22,6 @@ async function loadAllSettings() {
         const { data, error } = await supabase.from('settings').select('*');
         if (error) throw error;
 
-        // Map the database rows directly to the UI inputs
         if (data) {
             data.forEach(s => {
                 const input = document.getElementById(s.setting_key);
@@ -30,12 +34,316 @@ async function loadAllSettings() {
                 }
             });
         }
+        handleSaturdayToggle();
     } catch (err) {
         console.error("Error loading settings:", err);
     }
 }
 
-// 3. The Switch Tab Function (Fixed to prevent "null" error)
+function handleSaturdayToggle() {
+    const satEnabled = document.getElementById('weekend_saturday_enabled')?.checked;
+    const satClassSection = document.getElementById('saturday-class-section');
+    if (satClassSection) {
+        satClassSection.classList.toggle('hidden', !satEnabled);
+    }
+}
+
+// 3. Load Suspensions
+async function loadSuspensions() {
+    const tbody = document.getElementById('suspensions-list');
+    if (!tbody) return;
+    
+    try {
+        const { data, error } = await supabase
+            .from('suspensions')
+            .select('*')
+            .order('start_date', { ascending: false });
+        
+        if (error) throw error;
+        renderSuspensions(data || []);
+    } catch (err) {
+        console.error("Error loading suspensions:", err);
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">Error loading data</td></tr>';
+    }
+}
+
+function renderSuspensions(suspensions) {
+    const tbody = document.getElementById('suspensions-list');
+    if (!tbody) return;
+    
+    if (suspensions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No suspensions or breaks recorded</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = suspensions.map(s => {
+        const typeBadge = getSuspensionTypeBadge(s.suspension_type);
+        const statusBadge = s.is_active 
+            ? '<span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Active</span>'
+            : '<span class="px-2 py-1 bg-gray-100 text-gray-500 text-xs font-bold rounded-full">Inactive</span>';
+        
+        return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4">
+                    <div class="font-bold text-gray-800">${s.title}</div>
+                    <div class="text-xs text-gray-500">${s.description || ''}</div>
+                </td>
+                <td class="px-6 py-4">${typeBadge}</td>
+                <td class="px-6 py-4 text-sm">${formatDate(s.start_date)} - ${formatDate(s.end_date)}</td>
+                <td class="px-6 py-4">${statusBadge}</td>
+                <td class="px-6 py-4">
+                    <button onclick="editSuspension(${s.id})" class="text-violet-600 hover:text-violet-800 mr-3"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    <button onclick="toggleSuspension(${s.id}, ${!s.is_active})" class="text-gray-500 hover:text-gray-700 mr-3"><i data-lucide="power" class="w-4 h-4"></i></button>
+                    <button onclick="deleteSuspension(${s.id})" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    if (window.lucide) lucide.createIcons();
+}
+
+function getSuspensionTypeBadge(type) {
+    const badges = {
+        'suspension': '<span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Suspension</span>',
+        'semestral_break': '<span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded">Semestral Break</span>',
+        'saturday_class': '<span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded">Saturday Class</span>',
+        'grade_suspension': '<span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded">Grade Suspension</span>'
+    };
+    return badges[type] || badges['suspension'];
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function openSuspensionModal() {
+    document.getElementById('suspension-modal').classList.remove('hidden');
+    document.getElementById('modal-title').textContent = 'Add Suspension / Break';
+    document.getElementById('suspension-form').reset();
+    document.getElementById('suspension-id').value = '';
+    handleSuspensionTypeChange();
+}
+
+function closeSuspensionModal() {
+    document.getElementById('suspension-modal').classList.add('hidden');
+}
+
+function handleSuspensionTypeChange() {
+    const type = document.getElementById('suspension-type').value;
+    const gradeSection = document.getElementById('grade-selection-section');
+    const classSection = document.getElementById('class-selection-section');
+    const satSection = document.getElementById('saturday-settings-section');
+    
+    if (gradeSection) gradeSection.classList.add('hidden');
+    if (classSection) classSection.classList.add('hidden');
+    if (satSection) satSection.classList.add('hidden');
+    
+    if (type === 'grade_suspension') {
+        if (gradeSection) gradeSection.classList.remove('hidden');
+        loadGradeLevels();
+    } else if (type === 'suspension') {
+        if (classSection) classSection.classList.remove('hidden');
+        loadClasses();
+    } else if (type === 'saturday_class') {
+        if (satSection) satSection.classList.remove('hidden');
+    }
+}
+
+async function loadGradeLevels() {
+    const container = document.getElementById('grade-checkboxes');
+    if (!container) return;
+    
+    const gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+    
+    container.innerHTML = gradeLevels.map(grade => `
+        <label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+            <input type="checkbox" name="affected_grades" value="${grade}" class="rounded text-violet-600">
+            <span class="text-sm">${grade}</span>
+        </label>
+    `).join('');
+}
+
+async function loadClasses() {
+    const container = document.getElementById('class-checkboxes');
+    if (!container) return;
+    
+    try {
+        const { data, error } = await supabase
+            .from('classes')
+            .select('id, grade_level, section_name')
+            .order('grade_level')
+            .order('section_name');
+        
+        if (error) throw error;
+        
+        container.innerHTML = (data || []).map(cls => `
+            <label class="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                <input type="checkbox" name="affected_classes" value="${cls.id}" class="rounded text-violet-600">
+                <span class="text-sm">${cls.grade_level} - ${cls.section_name}</span>
+            </label>
+        `).join('');
+        
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-500 p-2">No classes available</p>';
+        }
+    } catch (err) {
+        console.error("Error loading classes:", err);
+    }
+}
+
+async function saveSuspension(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('suspension-id').value;
+    const title = document.getElementById('suspension-title').value;
+    const description = document.getElementById('suspension-description').value;
+    const startDate = document.getElementById('suspension-start').value;
+    const endDate = document.getElementById('suspension-end').value;
+    const type = document.getElementById('suspension-type').value;
+    const isActive = document.getElementById('suspension-active').checked;
+    
+    if (!title || !startDate || !endDate || !type) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        showNotification('Start date must be before end date', 'error');
+        return;
+    }
+    
+    let affectedData = { affected_grades: [], affected_classes: [] };
+    
+    if (type === 'grade_suspension') {
+        const checkedGrades = document.querySelectorAll('input[name="affected_grades"]:checked');
+        affectedData.affected_grades = Array.from(checkedGrades).map(cb => cb.value);
+    } else if (type === 'suspension') {
+        const checkedClasses = document.querySelectorAll('input[name="affected_classes"]:checked');
+        affectedData.affected_classes = Array.from(checkedClasses).map(cb => cb.value);
+    } else if (type === 'saturday_class') {
+        affectedData.saturday_enabled = document.getElementById('saturday_enabled')?.checked || false;
+    }
+    
+    const payload = {
+        title,
+        description,
+        start_date: startDate,
+        end_date: endDate,
+        suspension_type: type,
+        is_active: isActive,
+        ...affectedData
+    };
+    
+    try {
+        let error;
+        if (id) {
+            ({ error } = await supabase.from('suspensions').update(payload).eq('id', id));
+        } else {
+            ({ error } = await supabase.from('suspensions').insert(payload));
+        }
+        
+        if (error) throw error;
+        
+        showNotification(id ? 'Suspension updated successfully' : 'Suspension added successfully', 'success');
+        closeSuspensionModal();
+        loadSuspensions();
+        
+    } catch (err) {
+        console.error("Error saving suspension:", err);
+        showNotification('Error saving: ' + err.message, 'error');
+    }
+}
+
+async function editSuspension(id) {
+    try {
+        const { data, error } = await supabase
+            .from('suspensions')
+            .select('*')
+            .eq('id', id)
+            .single();
+        
+        if (error) throw error;
+        
+        document.getElementById('suspension-modal').classList.remove('hidden');
+        document.getElementById('modal-title').textContent = 'Edit Suspension / Break';
+        
+        document.getElementById('suspension-id').value = data.id;
+        document.getElementById('suspension-title').value = data.title;
+        document.getElementById('suspension-description').value = data.description || '';
+        document.getElementById('suspension-start').value = data.start_date;
+        document.getElementById('suspension-end').value = data.end_date;
+        document.getElementById('suspension-type').value = data.suspension_type;
+        document.getElementById('suspension-active').checked = data.is_active;
+        
+        handleSuspensionTypeChange();
+        
+        if (data.suspension_type === 'grade_suspension' && data.affected_grades) {
+            await loadGradeLevels();
+            data.affected_grades.forEach(grade => {
+                const cb = document.querySelector(`input[name="affected_grades"][value="${grade}"]`);
+                if (cb) cb.checked = true;
+            });
+        }
+        
+        if (data.suspension_type === 'suspension' && data.affected_classes) {
+            await loadClasses();
+            data.affected_classes.forEach(clsId => {
+                const cb = document.querySelector(`input[name="affected_classes"][value="${clsId}"]`);
+                if (cb) cb.checked = true;
+            });
+        }
+        
+    } catch (err) {
+        console.error("Error loading suspension:", err);
+        showNotification('Error loading data', 'error');
+    }
+}
+
+async function toggleSuspension(id, newStatus) {
+    try {
+        const { error } = await supabase
+            .from('suspensions')
+            .update({ is_active: newStatus })
+            .eq('id', id);
+        
+        if (error) throw error;
+        
+        showNotification(newStatus ? 'Suspension activated' : 'Suspension deactivated', 'success');
+        loadSuspensions();
+    } catch (err) {
+        console.error("Error toggling suspension:", err);
+        showNotification('Error updating status', 'error');
+    }
+}
+
+async function deleteSuspension(id) {
+    if (!confirm('Are you sure you want to delete this suspension?')) return;
+    
+    try {
+        const { error } = await supabase.from('suspensions').delete().eq('id', id);
+        
+        if (error) throw error;
+        
+        showNotification('Suspension deleted', 'success');
+        loadSuspensions();
+    } catch (err) {
+        console.error("Error deleting suspension:", err);
+        showNotification('Error deleting', 'error');
+    }
+}
+
+// Make functions globally available
+window.openSuspensionModal = openSuspensionModal;
+window.closeSuspensionModal = closeSuspensionModal;
+window.editSuspension = editSuspension;
+window.toggleSuspension = toggleSuspension;
+window.deleteSuspension = deleteSuspension;
+
+// ============== ORIGINAL CODE BELOW ==============
+
 function switchTab(tabId) {
     const tabs = ['thresholds', 'attendance-rules', 'notifications'];
     
@@ -43,7 +351,6 @@ function switchTab(tabId) {
         const contentArea = document.getElementById(`${t}Tab`);
         const navBtn = document.getElementById(`tab-${t}`);
 
-        // Only try to modify if the element actually exists in the HTML
         if (contentArea) {
             if (t === tabId) {
                 contentArea.classList.remove('hidden');
@@ -62,7 +369,6 @@ function switchTab(tabId) {
     });
 }
 
-// 4. Save Logic: Time Thresholds
 async function saveThresholds() {
     const btn = event.currentTarget;
     setLoading(btn, true);
@@ -79,7 +385,6 @@ async function saveThresholds() {
     }
 }
 
-// 5. Save Logic: Notification Toggles
 async function saveNotificationSettings() {
     const btn = event.currentTarget;
     setLoading(btn, true);
@@ -96,19 +401,29 @@ async function saveNotificationSettings() {
     }
 }
 
-// 6. The "Simplifier" Utility: Bulk Upsert
+async function saveWeekendSettings() {
+    const btn = event.currentTarget;
+    setLoading(btn, true);
+
+    const keys = ['weekend_sunday_enabled', 'weekend_saturday_enabled', 'weekend_saturday_class_enabled'];
+    
+    try {
+        await performBulkUpsert(keys);
+        showNotification("Weekend settings saved!", "success");
+    } catch (err) {
+        showNotification("Update failed: " + err.message, "error");
+    } finally {
+        setLoading(btn, false, '<i data-lucide="save" class="w-4 h-4"></i> Save Settings');
+    }
+}
+
 async function performBulkUpsert(keys) {
     const payload = keys.map(key => {
         const el = document.getElementById(key);
         if (!el) return null;
         
         const val = el.type === 'checkbox' ? el.checked.toString() : el.value;
-        return { 
-            setting_key: key, 
-            setting_value: val,
-            // Optional: add a description so the DB stays readable
-            setting_description: `Admin setting for ${key}` 
-        };
+        return { setting_key: key, setting_value: val };
     }).filter(item => item !== null);
 
     const { error } = await supabase
@@ -118,7 +433,6 @@ async function performBulkUpsert(keys) {
     if (error) throw error;
 }
 
-// Helper: Loading Spinner
 function setLoading(btn, isLoading, originalText) {
     btn.disabled = isLoading;
     btn.innerHTML = isLoading ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...' : originalText;
@@ -144,7 +458,6 @@ function showNotification(msg, type='info', callback=null) {
 
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
         if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -158,7 +471,7 @@ function showNotification(msg, type='info', callback=null) {
         } catch(e){}
     }
 
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div>`;
     document.body.appendChild(modal);
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();

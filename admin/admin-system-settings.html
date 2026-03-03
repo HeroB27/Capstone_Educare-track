@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School Calendar - Educare Admin</title>
+    <title>System Settings - Educare Admin</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -25,24 +25,55 @@
 </head>
 <body class="bg-slate-50 min-h-screen flex text-gray-800">
 
-    <aside class="w-64 m-4 rounded-2xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
-        <div class="p-6 border-b border-white/10 flex items-center gap-3">
-            <div class="bg-white/10 p-2 rounded-lg"><i data-lucide="calendar" class="text-violet-300"></i></div>
-            <span class="font-bold tracking-tight">EDUCARE ADMIN</span>
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
         </div>
-        <nav class="flex-1 p-4 space-y-2">
-            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard</a>
-            <a href="admin-system-settings.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800 text-white rounded-xl shadow-lg"><i data-lucide="calendar-days" class="w-5 h-5"></i> School Calendar</a>
-            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+        
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="users" class="w-5 h-5"></i> User Management
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
             </a>
-            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
         </nav>
+        
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
     </aside>
 
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
@@ -100,13 +131,13 @@
                 <div>
                     <label class="block text-[10px] font-black text-gray-400 uppercase mb-2">Category</label>
                     <div class="grid grid-cols-3 gap-2">
-                        <button onclick="setCategory('Calamity')" id="cat-Calamity" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                        <button onclick="setCategory(event, 'Calamity')" id="cat-Calamity" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
                             <i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-[10px] font-bold">Calamity</span>
                         </button>
-                        <button onclick="setCategory('Holiday')" id="cat-Holiday" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                        <button onclick="setCategory(event, 'Holiday')" id="cat-Holiday" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
                             <i data-lucide="calendar" class="w-4 h-4"></i><span class="text-[10px] font-bold">Holiday</span>
                         </button>
-                        <button onclick="setCategory('Others')" id="cat-Others" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
+                        <button onclick="setCategory(event, 'Others')" id="cat-Others" class="category-btn py-2.5 rounded-xl border-2 border-gray-100 flex flex-col items-center gap-1 transition-all">
                             <i data-lucide="more-horizontal" class="w-4 h-4"></i><span class="text-[10px] font-bold">Others</span>
                         </button>
                     </div>

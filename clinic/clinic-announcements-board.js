@@ -63,6 +63,7 @@ async function loadAnnouncements() {
     
     try {
         // FIXED: Removed is_active filter - column doesn't exist in database
+        const now = new Date().toISOString();
         const { data: announcements, error } = await supabase
             .from('announcements')
             .select(`
@@ -70,6 +71,7 @@ async function loadAnnouncements() {
                 admins(full_name)
             `)
             .eq('target_clinic', true)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false });
         
         if (error) {
@@ -138,13 +140,14 @@ function renderAnnouncements(announcements) {
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         
-        const priorityClass = announcement.priority === 'high' 
+        const priorityClass = announcement.type === 'Emergency' 
             ? 'border-l-red-500' 
             : 'border-l-gray-300';
         
-        const priorityBadge = announcement.priority === 'high'
-            ? '<span class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded-lg font-medium">Important</span>'
-            : '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-lg">General</span>';
+        const badgeColor = announcement.type === 'Emergency' ? 'bg-red-100 text-red-600' : 
+                          announcement.type === 'Event' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600';
+        
+        const priorityBadge = `<span class="px-2 py-1 ${badgeColor} text-xs rounded-lg font-black uppercase tracking-wider">${announcement.type || 'General'}</span>`;
         
         return `
             <div class="bg-white rounded-2xl border border-gray-100 border-l-4 ${priorityClass} p-6 hover:shadow-lg hover:border-red-200 transition-all duration-200 cursor-pointer" onclick="viewAnnouncement('${announcement.id}')">

@@ -30,11 +30,12 @@
 </head>
 <body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
 
-    <aside class="w-64 m-4 rounded-[32px] bg-violet-900 text-white flex flex-col shadow-2xl shrink-0 no-print">
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0 no-print">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">EDUCARE</span>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
         </div>
+        
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
             <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
@@ -42,22 +43,37 @@
             <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
                 <i data-lucide="users" class="w-5 h-5"></i> User Management
             </a>
-            <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
             </a>
-            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
             </a>
-            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
-            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
         </nav>
+        
         <div class="p-6 border-t border-white/10">
             <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
                 <i data-lucide="log-out" class="w-5 h-5"></i> Logout
@@ -78,8 +94,8 @@
             <div class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50/30">
                     <div class="flex gap-6">
-                        <button onclick="switchView('staff')" id="tab-staff" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Staff & Admins</button>
-                        <button onclick="switchView('parents')" id="tab-parents" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Parent - Student</button>
+                        <button onclick="switchView(event, 'staff')" id="tab-staff" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Staff & Admins</button>
+                        <button onclick="switchView(event, 'parents')" id="tab-parents" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Parent - Student</button>
                     </div>
                     <div class="flex gap-2">
                         <div class="relative w-64">
@@ -121,8 +137,8 @@
 
             <div class="p-10 overflow-y-auto custom-scrollbar flex-1">
                 <div id="enroll-selector-box" class="mb-8 p-4 bg-gray-50 rounded-[24px] border border-gray-100 flex justify-center gap-4">
-                    <button onclick="setEnrollType('parent')" id="btn-type-parent" class="px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Parent - Student</button>
-                    <button onclick="setEnrollType('staff')" id="btn-type-staff" class="px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Staff Member</button>
+                    <button onclick="setEnrollType(event, 'parent')" id="btn-type-parent" class="px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Parent - Student</button>
+                    <button onclick="setEnrollType(event, 'staff')" id="btn-type-staff" class="px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Staff Member</button>
                 </div>
 
                 <div id="parent-flow-container">
@@ -212,7 +228,7 @@
                     <div class="flex items-center gap-2 mb-2"><i data-lucide="shield-check" class="w-4 h-4 text-violet-600"></i><h4 class="font-black text-gray-800 uppercase tracking-widest text-[11px]">Authentication Credentials</h4></div>
                     <div class="grid grid-cols-2 gap-4">
                         <div class="relative"><i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-username" placeholder="Username" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
-                        <div class="relative"><i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-password" placeholder="Password" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
+                        <div class="relative"><i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="password" id="edit-password" placeholder="Password" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
                     </div>
                 </div>
                 <div class="space-y-4">

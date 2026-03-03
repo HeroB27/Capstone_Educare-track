@@ -1,8 +1,6 @@
 // admin/admin-calendar.js
 // Manages School Calendar - Holidays and Suspension Days
 
-let deleteTargetDate = null;
-
 // 1. Initialize Page
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof checkSession === 'function') {
@@ -265,32 +263,27 @@ function editHoliday(date) {
 
 // 9. Delete Holiday
 function deleteHoliday(date) {
-    deleteTargetDate = date;
-    document.getElementById('delete-modal').classList.remove('hidden');
-}
+    showConfirmationModal(
+        "Delete Holiday?",
+        "Are you sure you want to delete this holiday?",
+        async () => {
+            try {
+                const { error } = await supabase
+                    .from('holidays')
+                    .delete()
+                    .eq('holiday_date', date);
 
-async function confirmDelete() {
-    if (!deleteTargetDate) return;
+                if (error) throw error;
 
-    try {
-        const { error } = await supabase
-            .from('holidays')
-            .delete()
-            .eq('holiday_date', deleteTargetDate);
-
-        if (error) throw error;
-
-        showNotification("Holiday deleted successfully!", "success");
-        document.getElementById('delete-modal').classList.add('hidden');
-        loadHolidays();
-        loadStats();
-
-    } catch (err) {
-        console.error("Error deleting holiday:", err);
-        showNotification("Error deleting holiday: " + err.message, "error");
-    }
-
-    deleteTargetDate = null;
+                showNotification("Holiday deleted successfully!", "success");
+                loadHolidays();
+                loadStats();
+            } catch (err) {
+                console.error("Error deleting holiday:", err);
+                showNotification("Error deleting holiday: " + err.message, "error");
+            }
+        }
+    );
 }
 
 // Helper Functions
@@ -323,6 +316,44 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+function showConfirmationModal(title, message, onConfirm, type = 'danger') {
+    const existing = document.getElementById('confirmation-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
+
+    let iconColor = 'text-red-500';
+    let iconBg = 'bg-red-50';
+    let btnBg = 'bg-red-600 hover:bg-red-700 shadow-red-200';
+    let iconName = 'alert-triangle';
+
+    if (type === 'warning') {
+        iconColor = 'text-amber-500';
+        iconBg = 'bg-amber-50';
+        btnBg = 'bg-amber-500 hover:bg-amber-600 shadow-amber-200';
+        iconName = 'alert-circle';
+    } else if (type === 'info') {
+        iconColor = 'text-blue-500';
+        iconBg = 'bg-blue-50';
+        btnBg = 'bg-blue-600 hover:bg-blue-700 shadow-blue-200';
+        iconName = 'info';
+    }
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 ${iconBg} ${iconColor} rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 ${btnBg} text-white rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-lg">Confirm</button></div></div></div>`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
+    document.getElementById('confirm-action-btn').onclick = () => {
+        modal.remove();
+        if (onConfirm) onConfirm();
+    };
+    
+    if (window.lucide) lucide.createIcons();
 }
 
 // Notification helper (reuse from admin-settings.js)

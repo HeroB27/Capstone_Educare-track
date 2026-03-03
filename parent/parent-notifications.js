@@ -63,11 +63,13 @@ function setupNotificationsRealtime() {
  */
 async function loadNotifications() {
     try {
+        const now = new Date().toISOString();
         const { data: notifications, error } = await supabase
             .from('notifications')
             .select('*')
             .eq('recipient_id', currentUser.id)
             .eq('recipient_role', 'parent')
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false })
             .limit(100);
 

@@ -120,6 +120,15 @@ async function submitPasswordChange() {
 
         if (updateErr) throw updateErr;
 
+        // Notify admin about password change
+        await supabase.from('notifications').insert({
+            recipient_role: 'admins',
+            title: 'Password Change',
+            message: `Parent "${user.full_name}" has changed their password.`,
+            type: 'system_alert',
+            is_read: false
+        });
+
         showMessage('Password updated successfully!', 'success');
         
         // Clear form fields

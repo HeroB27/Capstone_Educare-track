@@ -229,6 +229,15 @@ async function handlePasswordChange(event) {
             .update({ password: newPassword })
             .eq('id', currentUser.id);
         
+        // Notify admin about password change
+        await supabase.from('notifications').insert({
+            recipient_role: 'admins',
+            title: 'Password Change',
+            message: `Clinic Staff "${currentUser.full_name}" has changed their password.`,
+            type: 'system_alert',
+            is_read: false
+        });
+        
         showToast('Password updated successfully', 'success');
         
         // Clear form

@@ -348,6 +348,15 @@ async function changePassword() {
             return;
         }
         
+        // Notify admin about password change
+        await supabase.from('notifications').insert({
+            recipient_role: 'admins',
+            title: 'Password Change',
+            message: `Guard "${currentUser.full_name}" has changed their password.`,
+            type: 'system_alert',
+            is_read: false
+        });
+        
         showNotification('Password changed successfully!');
         
         // Clear form

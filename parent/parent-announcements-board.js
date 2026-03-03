@@ -44,10 +44,12 @@ async function loadAnnouncements() {
 
         // 2. PARANOIA SHIELD: Build privacy-focused query
         // Only fetch Admin posts (posted_by_teacher_id is null) OR posts from the current child's adviser
+        const now = new Date().toISOString();
         let query = supabase
             .from('announcements')
             .select(`*, teachers (full_name)`)
-            .eq('target_parents', true);
+            .eq('target_parents', true)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`);
 
         // Data Isolation: Only show Admin posts OR adviser posts
         if (adviserId) {

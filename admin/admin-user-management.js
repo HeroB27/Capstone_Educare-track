@@ -106,6 +106,14 @@ async function loadUsers() {
     } catch (e) { tableBody.innerHTML = '<tr><td colspan="3" class="py-10 text-center text-red-500">Critical Sync Error.</td></tr>'; }
 }
 
+// UPDATED: Helper function to prevent XSS attacks.
+function escapeHtml(text) {
+    if (text === null || typeof text === 'undefined') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function renderUserTable() {
     const tableBody = document.getElementById('user-table-body');
     const q = document.getElementById('userSearch').value.toLowerCase();
@@ -120,29 +128,43 @@ function renderUserTable() {
         return;
     }
 
-    tableBody.innerHTML = filtered.map(u => `
-        <tr class="hover:bg-violet-50/40 transition-all border-b border-gray-50 last:border-0 group">
-            <td class="px-8 py-5">
-                <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-xl bg-white border border-gray-100 text-violet-600 flex items-center justify-center font-black text-xs uppercase shadow-sm group-hover:scale-110 transition-transform">${u.full_name?.charAt(0)}</div>
-                    <div><p class="font-bold text-gray-800 text-sm leading-tight mb-0.5">${u.full_name}</p><p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest font-mono">${u.username}</p></div>
-                </div>
-            </td>
-            <td class="px-8 py-5">
-                <div class="flex items-center gap-3">
-                    <span class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-violet-50 text-violet-600 border border-violet-100">${u.role}</span>
-                    <button onclick="toggleStatus('${u.table}', ${u.id}, ${u.is_active !== false})" class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border ${u.is_active !== false ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'} hover:opacity-80 transition-all">
-                        ${u.is_active !== false ? 'Active' : 'Inactive'}
-                    </button>
-                </div>
-            </td>
-            <td class="px-8 py-5 text-right">
-                <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-all">
-                    <button onclick="openEditModal('${u.table}', ${u.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-violet-500 hover:text-violet-600 hover:shadow-md transition-all" title="Edit Details"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
-                    <button onclick="deleteUser('${u.table}', ${u.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-red-500 hover:text-red-500 hover:shadow-md transition-all" title="Delete Account"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </div>
-            </td>
-        </tr>`).join('');
+    // UPDATED: Use manual DOM creation to prevent XSS vulnerabilities.
+    tableBody.innerHTML = ''; // Clear existing rows
+    filtered.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-violet-50/40 transition-all border-b border-gray-50 last:border-0 group";
+        
+        const safeFullName = escapeHtml(u.full_name);
+        const safeUsername = escapeHtml(u.username);
+        const safeRole = escapeHtml(u.role);
+
+        tr.innerHTML = `
+                <td class="px-8 py-5">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-white border border-gray-100 text-violet-600 flex items-center justify-center font-black text-xs uppercase shadow-sm group-hover:scale-110 transition-transform">${safeFullName?.charAt(0)}</div>
+                        <div><p class="font-bold text-gray-800 text-sm leading-tight mb-0.5">${safeFullName}</p><p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest font-mono">${safeUsername}</p></div>
+                    </div>
+                </td>
+                <td class="px-8 py-5">
+                    <div class="flex items-center gap-3">
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-violet-50 text-violet-600 border border-violet-100">${safeRole}</span>
+                        <button onclick="toggleStatus('${u.table}', ${u.id}, ${u.is_active !== false})" class="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border ${u.is_active !== false ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'} hover:opacity-80 transition-all">
+                            ${u.is_active !== false ? 'Active' : 'Inactive'}
+                        </button>
+                    </div>
+                </td>
+                <td class="px-8 py-5 text-right">
+                    <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-all">
+                        <button onclick="openEditModal('${u.table}', ${u.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-violet-500 hover:text-violet-600 hover:shadow-md transition-all" title="Edit Details"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                        <button onclick="openDirectResetPassword('${u.table}', ${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name)}')" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:shadow-md transition-all" title="Direct Password Reset"><i data-lucide="lock" class="w-4 h-4"></i></button>
+                        <button onclick="generateResetToken(${u.id}, '${u.table}')" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-yellow-500 hover:text-yellow-600 hover:shadow-md transition-all" title="Generate Reset Token"><i data-lucide="key" class="w-4 h-4"></i></button>
+                        <button onclick="deleteUser('${u.table}', ${u.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-red-500 hover:text-red-500 hover:shadow-md transition-all" title="Delete Account"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </td>
+        `;
+        tableBody.appendChild(tr);
+    });
+
     if (window.lucide) lucide.createIcons();
 }
 
@@ -249,17 +271,23 @@ function showStaffConfirmation() {
         extraInfo = `<p class="text-xs mt-2">Role: ${roleTitle || 'N/A'}</p>`;
     }
     
+    // UPDATED: Use textContent to prevent XSS
     const confirmArea = document.getElementById('staff-confirm-area');
-    confirmArea.innerHTML = `
-        <div class="text-left space-y-2">
-            <p class="font-black text-sm uppercase">Confirm Staff Registration</p>
-            <p><span class="text-violet-600">Name:</span> ${name}</p>
-            <p><span class="text-violet-600">Role:</span> ${roleLabel}</p>
-            <p><span class="text-violet-600">Contact:</span> ${phone}</p>
-            <p><span class="text-violet-600">Username:</span> ${username}</p>
-            ${extraInfo}
-        </div>
+    confirmArea.innerHTML = ''; // Clear previous content
+    const container = document.createElement('div');
+    container.className = 'text-left space-y-2';
+    container.innerHTML = `
+        <p class="font-black text-sm uppercase">Confirm Staff Registration</p>
+        <p><span class="text-violet-600">Name:</span> ${escapeHtml(name)}</p>
+        <p><span class="text-violet-600">Role:</span> ${escapeHtml(roleLabel)}</p>
+        <p><span class="text-violet-600">Contact:</span> ${escapeHtml(phone)}</p>
+        <p><span class="text-violet-600">Username:</span> ${escapeHtml(username)}</p>
     `;
+    // Safely append extraInfo which contains HTML
+    const extraInfoDiv = document.createElement('div');
+    extraInfoDiv.innerHTML = extraInfo; // Assuming extraInfo is internally generated and safe.
+    container.appendChild(extraInfoDiv);
+    confirmArea.appendChild(container);
     confirmArea.classList.remove('hidden');
     return true;
 }
@@ -355,7 +383,10 @@ async function openEditModal(table, id) {
     document.getElementById('edit-user-id').value = user.id;
     document.getElementById('edit-user-table').value = table;
     document.getElementById('edit-username').value = user.username || '';
-    document.getElementById('edit-password').value = user.password || '';
+    // UPDATED: Do not expose password. Set a placeholder instead.
+    const passInput = document.getElementById('edit-password');
+    passInput.value = '';
+    passInput.placeholder = 'Enter new password to change';
     document.getElementById('edit-name').value = user.full_name || '';
     document.getElementById('edit-phone').value = user.contact_number || '';
     document.getElementById('edit-address').value = user.address || '';
@@ -423,14 +454,17 @@ async function saveUserEdit() {
     const table = document.getElementById('edit-user-table').value;
     const userOrig = allUsers.find(u => u.table === table && u.id == id);
     
-    // UPDATED: Only include address for tables that have it (parents, students)
     const tablesWithAddress = ['parents', 'students'];
+    const newPassword = document.getElementById('edit-password').value;
+
     const updated = { 
         username: document.getElementById('edit-username').value, 
-        password: document.getElementById('edit-password').value, 
         full_name: document.getElementById('edit-name').value, 
         contact_number: document.getElementById('edit-phone').value
     };
+
+    // UPDATED: Only include password in the update payload if it has been changed.
+    if (newPassword) updated.password = newPassword;
     
     // Only add address if the table has this column
     if (tablesWithAddress.includes(table)) {
@@ -483,24 +517,31 @@ async function renderBulkPrint(list, p) {
     }
     
     const area = document.getElementById('id-print-queue');
-    area.innerHTML = list.map(s => `
+    // UPDATED: Use escapeHtml to prevent XSS in printed IDs.
+    area.innerHTML = list.map(s => {
+        const safeName = escapeHtml(s.full_name);
+        const safeAddress = escapeHtml(s.address);
+        const safeIdText = escapeHtml(s.student_id_text);
+        const safeParentName = escapeHtml(p.full_name);
+        const safeParentContact = escapeHtml(p.contact_number);
+        return `
         <div class="id-page-break flex gap-10 justify-center items-center py-20 bg-white">
             <div class="w-[2in] h-[3in] border-2 border-gray-100 rounded-xl relative p-4 flex flex-col items-center bg-white shadow-lg font-sans">
                 <p class="text-[8px] font-black" style="color: ${config.primaryColor}">Educare Colleges Inc</p>
                 <p class="text-[5px] text-gray-500 uppercase tracking-widest">Purok 4 Irisan Baguio City</p>
-                <div class="w-24 h-24 bg-gray-50 border-2 p-1 rounded-2xl mt-4" style="border-color: ${config.secondaryColor}"><img src="https://ui-avatars.com/api/?name=${s.full_name}" class="w-full h-full object-cover"></div>
-                <h2 class="text-[10px] font-black mt-4 uppercase text-center leading-tight">${s.full_name}</h2>
-                <div class="w-full text-left mt-auto pb-4 border-t pt-2"><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-bold leading-none">${s.address}</p></div>
+                <div class="w-24 h-24 bg-gray-50 border-2 p-1 rounded-2xl mt-4" style="border-color: ${config.secondaryColor}"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}" class="w-full h-full object-cover"></div>
+                <h2 class="text-[10px] font-black mt-4 uppercase text-center leading-tight">${safeName}</h2>
+                <div class="w-full text-left mt-auto pb-4 border-t pt-2"><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-bold leading-none">${safeAddress}</p></div>
                 <div class="h-1.5 w-full absolute bottom-0 left-0" style="background: ${config.primaryColor}"></div>
             </div>
             <div class="w-[2in] h-[3in] border-2 border-gray-100 rounded-xl relative p-6 flex flex-col items-center justify-center bg-white text-center shadow-lg font-sans">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${s.student_id_text}" class="w-20 h-20 mb-2 border p-1 rounded-lg">
-                <p class="text-[7px] font-mono font-black uppercase tracking-widest">${s.student_id_text}</p>
-                <div class="w-full text-left border-t pt-4"><p class="text-[5px] text-gray-400 font-bold uppercase mb-1">Guardian / Contact</p><p class="text-[7px] font-black text-gray-800">${p.full_name}</p><p class="text-[7px] font-bold" style="color: ${config.secondaryColor}">${p.contact_number}</p></div>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(safeIdText)}" class="w-20 h-20 mb-2 border p-1 rounded-lg">
+                <p class="text-[7px] font-mono font-black uppercase tracking-widest">${safeIdText}</p>
+                <div class="w-full text-left border-t pt-4"><p class="text-[5px] text-gray-400 font-bold uppercase mb-1">Guardian / Contact</p><p class="text-[7px] font-black text-gray-800">${safeParentName}</p><p class="text-[7px] font-bold" style="color: ${config.secondaryColor}">${safeParentContact}</p></div>
                 <p class="text-[5px] text-gray-400 mt-6 italic">If lost, return to Purok 4 Irisan Baguio City</p>
                 <div class="h-1.5 w-full absolute bottom-0 left-0" style="background: ${config.primaryColor}"></div>
             </div>
-        </div>`).join('');
+        </div>`}).join('');
     setTimeout(() => { window.print(); }, 1000);
 }
 
@@ -533,8 +574,21 @@ async function addStudentForm() {
     const classOptions = classes.map(c => `<option value="${c.id}">${c.grade_level} - ${c.section_name}</option>`).join('');
     document.getElementById('student-form-container').insertAdjacentHTML('beforeend', `<div class="stu-form p-6 bg-gray-50 rounded-3xl border border-gray-100" id="b-${id}"><div class="grid grid-cols-2 gap-4"><input type="text" class="stu-name col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="Child's Full Name"><select class="stu-gender border rounded-xl px-4 py-3 font-bold"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><select class="stu-grade border rounded-xl px-4 py-3 font-bold" onchange="const b=this.closest('.stu-form').querySelector('.s-area'); (this.value==='G11'||this.value==='G12')?b.classList.remove('hidden'):b.classList.add('hidden')"><option value="Kinder">Kinder</option>${Array.from({length:10},(_,i)=>`<option value="G${i+1}">Grade ${i+1}</option>`).join('')}<option value="G11">Grade 11</option><option value="G12">Grade 12</option></select><div class="s-area hidden"><select class="stu-strand w-full border rounded-xl px-4 py-3 font-bold"><option value="ABM">ABM</option><option value="STEM">STEM</option><option value="TVL-ICT">TVL-ICT</option></select></div><select class="stu-class border rounded-xl px-4 py-3 font-bold"><option value="">Select Class (Optional)</option>${classOptions}</select><input type="text" class="stu-lrn col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="12-Digit LRN"></div></div>`);
 }
-function renderParentSummary() { document.getElementById('p-summary').innerHTML = `<div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PARENT NAME</p>${parentInfo.full_name}</div><div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PHONE</p>${parentInfo.contact_number}</div><div class="col-span-2"><p class="text-[8px] text-violet-400 uppercase tracking-widest">ADDRESS</p>${parentInfo.address}</div>`; }
-function renderStudentSummary() { document.getElementById('s-summary-container').innerHTML = studentData.map((s,i)=>`<div class="p-4 bg-violet-50 rounded-2xl border border-violet-100 font-bold text-xs">Student #${i+1}: ${s.name} (${s.grade})</div>`).join(''); }
+function renderParentSummary() { 
+    // UPDATED: Use escapeHtml to prevent XSS
+    const safeName = escapeHtml(parentInfo.full_name);
+    const safeContact = escapeHtml(parentInfo.contact_number);
+    const safeAddress = escapeHtml(parentInfo.address);
+    document.getElementById('p-summary').innerHTML = `<div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PARENT NAME</p>${safeName}</div><div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PHONE</p>${safeContact}</div><div class="col-span-2"><p class="text-[8px] text-violet-400 uppercase tracking-widest">ADDRESS</p>${safeAddress}</div>`; 
+}
+function renderStudentSummary() { 
+    // UPDATED: Use escapeHtml to prevent XSS
+    document.getElementById('s-summary-container').innerHTML = studentData.map((s,i)=> {
+        const safeName = escapeHtml(s.name);
+        const safeGrade = escapeHtml(s.grade);
+        return `<div class="p-4 bg-violet-50 rounded-2xl border border-violet-100 font-bold text-xs">Student #${i+1}: ${safeName} (${safeGrade})</div>`;
+    }).join(''); 
+}
 function collectStudents() {
     studentData = Array.from(document.querySelectorAll('.stu-form')).map(f => ({
         name: f.querySelector('.stu-name').value.trim(),
@@ -710,14 +764,178 @@ function injectPasswordGenerators() {
 }
 
 // --- ENHANCED ACTIONS ---
-async function deleteUser(table, id) {
-    if(!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+
+// NEW: Direct Password Reset - Admin can directly set a new password for any user
+function openDirectResetPassword(table, id, username, fullName) {
+    const existing = document.getElementById('direct-reset-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'direct-reset-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[80] flex items-center justify-center animate-fade-in p-4';
+
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-auto transform transition-all animate-fade-in-up">
+            <div class="p-6 border-b">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="lock" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-gray-800">Reset Password</h3>
+                        <p class="text-xs text-gray-500">Directly change user's password</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-gray-50 p-4 rounded-xl">
+                    <p class="text-xs text-gray-500 uppercase font-bold">User</p>
+                    <p class="font-bold text-gray-800">${escapeHtml(fullName)}</p>
+                    <p class="text-sm text-gray-600">@${escapeHtml(username)}</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">New Password</label>
+                    <input type="password" id="direct-reset-new-pass" class="w-full px-4 py-3 border border-gray-200 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter new password (min 6 chars)">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Confirm Password</label>
+                    <input type="password" id="direct-reset-confirm-pass" class="w-full px-4 py-3 border border-gray-200 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Confirm new password">
+                </div>
+            </div>
+            <div class="p-6 pt-0 flex gap-3">
+                <button onclick="document.getElementById('direct-reset-modal').remove()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button>
+                <button onclick="submitDirectPasswordReset('${table}', ${id})" id="btn-direct-reset" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Reset Password</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (window.lucide) lucide.createIcons();
+}
+
+// NEW: Submit Direct Password Reset
+async function submitDirectPasswordReset(table, id) {
+    const newPass = document.getElementById('direct-reset-new-pass').value;
+    const confirmPass = document.getElementById('direct-reset-confirm-pass').value;
+    const btn = document.getElementById('btn-direct-reset');
+
+    // Validation
+    if (!newPass || !confirmPass) {
+        showNotification("Please enter and confirm the new password.", "error");
+        return;
+    }
+    if (newPass.length < 6) {
+        showNotification("Password must be at least 6 characters.", "error");
+        return;
+    }
+    if (newPass !== confirmPass) {
+        showNotification("Passwords do not match.", "error");
+        return;
+    }
+
+    // Show loading
+    btn.disabled = true;
+    btn.textContent = "Resetting...";
+
     try {
-        const { error } = await supabase.from(table).delete().eq('id', id);
-        if(error) throw error;
-        showNotification("User deleted successfully", "success");
-        loadUsers();
-    } catch(e) { showNotification(e.message, "error"); }
+        // Direct update to the user's table
+        const { error } = await supabase
+            .from(table)
+            .update({ password: newPass })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        // Close modal and show success
+        document.getElementById('direct-reset-modal').remove();
+        showNotification("Password has been reset successfully!", "success");
+
+    } catch (err) {
+        console.error("Error resetting password:", err);
+        showNotification("Error resetting password: " + err.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Reset Password";
+    }
+}
+
+async function generateResetToken(id, table) {
+    const user = allUsers.find(u => u.id === id && u.table === table);
+    if (!user) return showNotification("User not found", "error");
+    
+    showConfirmationModal(
+        "Generate Reset Token?",
+        `Generate a password reset token for user '${user.username}'?`,
+        async () => {
+            try {
+                // 1. Generate Token
+                const token = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const expiresAt = new Date(Date.now() + 3600000).toISOString(); // 1 hour expiry
+
+                // 2. Save to DB
+                const { error } = await supabase.from('password_resets').insert({
+                    username: user.username,
+                    user_role: table,
+                    token: token,
+                    expires_at: expiresAt
+                });
+
+                if (error) throw error;
+
+                // 3. Show Token
+                showTokenModal(user.username, token);
+
+            } catch (e) {
+                showNotification("Error generating token: " + e.message, "error");
+            }
+        }
+    );
+}
+
+function showTokenModal(username, token) {
+    const existing = document.getElementById('token-modal');
+    if(existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'token-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[70] flex items-center justify-center animate-fade-in';
+    
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 bg-yellow-50 text-yellow-600 rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="key" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">Reset Token Generated</h3><p class="text-sm text-gray-500 font-medium mb-4">Provide this token to <strong>${escapeHtml(username)}</strong>:</p><div class="bg-gray-100 p-4 rounded-xl mb-6 border-2 border-dashed border-gray-300"><p class="text-3xl font-mono font-black text-gray-800 tracking-widest select-all">${token}</p></div><p class="text-xs text-gray-400 mb-6">Valid for 1 hour.</p><button id="close-token-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Done</button></div></div>`;
+
+    document.body.appendChild(modal);
+    document.getElementById('close-token-btn').onclick = () => modal.remove();
+    if(window.lucide) lucide.createIcons();
+}
+
+async function deleteUser(table, id) {
+    showConfirmationModal(
+        "Delete User?",
+        "Are you sure you want to delete this user? This action cannot be undone.",
+        async () => {
+            try {
+                // Manual Cascade Logic: Clean up related records first
+                if (table === 'parents') {
+                    // Delete linked students first
+                    const { error: stuErr } = await supabase.from('students').delete().eq('parent_id', id);
+                    if (stuErr) throw new Error("Failed to delete linked students: " + stuErr.message);
+                } else if (table === 'teachers') {
+                    // Unassign from classes (Adviser) - Set to NULL
+                    const { error: classErr } = await supabase.from('classes').update({ adviser_id: null }).eq('adviser_id', id);
+                    if (classErr) throw new Error("Failed to unassign advisory class: " + classErr.message);
+                    
+                    // Delete subject loads
+                    const { error: subjErr } = await supabase.from('subject_loads').delete().eq('teacher_id', id);
+                    if (subjErr) throw new Error("Failed to delete subject loads: " + subjErr.message);
+                }
+
+                // Proceed with user deletion
+                const { error } = await supabase.from(table).delete().eq('id', id);
+                if(error) throw error;
+                showNotification("User deleted successfully", "success");
+                loadUsers();
+            } catch(e) { showNotification(e.message, "error"); }
+        }
+    );
 }
 
 async function toggleStatus(table, id, currentStatus) {
@@ -727,6 +945,27 @@ async function toggleStatus(table, id, currentStatus) {
         showNotification(`User ${!currentStatus ? 'activated' : 'deactivated'}`, "success");
         loadUsers();
     } catch(e) { showNotification(e.message, "error"); }
+}
+
+function showConfirmationModal(title, message, onConfirm) {
+    const existing = document.getElementById('confirmation-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="alert-triangle" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200">Confirm</button></div></div></div>`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
+    document.getElementById('confirm-action-btn').onclick = () => {
+        modal.remove();
+        if (onConfirm) onConfirm();
+    };
+    
+    if (window.lucide) lucide.createIcons();
 }
 
 function showNotification(msg, type='info', callback=null) {
@@ -759,7 +998,10 @@ function showNotification(msg, type='info', callback=null) {
     }
 
     modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
-    
+    // UPDATED: Sanitize the message to prevent XSS from error messages that might reflect user input.
+    const messageParagraph = modal.querySelector('p');
+    messageParagraph.textContent = msg;
+
     document.body.appendChild(modal);
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();

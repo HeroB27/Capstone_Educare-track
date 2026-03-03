@@ -123,42 +123,48 @@ function getGradeLevelCode(gradeLevel) {
 
 // Re-issue ID - Generate new student ID
 async function reissueID(dbId) {
-    if (!confirm("Are you sure you want to re-issue this ID? This will generate a new student ID.")) return;
     const student = studentRecords.find(x => x.id === dbId);
     if (!student) return;
-    const year = new Date().getFullYear();
-    const gradeLevel = student.classes?.grade_level || 'Unknown';
-    const levelCode = getGradeLevelCode(gradeLevel);
+    
+    showConfirmationModal(
+        "Re-issue ID?",
+        "Are you sure you want to re-issue this ID? This will generate a new student ID.",
+        async () => {
+            const year = new Date().getFullYear();
+            const gradeLevel = student.classes?.grade_level || 'Unknown';
+            const levelCode = getGradeLevelCode(gradeLevel);
 
-    // --- FIX: Loop to ensure the newly generated ID is unique before updating. ---
-    let newID;
-    let isUnique = false;
-    let attempts = 0;
-    const maxAttempts = 10;
+            // --- FIX: Loop to ensure the newly generated ID is unique before updating. ---
+            let newID;
+            let isUnique = false;
+            let attempts = 0;
+            const maxAttempts = 10;
 
-    while (!isUnique && attempts < maxAttempts) {
-        const suffix = Math.random().toString(36).substring(2, 6).toUpperCase(); // Simple random for this case
-        newID = `EDU-${year}-${levelCode}-${suffix}`;
+            while (!isUnique && attempts < maxAttempts) {
+                const suffix = Math.random().toString(36).substring(2, 6).toUpperCase(); // Simple random for this case
+                newID = `EDU-${year}-${levelCode}-${suffix}`;
 
-        const { count, error } = await supabase
-            .from('students')
-            .select('id', { head: true, count: 'exact' })
-            .eq('student_id_text', newID);
+                const { count, error } = await supabase
+                    .from('students')
+                    .select('id', { head: true, count: 'exact' })
+                    .eq('student_id_text', newID);
 
-        if (error) break; // Exit on query error
-        if (count === 0) isUnique = true;
-        attempts++;
-    }
+                if (error) break; // Exit on query error
+                if (count === 0) isUnique = true;
+                attempts++;
+            }
 
-    if (!isUnique) return showNotification('Could not generate a unique ID. Please try again.', 'error');
+            if (!isUnique) return showNotification('Could not generate a unique ID. Please try again.', 'error');
 
-    const { error } = await supabase.from('students').update({ student_id_text: newID, qr_code_data: newID }).eq('id', dbId);
-    if (!error) {
-        showNotification(`New ID Issued: ${newID}`, "success");
-        loadStudentIDs();
-    } else {
-        showNotification(error.message, "error");
-    }
+            const { error } = await supabase.from('students').update({ student_id_text: newID, qr_code_data: newID }).eq('id', dbId);
+            if (!error) {
+                showNotification(`New ID Issued: ${newID}`, "success");
+                loadStudentIDs();
+            } else {
+                showNotification(error.message, "error");
+            }
+        }
+    );
 }
 
 // MASTER RENDERING ENGINE (Portrait 2x3) - Same as admin-idtemplate.js
@@ -219,6 +225,27 @@ function injectStyles() {
     const style = document.createElement('style');
     style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
     document.head.appendChild(style);
+}
+
+function showConfirmationModal(title, message, onConfirm) {
+    const existing = document.getElementById('confirmation-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="alert-triangle" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200">Confirm</button></div></div></div>`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
+    document.getElementById('confirm-action-btn').onclick = () => {
+        modal.remove();
+        if (onConfirm) onConfirm();
+    };
+    
+    if (window.lucide) lucide.createIcons();
 }
 
 // Notification helper

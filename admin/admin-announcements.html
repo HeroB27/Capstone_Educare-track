@@ -21,16 +21,17 @@
 </head>
 <body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
 
-    <aside class="w-64 m-4 rounded-[32px] bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0 no-print">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">EDUCARE</span>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
         </div>
+        
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
-            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="users" class="w-5 h-5"></i> User Management
             </a>
             <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
@@ -54,7 +55,16 @@
             <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
         </nav>
+        
         <div class="p-6 border-t border-white/10">
             <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
                 <i data-lucide="log-out" class="w-5 h-5"></i> Logout
@@ -77,12 +87,27 @@
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
             <div class="flex justify-between items-center mb-10">
                 <div>
-                    <h3 class="font-black text-gray-900 text-2xl tracking-tight">Active Announcements</h3>
+                    <h3 class="font-black text-gray-900 text-2xl tracking-tight">Broadcast Center</h3>
                     <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">School-wide Communication Log</p>
                 </div>
                 <div class="flex gap-4">
                     <button onclick="openSuspensionModal()" class="px-8 py-3 bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest">Declare Suspension</button>
-                    <button onclick="openCreateAnnouncementModal()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest">Post Broadcast</button>
+                    <button onclick="openAnnouncementModal()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest">Post Broadcast</button>
+                </div>
+            </div>
+
+            <div class="mb-6 border-b border-gray-200 flex flex-wrap justify-between items-end gap-4">
+                <nav class="-mb-px flex space-x-8">
+                    <button onclick="switchAnnouncementTab('active')" id="tab-active" class="border-b-2 border-violet-600 text-violet-600 px-1 pb-4 text-sm font-bold uppercase tracking-widest transition-colors">Active Broadcasts</button>
+                    <button onclick="switchAnnouncementTab('scheduled')" id="tab-scheduled" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 px-1 pb-4 text-sm font-bold uppercase tracking-widest transition-colors">Scheduled</button>
+                </nav>
+                <div class="pb-2">
+                    <select id="filterType" onchange="loadAnnouncements()" class="bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-xl focus:ring-violet-500 focus:border-violet-500 block w-40 p-2.5 outline-none shadow-sm">
+                        <option value="all">All Types</option>
+                        <option value="General">General</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Event">Event</option>
+                    </select>
                 </div>
             </div>
 
@@ -92,11 +117,13 @@
                         <tr>
                             <th class="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Broadcast Details</th>
                             <th class="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Target Audience</th>
+                            <th class="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Schedule / Status</th>
                             <th class="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="announcementList" class="divide-y divide-gray-50">
-                        </tbody>
+                        <tr><td colspan="4" class="px-10 py-8 text-center text-gray-400 italic">Loading broadcasts...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -112,9 +139,9 @@
                 <div>
                     <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Suspension Reason</label>
                     <div class="grid grid-cols-3 gap-2 mt-2">
-                        <button onclick="setCategory('Calamity')" id="cat-Calamity" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Calamity</span></button>
-                        <button onclick="setCategory('Holiday')" id="cat-Holiday" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="calendar" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Holiday</span></button>
-                        <button onclick="setCategory('Others')" id="cat-Others" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="more-horizontal" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Others</span></button>
+                        <button onclick="setCategory(event, 'Calamity')" id="cat-Calamity" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Calamity</span></button>
+                        <button onclick="setCategory(event, 'Holiday')" id="cat-Holiday" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="calendar" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Holiday</span></button>
+                        <button onclick="setCategory(event, 'Others')" id="cat-Others" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="more-horizontal" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Others</span></button>
                     </div>
                 </div>
                 <div id="dynamicFields" class="hidden space-y-4">
@@ -137,5 +164,64 @@
             </div>
         </div>
     </div>
+
+    <!-- Create/Edit Announcement Modal -->
+    <div id="announcementModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-violet-600 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight" id="annModalTitle">Post Broadcast</h3>
+                <button onclick="closeAnnouncementModal()"><i data-lucide="x"></i></button>
+            </div>
+            <div class="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                <input type="hidden" id="annId">
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Title</label>
+                    <input type="text" id="annTitle" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 font-bold text-gray-800 transition-all" placeholder="Announcement Title">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Type</label>
+                    <select id="annType" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 font-bold text-gray-800 transition-all">
+                        <option value="General">General</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Event">Event</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Content</label>
+                    <textarea id="annContent" rows="4" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 font-bold text-gray-800 resize-none transition-all" placeholder="Message content..."></textarea>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Target Audience</label>
+                    <div class="flex gap-4 mt-2 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="targetTeachers" class="w-5 h-5 text-violet-600 rounded-lg focus:ring-violet-500">
+                            <span class="text-sm font-bold text-gray-700">Teachers</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="targetParents" class="w-5 h-5 text-violet-600 rounded-lg focus:ring-violet-500">
+                            <span class="text-sm font-bold text-gray-700">Parents</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="targetStudents" class="w-5 h-5 text-violet-600 rounded-lg focus:ring-violet-500">
+                            <span class="text-sm font-bold text-gray-700">Students</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Schedule (Optional)</label>
+                    <div class="grid grid-cols-2 gap-3 mt-1">
+                        <input type="date" id="annDate" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 font-bold text-gray-800 transition-all">
+                        <input type="time" id="annTime" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 font-bold text-gray-800 transition-all">
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-2 ml-1 font-medium">Leave blank to post immediately.</p>
+                </div>
+            </div>
+            <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3 border-t border-gray-100 shrink-0">
+                <button onclick="closeAnnouncementModal()" class="px-6 py-3 text-gray-400 font-bold uppercase text-xs tracking-widest hover:text-gray-600 transition-colors">Cancel</button>
+                <button onclick="saveAnnouncement()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Save Broadcast</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

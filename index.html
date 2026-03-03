@@ -6,7 +6,6 @@
     <title>Login - Educare</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
     <script src="assets/supabase-client.js"></script>
 </head>
 <body class="bg-gray-100 h-screen flex items-center justify-center">
@@ -47,6 +46,43 @@
         </div>
     </div>
 
+    <!-- Password Reset Modal -->
+    <div id="reset-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-96 p-6 transform transition-all scale-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Reset Password</h3>
+                <button onclick="closeResetModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Step 1: Request Token -->
+            <div id="reset-step-1" class="space-y-4">
+                <p class="text-sm text-gray-500">Enter your username to receive a reset token.</p>
+                <input type="text" id="reset-username" placeholder="Enter Username" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none">
+                <button onclick="requestResetToken()" id="btn-request-token" class="w-full bg-violet-600 text-white font-bold py-3 rounded-xl hover:bg-violet-700 transition shadow-lg shadow-violet-200">
+                    Get Reset Token
+                </button>
+                <div class="text-center pt-2">
+                    <button onclick="showResetStep(2)" class="text-xs text-violet-600 font-bold hover:underline">I already have a token</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Submit Token -->
+            <div id="reset-step-2" class="space-y-4 hidden">
+                <p class="text-sm text-gray-500">Enter the token and your new password.</p>
+                <input type="text" id="reset-token" placeholder="Enter 6-Digit Token" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none font-mono tracking-widest text-center uppercase">
+                <input type="password" id="reset-new-pass" placeholder="New Password" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none">
+                <button onclick="submitResetPassword()" id="btn-submit-reset" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-lg shadow-emerald-200">
+                    Update Password
+                </button>
+                <button onclick="showResetStep(1)" class="w-full text-gray-500 text-sm font-medium hover:text-gray-700">Back</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Auto-redirect if session exists
         const existingSession = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
@@ -60,43 +96,57 @@
         }
 
         async function handleLogin() {
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('remember-me').checked;
             const errorMsg = document.getElementById('error-msg');
-            const roles = ['admins', 'teachers', 'clinic_staff', 'guards', 'parents'];
  
+            if (!username || !password) {
+                errorMsg.innerText = "Please enter both username and password.";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            
             errorMsg.classList.add('hidden');
  
+            // Array of tables to check - XAMPP style direct queries
+            // All use username column for simplicity
+            const userRoles = [
+                { table: 'admins', column: 'username', role: 'admins', redirect: 'admin/admin-dashboard.html' },
+                { table: 'teachers', column: 'username', role: 'teachers', redirect: 'teacher/teacher-dashboard.html' },
+                { table: 'parents', column: 'username', role: 'parents', redirect: 'parent/parent-dashboard.html' },
+                { table: 'guards', column: 'username', role: 'guards', redirect: 'guard/guard-dashboard.html' },
+                { table: 'clinic_staff', column: 'username', role: 'clinic_staff', redirect: 'clinic/clinic-dashboard.html' }
+            ];
+ 
             try {
-                // --- SECURITY FIX: Use RPC to verify password securely on the server ---
-                const { data: user, error: rpcError } = await supabase.rpc('verify_user_password', {
-                    p_username: username,
-                    p_password: password
-                });
- 
-                if (rpcError) throw rpcError;
-                if (!user) throw new Error("Invalid credentials");
- 
-                const role = user.role;
- 
-                // CRITICAL FIX: Check if the user account is active
-                // For admins who don't have is_active column, undefined means active
-                // is_active = false means explicitly deactivated
-                if (user.is_active === false) {
-                    throw new Error("Your account has been deactivated. Please contact an administrator.");
+                // Loop through each table to find the user
+                for (let role of userRoles) {
+                    const { data: user, error } = await supabase
+                        .from(role.table)
+                        .select('*')
+                        .eq(role.column, username)
+                        .eq('password', password)
+                        .eq('is_active', true)
+                        .single();
+
+                    // If we found a match!
+                    if (user) {
+                        // Add role to user object
+                        user.role = role.role;
+                        
+                        // Save session to localStorage or sessionStorage
+                        const storage = rememberMe ? localStorage : sessionStorage;
+                        storage.setItem('educare_user', JSON.stringify(user));
+                        
+                        // Redirect to dashboard
+                        window.location.href = role.redirect;
+                        return;
+                    }
                 }
 
-                // Save Session - The user object from RPC already contains the role
-                const storage = rememberMe ? localStorage : sessionStorage;
-                storage.setItem('educare_user', JSON.stringify(user));
- 
-                // REDIRECT LOGIC (Updated to your naming convention)
-                if (role === 'admins') window.location.href = 'admin/admin-dashboard.html';
-                else if (role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
-                else if (role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
-                else if (role === 'guards') window.location.href = 'guard/guard-dashboard.html';
-                else if (role === 'parents') window.location.href = 'parent/parent-dashboard.html';
+                // If loop finishes and no match found
+                throw new Error("Invalid credentials or inactive account.");
  
             } catch (err) {
                 errorMsg.innerText = err.message;
@@ -104,21 +154,125 @@
             }
         }
 
-        async function handleForgotPassword() {
-            const username = prompt("Please enter your username to request a password reset:");
-            if (!username) return;
+        // --- SIMPLE PASSWORD RESET LOGIC (No database table needed) ---
+        // Uses sessionStorage instead of database
+
+        function handleForgotPassword() {
+            document.getElementById('reset-modal').classList.remove('hidden');
+            showResetStep(1);
+        }
+
+        function closeResetModal() {
+            document.getElementById('reset-modal').classList.add('hidden');
+            document.getElementById('reset-username').value = '';
+            document.getElementById('reset-token').value = '';
+            document.getElementById('reset-new-pass').value = '';
+            // Clear session storage
+            sessionStorage.removeItem('reset_token');
+            sessionStorage.removeItem('reset_username');
+            sessionStorage.removeItem('reset_role');
+            sessionStorage.removeItem('reset_expires');
+        }
+
+        function showResetStep(step) {
+            document.getElementById('reset-step-1').classList.toggle('hidden', step !== 1);
+            document.getElementById('reset-step-2').classList.toggle('hidden', step !== 2);
+        }
+
+        async function requestResetToken() {
+            const username = document.getElementById('reset-username').value.trim();
+            const btn = document.getElementById('btn-request-token');
+            
+            if (!username) return alert("Please enter your username.");
+            
+            btn.disabled = true;
+            btn.innerText = "Verifying...";
 
             try {
-                await supabase.from('notifications').insert({
-                    recipient_role: 'admins',
-                    title: 'Password Reset Request',
-                    message: `User '${username}' has requested a password reset.`,
-                    type: 'system_alert',
-                    is_read: false
-                });
-                alert("Admin has been notified of your request.");
-            } catch (e) {
-                alert("Request failed: " + e.message);
+                // 1. Find user across all tables - use username for all
+                const roles = [
+                    { table: 'admins', column: 'username' },
+                    { table: 'teachers', column: 'username' },
+                    { table: 'parents', column: 'username' },
+                    { table: 'guards', column: 'username' },
+                    { table: 'clinic_staff', column: 'username' }
+                ];
+                
+                let foundRole = null;
+                
+                for (const r of roles) {
+                    const { data } = await supabase.from(r.table).select('id').eq(r.column, username).maybeSingle();
+                    if (data) { foundRole = r.table; break; }
+                }
+
+                if (!foundRole) throw new Error("Username not found.");
+
+                // 2. Generate Token
+                const token = Math.random().toString(36).substring(2, 8).toUpperCase();
+                
+                // 3. Store token in sessionStorage (simple demo - in production use DB)
+                sessionStorage.setItem('reset_token', token);
+                sessionStorage.setItem('reset_username', username);
+                sessionStorage.setItem('reset_role', foundRole);
+                sessionStorage.setItem('reset_expires', Date.now() + 3600000); // 1 hour
+
+                // 4. Show token to user
+                alert(`[DEMO MODE] Your reset token is: ${token}\n\n(In production, this would be sent to your email)`);
+                
+                showResetStep(2);
+
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Get Reset Token";
+            }
+        }
+
+        async function submitResetPassword() {
+            const token = document.getElementById('reset-token').value.trim().toUpperCase();
+            const newPass = document.getElementById('reset-new-pass').value;
+            const btn = document.getElementById('btn-submit-reset');
+
+            if (!token || !newPass) return alert("All fields are required.");
+            if (newPass.length < 6) return alert("Password must be at least 6 characters.");
+
+            btn.disabled = true;
+            btn.innerText = "Updating...";
+
+            try {
+                // 1. Verify Token from sessionStorage
+                const storedToken = sessionStorage.getItem('reset_token');
+                const storedUsername = sessionStorage.getItem('reset_username');
+                const storedRole = sessionStorage.getItem('reset_role');
+                const expires = parseInt(sessionStorage.getItem('reset_expires'));
+
+                if (!storedToken || token !== storedToken) throw new Error("Invalid token.");
+                if (Date.now() > expires) throw new Error("Token has expired. Please start over.");
+                if (!storedRole) throw new Error("Session expired. Please start over.");
+
+                // 2. Update User Password
+                const { error: updateError } = await supabase
+                    .from(storedRole)
+                    .update({ password: newPass })
+                    .eq('username', storedUsername);
+
+                if (updateError) throw updateError;
+
+                // 3. Clear session
+                sessionStorage.removeItem('reset_token');
+                sessionStorage.removeItem('reset_username');
+                sessionStorage.removeItem('reset_role');
+                sessionStorage.removeItem('reset_expires');
+
+                alert("Password updated successfully! You can now login.");
+                closeResetModal();
+
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Update Password";
             }
         }
 
@@ -140,3 +294,4 @@
     </script>
 </body>
 </html>
+
