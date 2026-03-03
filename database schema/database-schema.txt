@@ -1,141 +1,42 @@
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
+-- ============================================================================
+-- EDUCARE TRACK - COMPLETE DATABASE SCHEMA DOCUMENTATION
+-- ============================================================================
+-- This file documents the complete database schema for Educare Track
+-- Use schema-updates.sql to add missing columns/tables to an existing database
+-- ============================================================================
 
+-- ============================================================================
+-- PART 1: USER MANAGEMENT TABLES
+-- ============================================================================
+
+-- Administrators Table
 CREATE TABLE public.admins (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   username text NOT NULL UNIQUE,
   password text NOT NULL,
   full_name text,
   contact_number text,
-  is_active boolean DEFAULT true,  -- FIX: Added is_active column for account deactivation
+  is_active boolean DEFAULT true,           -- REQUIRED: Run schema-updates.sql if missing
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.announcements (
+
+-- Teachers Table
+CREATE TABLE public.teachers (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  title text,
-  content text,
-  posted_by_admin_id bigint,
-  target_teachers boolean DEFAULT false,
-  target_parents boolean DEFAULT false,
-  target_guards boolean DEFAULT false,
-  target_clinic boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  posted_by_teacher_id bigint,
-  CONSTRAINT announcements_pkey PRIMARY KEY (id),
-  CONSTRAINT announcements_posted_by_admin_id_fkey FOREIGN KEY (posted_by_admin_id) REFERENCES public.admins(id),
-  CONSTRAINT announcements_posted_by_teacher_id_fkey FOREIGN KEY (posted_by_teacher_id) REFERENCES public.teachers(id)
-);
-CREATE TABLE public.attendance_logs (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  student_id bigint,
-  log_date date DEFAULT CURRENT_DATE,
-  time_in timestamp without time zone,
-  time_out timestamp without time zone,
-  status text,
-  remarks text,
-  CONSTRAINT attendance_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
-);
-CREATE TABLE public.classes (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  grade_level text,
-  section_name text,
-  strand text,
-  adviser_id bigint,
-  room_number text,
-  school_year text DEFAULT '2025-2026'::text,
-  CONSTRAINT classes_pkey PRIMARY KEY (id),
-  CONSTRAINT classes_adviser_id_fkey FOREIGN KEY (adviser_id) REFERENCES public.teachers(id)
-);
-CREATE TABLE public.clinic_staff (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  clinic_id_text text UNIQUE,
+  teacher_id_text text UNIQUE,
   username text NOT NULL UNIQUE,
   password text NOT NULL,
   full_name text,
-  role_title text,
-  CONSTRAINT clinic_staff_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.clinic_visits (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  student_id bigint,
-  referred_by_teacher_id bigint,
-  reason text,
-  nurse_notes text,
-  action_taken text,
-  time_in timestamp without time zone DEFAULT now(),
-  time_out timestamp without time zone,
-  parent_notified boolean DEFAULT false,
-  status text DEFAULT 'Pending'::text,
-  CONSTRAINT clinic_visits_pkey PRIMARY KEY (id),
-  CONSTRAINT clinic_visits_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
-  CONSTRAINT clinic_visits_referred_by_teacher_id_fkey FOREIGN KEY (referred_by_teacher_id) REFERENCES public.teachers(id)
-);
-CREATE TABLE public.excuse_letters (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  student_id bigint,
-  parent_id bigint,
-  reason text,
-  date_absent date,
-  image_proof_url text,
-  status text DEFAULT 'Pending'::text,
-  teacher_remarks text,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT excuse_letters_pkey PRIMARY KEY (id),
-  CONSTRAINT excuse_letters_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
-  CONSTRAINT excuse_letters_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id)
-);
-CREATE TABLE public.guards (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  guard_id_text text UNIQUE,
-  username text NOT NULL UNIQUE,
-  password text NOT NULL,
-  full_name text,
-  assigned_gate text,
-  shift_schedule text,
-  CONSTRAINT guards_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.holidays (
-  holiday_date date NOT NULL UNIQUE,
-  description text,
-  is_suspended boolean DEFAULT true,
-  target_grades text DEFAULT 'All'::text
+  department text,
+  contact_number text,
+  email text,
+  is_active boolean DEFAULT true,
+  is_gatekeeper boolean DEFAULT false,       -- REQUIRED: Run schema-updates.sql if missing
+  CONSTRAINT teachers_pkey PRIMARY KEY (id)
 );
 
--- Grade-Level Attendance Schedules (for per-grade entrance/dismissal times)
--- Note: This can also be stored in the settings table using prefixed keys:
--- grade_kinder_start, grade_kinder_end, grade_kinder_late_threshold, grade_kinder_early_cutoff
--- grade_grades1_3_start, grade_grades1_3_end, etc.
-CREATE TABLE public.grade_schedules (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  grade_level text NOT NULL UNIQUE,
-  start_time time without time zone NOT NULL,
-  end_time time without time zone NOT NULL,
-  late_threshold time without time zone,
-  early_cutoff time without time zone,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT grade_schedules_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.id_templates (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  template_type text NOT NULL UNIQUE,
-  settings jsonb NOT NULL,
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT id_templates_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.notifications (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  recipient_id bigint,
-  recipient_role text,
-  title text,
-  message text,
-  type text,
-  is_read boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT notifications_pkey PRIMARY KEY (id)
-);
+-- Parents Table
 CREATE TABLE public.parents (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   parent_id_text text UNIQUE,
@@ -148,10 +49,39 @@ CREATE TABLE public.parents (
   is_active boolean DEFAULT true,
   CONSTRAINT parents_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.settings (
-  setting_key text NOT NULL UNIQUE,
-  setting_value text
+
+-- Guards Table
+CREATE TABLE public.guards (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  guard_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  assigned_gate text,
+  shift_schedule text,
+  contact_number text,                      -- REQUIRED: Run schema-updates.sql if missing
+  is_active boolean DEFAULT true,            -- REQUIRED: Run schema-updates.sql if missing
+  CONSTRAINT guards_pkey PRIMARY KEY (id)
 );
+
+-- Clinic Staff Table
+CREATE TABLE public.clinic_staff (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  clinic_id_text text UNIQUE,
+  username text NOT NULL UNIQUE,
+  password text NOT NULL,
+  full_name text,
+  role_title text,
+  contact_number text,                       -- REQUIRED: Run schema-updates.sql if missing
+  is_active boolean DEFAULT true,             -- REQUIRED: Run schema-updates.sql if missing
+  CONSTRAINT clinic_staff_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================================
+-- PART 2: STUDENT & CLASS MANAGEMENT TABLES
+-- ============================================================================
+
+-- Students Table
 CREATE TABLE public.students (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   lrn text NOT NULL UNIQUE,
@@ -162,13 +92,28 @@ CREATE TABLE public.students (
   gender text,
   address text,
   emergency_contact text,
-  qr_code_data text,
-  profile_photo_url text,
+  qr_code_data text,                         -- REQUIRED: Run schema-updates.sql if missing
+  profile_photo_url text,                     -- REQUIRED: Run schema-updates.sql if missing
   status text DEFAULT 'Enrolled'::text,
   CONSTRAINT students_pkey PRIMARY KEY (id),
   CONSTRAINT students_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id),
   CONSTRAINT students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)
 );
+
+-- Classes Table
+CREATE TABLE public.classes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  grade_level text,
+  section_name text,
+  strand text,
+  adviser_id bigint,
+  room_number text,
+  school_year text DEFAULT '2025-2026'::text,
+  CONSTRAINT classes_pkey PRIMARY KEY (id),
+  CONSTRAINT classes_adviser_id_fkey FOREIGN KEY (adviser_id) REFERENCES public.teachers(id)
+);
+
+-- Subject Loads Table
 CREATE TABLE public.subject_loads (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   subject_name text,
@@ -181,23 +126,177 @@ CREATE TABLE public.subject_loads (
   CONSTRAINT subject_loads_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT subject_loads_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)
 );
-CREATE TABLE public.teachers (
+
+-- ============================================================================
+-- PART 3: ATTENDANCE TABLES
+-- ============================================================================
+
+-- Attendance Logs Table
+CREATE TABLE public.attendance_logs (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  teacher_id_text text UNIQUE,
-  username text NOT NULL UNIQUE,
-  password text NOT NULL,
-  full_name text,
-  department text,
-  contact_number text,
-  email text,
-  is_active boolean DEFAULT true,
-  is_gatekeeper boolean DEFAULT false,
-  CONSTRAINT teachers_pkey PRIMARY KEY (id)
+  student_id bigint,
+  log_date date DEFAULT CURRENT_DATE,
+  time_in timestamp without time zone,
+  time_out timestamp without time zone,
+  status text,
+  remarks text,
+  morning_absent boolean DEFAULT false,       -- REQUIRED: Run schema-updates.sql if missing
+  afternoon_absent boolean DEFAULT false,     -- REQUIRED: Run schema-updates.sql if missing
+  partial_absence_notified boolean DEFAULT false,  -- REQUIRED: Run schema-updates.sql if missing
+  CONSTRAINT attendance_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
 );
 
+-- Grade Schedules Table
+CREATE TABLE public.grade_schedules (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  grade_level text NOT NULL UNIQUE,
+  start_time time without time zone NOT NULL,
+  end_time time without time zone NOT NULL,
+  late_threshold time without time zone,
+  early_cutoff time without time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT grade_schedules_pkey PRIMARY KEY (id)
+);
 
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
+-- Attendance Patterns Table (Gatekeeper Phase 4 - REQUIRED: Run schema-updates.sql to create)
+CREATE TABLE public.attendance_patterns (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    student_id bigint NOT NULL,
+    pattern_type text NOT NULL,
+    description text,
+    severity text DEFAULT 'low',
+    is_resolved boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    resolved_at timestamp with time zone,
+    CONSTRAINT attendance_patterns_pkey PRIMARY KEY (id),
+    CONSTRAINT attendance_patterns_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
+
+-- Admin Alerts Table (Gatekeeper Phase 4 - REQUIRED: Run schema-updates.sql to create)
+CREATE TABLE public.admin_alerts (
+    id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+    alert_type text NOT NULL,
+    title text NOT NULL,
+    message text NOT NULL,
+    severity text DEFAULT 'medium',
+    is_read boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    metadata jsonb DEFAULT '{}'::jsonb,
+    CONSTRAINT admin_alerts_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================================
+-- PART 4: ANNOUNCEMENTS & NOTIFICATIONS TABLES
+-- ============================================================================
+
+-- Announcements Table
+CREATE TABLE public.announcements (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  title text,
+  content text,
+  posted_by_admin_id bigint,                  -- REQUIRED: Run schema-updates.sql if missing
+  target_teachers boolean DEFAULT false,
+  target_parents boolean DEFAULT false,
+  target_guards boolean DEFAULT false,
+  target_clinic boolean DEFAULT false,
+  priority text,                               -- REQUIRED: Run schema-updates.sql if missing
+  created_at timestamp with time zone DEFAULT now(),
+  posted_by_teacher_id bigint,
+  CONSTRAINT announcements_pkey PRIMARY KEY (id),
+  CONSTRAINT announcements_posted_by_admin_id_fkey FOREIGN KEY (posted_by_admin_id) REFERENCES public.admins(id),
+  CONSTRAINT announcements_posted_by_teacher_id_fkey FOREIGN KEY (posted_by_teacher_id) REFERENCES public.teachers(id)
+);
+
+-- Notifications Table
+CREATE TABLE public.notifications (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  recipient_id bigint,
+  recipient_role text,
+  title text,
+  message text,
+  type text,
+  is_read boolean DEFAULT false,
+  is_urgent boolean DEFAULT false,            -- REQUIRED: Run schema-updates.sql if missing
+  scheduled_at timestamp with time zone,       -- REQUIRED: Run schema-updates.sql if missing
+  sender_id bigint,                            -- REQUIRED: Run schema-updates.sql if missing
+  batch_id text,                               -- REQUIRED: Run schema-updates.sql if missing
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================================
+-- PART 5: CLINIC & HEALTH TABLES
+-- ============================================================================
+
+-- Clinic Visits Table
+CREATE TABLE public.clinic_visits (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint,
+  referred_by_teacher_id bigint,
+  reason text,
+  nurse_notes text,
+  action_taken text,
+  time_in timestamp without time zone DEFAULT now(),
+  time_out timestamp without time zone,
+  parent_notified boolean DEFAULT false,
+  parent_notified_at timestamp with time zone,  -- REQUIRED: Run schema-updates.sql if missing
+  teacher_approval boolean,                      -- REQUIRED: Run schema-updates.sql if missing
+  teacher_remarks text,                           -- REQUIRED: Run schema-updates.sql if missing
+  status text DEFAULT 'Pending'::text,
+  CONSTRAINT clinic_visits_pkey PRIMARY KEY (id),
+  CONSTRAINT clinic_visits_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT clinic_visits_referred_by_teacher_id_fkey FOREIGN KEY (referred_by_teacher_id) REFERENCES public.teachers(id)
+);
+
+-- Excuse Letters Table
+CREATE TABLE public.excuse_letters (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint,
+  parent_id bigint,
+  reason text,
+  date_absent date,
+  image_proof_url text,
+  status text DEFAULT 'Pending'::text,
+  teacher_remarks text,
+  updated_at timestamp with time zone DEFAULT now(),  -- REQUIRED: Run schema-updates.sql if missing
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT excuse_letters_pkey PRIMARY KEY (id),
+  CONSTRAINT excuse_letters_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT excuse_letters_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id)
+);
+
+-- ============================================================================
+-- PART 6: SYSTEM SETTINGS TABLES
+-- ============================================================================
+
+-- Holidays Table
+CREATE TABLE public.holidays (
+  holiday_date date NOT NULL UNIQUE,
+  description text,
+  is_suspended boolean DEFAULT true,
+  target_grades text DEFAULT 'All'::text
+);
+
+-- Settings Table
+CREATE TABLE public.settings (
+  setting_key text NOT NULL UNIQUE,
+  setting_value text
+);
+
+-- ID Templates Table
+CREATE TABLE public.id_templates (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  template_type text NOT NULL UNIQUE,
+  settings jsonb NOT NULL,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT id_templates_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================================
+-- PART 7: STORAGE TABLES (Supabase Built-in)
+-- ============================================================================
 
 CREATE TABLE storage.buckets (
   id text NOT NULL,
@@ -213,30 +312,7 @@ CREATE TABLE storage.buckets (
   type USER-DEFINED NOT NULL DEFAULT 'STANDARD'::storage.buckettype,
   CONSTRAINT buckets_pkey PRIMARY KEY (id)
 );
-CREATE TABLE storage.buckets_analytics (
-  name text NOT NULL,
-  type USER-DEFINED NOT NULL DEFAULT 'ANALYTICS'::storage.buckettype,
-  format text NOT NULL DEFAULT 'ICEBERG'::text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  deleted_at timestamp with time zone,
-  CONSTRAINT buckets_analytics_pkey PRIMARY KEY (id)
-);
-CREATE TABLE storage.buckets_vectors (
-  id text NOT NULL,
-  type USER-DEFINED NOT NULL DEFAULT 'VECTOR'::storage.buckettype,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT buckets_vectors_pkey PRIMARY KEY (id)
-);
-CREATE TABLE storage.migrations (
-  id integer NOT NULL,
-  name character varying NOT NULL UNIQUE,
-  hash character varying NOT NULL,
-  executed_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT migrations_pkey PRIMARY KEY (id)
-);
+
 CREATE TABLE storage.objects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   bucket_id text,
@@ -253,44 +329,28 @@ CREATE TABLE storage.objects (
   CONSTRAINT objects_pkey PRIMARY KEY (id),
   CONSTRAINT objects_bucketId_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)
 );
-CREATE TABLE storage.s3_multipart_uploads (
-  id text NOT NULL,
-  in_progress_size bigint NOT NULL DEFAULT 0,
-  upload_signature text NOT NULL,
-  bucket_id text NOT NULL,
-  key text NOT NULL,
-  version text NOT NULL,
-  owner_id text,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  user_metadata jsonb,
-  CONSTRAINT s3_multipart_uploads_pkey PRIMARY KEY (id),
-  CONSTRAINT s3_multipart_uploads_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)
-);
-CREATE TABLE storage.s3_multipart_uploads_parts (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  upload_id text NOT NULL,
-  size bigint NOT NULL DEFAULT 0,
-  part_number integer NOT NULL,
-  bucket_id text NOT NULL,
-  key text NOT NULL,
-  etag text NOT NULL,
-  owner_id text,
-  version text NOT NULL,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT s3_multipart_uploads_parts_pkey PRIMARY KEY (id),
-  CONSTRAINT s3_multipart_uploads_parts_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES storage.s3_multipart_uploads(id),
-  CONSTRAINT s3_multipart_uploads_parts_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)
-);
-CREATE TABLE storage.vector_indexes (
-  id text NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  bucket_id text NOT NULL,
-  data_type text NOT NULL,
-  dimension integer NOT NULL,
-  distance_metric text NOT NULL,
-  metadata_configuration jsonb,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT vector_indexes_pkey PRIMARY KEY (id),
-  CONSTRAINT vector_indexes_bucket_id_fkey FOREIGN KEY (bucket_id) REFERENCES storage.buckets_vectors(id)
-);
+
+-- ============================================================================
+-- SCHEMA FIX SUMMARY
+-- ============================================================================
+-- Run 'database schema/schema-updates.sql' to add missing columns and tables:
+--
+-- COLUMNS TO ADD:
+--   - admins: is_active
+--   - guards: is_active, contact_number
+--   - clinic_staff: is_active, contact_number
+--   - clinic_visits: parent_notified, parent_notified_at, teacher_approval, teacher_remarks
+--   - excuse_letters: updated_at
+--   - announcements: priority, posted_by_admin_id
+--   - notifications: is_urgent, scheduled_at, sender_id, batch_id
+--   - teachers: is_gatekeeper
+--   - students: qr_code_data, profile_photo_url
+--   - attendance_logs: morning_absent, afternoon_absent, partial_absence_notified
+--
+-- TABLES TO CREATE:
+--   - grade_schedules
+--   - attendance_patterns
+--   - admin_alerts
+--
+-- ============================================================================
+

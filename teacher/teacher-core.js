@@ -337,7 +337,7 @@ window.loadHomeroomStudents = async function() {
 
         // Calculate attendance rate based on the entire class
         const presentCount = allClassStudents.filter(s => {
-            const log = s.attendance_logs.find(l => l.log_date === today);
+            const log = s.attendance_logs?.find(l => l.log_date === today);
             return log && log.status !== 'Absent';
         }).length;
         const totalStudents = allClassStudents.length;
@@ -355,7 +355,7 @@ window.loadHomeroomStudents = async function() {
 
         // Render the filtered list
         filteredStudents.forEach(student => {
-            const log = student.attendance_logs.find(l => l.log_date === today);
+            const log = student.attendance_logs?.find(l => l.log_date === today);
             const timeIn = log && log.time_in ? formatTime(log.time_in) : '--:--';
             
             let status = log ? log.status : 'Absent';
@@ -1330,30 +1330,53 @@ document.addEventListener('keydown', function(e) {
 
 // 16. Approve Excuse Letter
 async function approveExcuseLetter(letterId, studentId, dateAbsent) {
-    try {
-        await supabase
-            .from('excuse_letters')
-            .update({ status: 'Approved' })
-            .eq('id', letterId);
-        
-        await supabase
-            .from('attendance_logs')
-            .upsert({
-                student_id: studentId,
-                log_date: dateAbsent,
-                status: 'Excused',
-                remarks: 'Excused via approved excuse letter'
-            }, {
-                onConflict: 'student_id, log_date'
-            });
-        
-        showNotification('Excuse letter approved and attendance marked as Excused.', "success");
-        await loadExcuseLetters();
-        
-    } catch (err) {
-        console.error('Error approving excuse letter:', err);
-        showNotification('Error approving excuse letter. Please try again.', "error");
-    }
+    // UPDATED: Use confirmation modal to allow for optional remarks
+    showConfirmationModal(
+        'Approve Excuse Letter',
+        `<div class="text-left space-y-4 p-2">
+            <p class="text-gray-600">Are you sure you want to approve this excuse letter?</p>
+            <div>
+                <label class="text-xs font-bold text-gray-400 uppercase">Optional Remarks</label>
+                <textarea id="approve-remarks" rows="3" class="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm" placeholder="e.g., Approved, but please submit med cert next time."></textarea>
+            </div>
+        </div>`,
+        async () => {
+            const remarks = document.getElementById('approve-remarks')?.value.trim();
+            try {
+                await supabase
+                    .from('excuse_letters')
+                    .update({ 
+                        status: 'Approved',
+                        teacher_remarks: remarks || null // Add remarks if provided
+                    })
+                    .eq('id', letterId);
+                
+                await supabase
+                    .from('attendance_logs')
+                    .upsert({
+                        student_id: studentId,
+                        log_date: dateAbsent,
+                        status: 'Excused',
+                        remarks: 'Excused via approved excuse letter'
+                    }, {
+                        onConflict: 'student_id, log_date'
+                    });
+                
+                // NEW: Log the approval action
+                if (typeof logTeacherAction === 'function') {
+                    logTeacherAction('EXCUSE_LETTER_APPROVE', { teacher_remarks: remarks }, letterId, 'excuse_letter');
+                }
+
+                showNotification('Excuse letter approved and attendance marked as Excused.', "success");
+                await loadExcuseLetters();
+                
+            } catch (err) {
+                console.error('Error approving excuse letter:', err);
+                showNotification('Error approving excuse letter. Please try again.', "error");
+            }
+        },
+        'Approve'
+    );
 }
 
 // 17. Reject Excuse Letter

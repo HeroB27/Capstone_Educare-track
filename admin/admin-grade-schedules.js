@@ -10,6 +10,15 @@ const GRADE_LEVELS = [
     { id: 'shs', name: 'Senior High School', shortName: 'SHS', icon: 'school' }
 ];
 
+// Default schedule times per grade level (as per school specification)
+const DEFAULT_SCHEDULES = {
+    kinder: { start: '07:30', end: '13:00', late: '08:00', early: '12:30' },
+    grades1_3: { start: '07:30', end: '13:00', late: '08:00', early: '12:30' },
+    grades4_6: { start: '07:30', end: '15:00', late: '08:00', early: '14:30' },
+    jhs: { start: '07:30', end: '16:00', late: '08:00', early: '15:30' },
+    shs: { start: '07:30', end: '16:30', late: '08:00', early: '16:00' }
+};
+
 // 1. Initialize Page
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof checkSession === 'function') {
@@ -68,10 +77,11 @@ async function loadGradeSchedules() {
 
         // Build the grid
         container.innerHTML = GRADE_LEVELS.map(grade => {
-            const startTime = settings[`grade_${grade.id}_start`] || '07:00';
-            const endTime = settings[`grade_${grade.id}_end`] || '15:00';
-            const lateThreshold = settings[`grade_${grade.id}_late_threshold`] || '08:00';
-            const earlyCutoff = settings[`grade_${grade.id}_early_cutoff`] || '14:00';
+            const defaults = DEFAULT_SCHEDULES[grade.id];
+            const startTime = settings[`grade_${grade.id}_start`] || defaults.start;
+            const endTime = settings[`grade_${grade.id}_end`] || defaults.end;
+            const lateThreshold = settings[`grade_${grade.id}_late_threshold`] || defaults.late;
+            const earlyCutoff = settings[`grade_${grade.id}_early_cutoff`] || defaults.early;
 
             return `
                 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

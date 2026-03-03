@@ -8,7 +8,7 @@ function checkSession(requiredRole) {
     
     // If no session exists, kick them out
     if (!userStr) {
-        alert("No active session. Please login.");
+        showNotification("No active session. Please login.", 'error');
         window.location.href = '../index.html'; // Go up one level to root
         return null;
     }
@@ -18,7 +18,7 @@ function checkSession(requiredRole) {
 
         // Strict Role Check (Security)
         if (user.role !== requiredRole) {
-            alert(`Unauthorized! You are logged in as ${user.role}, not ${requiredRole}.`);
+            showNotification(`Unauthorized! You are logged in as ${user.role}, not ${requiredRole}.`, 'error');
             window.location.href = '../index.html';
             return null;
         }
@@ -26,7 +26,7 @@ function checkSession(requiredRole) {
         return user;
     } catch (e) {
         // If the JSON is corrupted, force a logout
-        alert("Session corrupted. Please login again.");
+        showNotification("Session corrupted. Please login again.", 'error');
         logout();
         return null;
     }

@@ -111,8 +111,13 @@ function setToday() {
     
     // FIX: Make sure these IDs exactly match your HTML file! 
     // If your HTML uses 'start-date' and 'end-date', change 'date-from' and 'date-to' below.
-    document.getElementById('date-from').value = today;
-    document.getElementById('date-to').value = today;
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    
+    if (!dateFrom || !dateTo) return; // Exit gracefully if inputs don't exist
+
+    dateFrom.value = today;
+    dateTo.value = today;
     applyDateFilter();
 }
 
@@ -152,7 +157,8 @@ function exportData() {
         Time_In: formatTime(v.time_in),
         Time_Out: v.time_out ? formatTime(v.time_out) : 'N/A',
         Student_Name: v.students?.full_name,
-        Class: `${v.students?.classes?.grade_level} - ${v.students?.classes?.section_name}`,
+        // FIX: Prevent "undefined" from rendering in official CSV reports
+        Class: `${v.students?.classes?.grade_level || ''} ${v.students?.classes?.section_name || ''}`.trim() || 'Unassigned',
         Reason: v.reason,
         Referred_By: v.teachers?.full_name || 'Walk-in',
         Action_Taken: v.action_taken,

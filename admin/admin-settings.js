@@ -172,8 +172,21 @@ async function submitPasswordChange() {
     if(!current || !newPass || !confirmPass) return showNotification("All fields are required", "error");
     if(newPass !== confirmPass) return showNotification("New passwords do not match", "error");
     
-    const user = JSON.parse(localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user'));
-    if(!user) return;
+    // FIX: Handle null localStorage properly to prevent TypeError
+    const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+    if (!userStr) {
+        showNotification("Session expired. Please login again.", "error");
+        return;
+    }
+    
+    let user;
+    try {
+        user = JSON.parse(userStr);
+    } catch (e) {
+        showNotification("Session corrupted. Please login again.", "error");
+        logout();
+        return;
+    }
 
     const { data, error } = await supabase.from('admins').select('*').eq('id', user.id).eq('password', current).single();
     if(error || !data) return showNotification("Incorrect current password", "error");

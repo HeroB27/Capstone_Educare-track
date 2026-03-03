@@ -83,14 +83,14 @@ function handleFileSelect(event) {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
-        alert('Please select a valid file (PNG, JPG, or PDF)');
+        showNotification('Please select a valid file (PNG, JPG, or PDF)', 'error');
         event.target.value = '';
         return;
     }
 
     // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
+        showNotification('File size must be less than 5MB', 'error');
         event.target.value = '';
         return;
     }
@@ -133,7 +133,7 @@ async function submitExcuse(event) {
     event.preventDefault();
 
     if (!selectedChildId) {
-        alert('Please select a child');
+        showNotification('Please select a child', 'error');
         return;
     }
 
@@ -142,11 +142,11 @@ async function submitExcuse(event) {
 
     // Validate
     if (!date) {
-        alert('Please select the date of absence');
+        showNotification('Please select the date of absence', 'error');
         return;
     }
     if (!reason || reason.length < 10) {
-        alert('Please provide a reason (minimum 10 characters)');
+        showNotification('Please provide a reason (minimum 10 characters)', 'error');
         return;
     }
 

@@ -167,8 +167,8 @@ async function approveClinicPass(visitId) {
         await notifyTeacherStudentAtClinic(
             visit.referred_by_teacher_id,
             visit.students.full_name,
-            visit.students.classes.grade_level,
-            visit.students.classes.section_name
+            visit.students.classes?.grade_level || 'Unassigned',
+            visit.students.classes?.section_name || 'N/A'
         );
         
         return true;

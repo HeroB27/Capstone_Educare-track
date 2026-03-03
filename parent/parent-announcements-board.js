@@ -38,7 +38,8 @@ async function loadAnnouncements() {
 
         if (childError) throw childError;
 
-        const adviserId = childData?.classes?.adviser_id;
+        // FIX: Prevent 400 Bad Request if student is not assigned to a class yet
+        const adviserId = childData?.classes?.adviser_id || 0;
         currentAdviserId = adviserId; // Store for real-time filtering
 
         // 2. PARANOIA SHIELD: Build privacy-focused query

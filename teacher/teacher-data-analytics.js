@@ -132,7 +132,7 @@ async function updateAnalytics() {
             .from('students')
             .select('id, full_name')
             .eq('class_id', classId)
-            .eq('is_active', true);
+            .eq('status', 'Enrolled');
         
         if (!students || students.length === 0) {
             updateEmptyState();

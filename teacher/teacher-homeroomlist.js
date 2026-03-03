@@ -106,7 +106,7 @@ async function loadStudents() {
                 classes!inner(grade_level, section_name)
             `)
             .eq('class_id', homeroom.id)
-            .eq('is_active', true)
+            .eq('status', 'Enrolled')
             .order('full_name');
         
         if (error) throw error;

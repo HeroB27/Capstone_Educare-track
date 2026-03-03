@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     injectStyles();
 });
 
-// --- SUSPENSION MODAL LOGIC (MOVED FROM SYSTEM SETTINGS) ---
+// --- SUSPENSION MODAL LOGIC ---
 
 function openSuspensionModal() { document.getElementById('suspensionModal').classList.remove('hidden'); }
 function closeSuspensionModal() { document.getElementById('suspensionModal').classList.add('hidden'); }
@@ -33,7 +33,6 @@ function handleTypeChange() {
     const ruleInfo = document.getElementById('ruleInfo');
     const container = document.getElementById('typeSelection');
     
-    // Logic for Signal Levels (Typhoon)
     const existing = document.getElementById('signalContainer');
     if (existing) existing.remove();
 
@@ -77,31 +76,53 @@ function calculateSuspensionRules() {
     }
 }
 
-// THE DUAL-SAVE LOGIC
+// DUAL-SAVE LOGIC: Holidays + Announcements
 async function saveLogicSuspension(event) {
     const btn = event.currentTarget;
     const originalText = btn.innerHTML;
     setLoading(btn, true, 'Processing...');
+
+    // Get current admin user
+    const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+    let adminId = null;
+    if (userStr) {
+        try {
+            const user = JSON.parse(userStr);
+            adminId = user.id;
+        } catch (e) {
+            console.error("Error parsing user:", e);
+        }
+    }
 
     const payload = {
         holiday_date: document.getElementById('eventDate').value,
         description: `${document.getElementById('eventType').value}${document.getElementById('signalLevel') ? ' (S#'+document.getElementById('signalLevel').value+')' : ''} - ${document.getElementById('scheduleType').value}`,
         target_grades: document.getElementById('ruleInfo').dataset.target || "All",
         is_suspended: true,
-        notes: document.getElementById('eventNotes').value
+        notes: document.getElementById('eventNotes').value || ''
     };
 
-    // 1. Insert into Holidays Table (For the Calendar)
+    // 1. Insert into Holidays Table
     const { error: holidayError } = await supabase.from('holidays').insert([payload]);
 
     if (!holidayError) {
-        // 2. Insert into Announcements Table (For Portals)
+        // 2. Insert into Announcements Table
+        const announcementPayload = {
+            title: `🚨 SUSPENSION: ${payload.description}`,
+            content: `Class suspension declared for ${payload.target_grades} on ${payload.holiday_date}. ${payload.notes}`,
+            target_parents: true, 
+            target_teachers: true, 
+            target_guards: true, 
+            target_clinic: true
+        };
+        
+        // Add admin ID if available (column requires SQL fix to exist)
+        if (adminId) {
+            announcementPayload.posted_by_admin_id = adminId;
+        }
+        
         if (document.getElementById('autoAnnounce').checked) {
-            await supabase.from('announcements').insert([{
-                title: `🚨 SUSPENSION: ${payload.description}`,
-                content: `Class suspension declared for ${payload.target_grades} on ${payload.holiday_date}. ${payload.notes}`,
-                target_parents: true, target_teachers: true, target_guards: true, target_clinic: true
-            }]);
+            await supabase.from('announcements').insert([announcementPayload]);
         }
         showNotification("Suspension Recorded and Broadcasted!", "success");
         closeSuspensionModal();
@@ -178,7 +199,6 @@ function showNotification(msg, type='info', callback=null) {
 
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
         if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -197,3 +217,4 @@ function showNotification(msg, type='info', callback=null) {
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
+

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Audit Logs - Educare Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="../assets/styles.css">
+    <style>
+        .json-details { font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar (Placeholder - assumes admin-core.js injects or handles navigation) -->
+        <div id="sidebar-container" class="w-64 bg-white border-r border-gray-200 hidden md:block">
+            <!-- Sidebar content would go here -->
+        </div>
+
+        <!-- Main Content -->
+        <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+            
+            <!-- Header -->
+            <header class="bg-white border-b border-gray-200 p-4 flex justify-between items-center sticky top-0 z-10">
+                <div class="flex items-center gap-3">
+                    <button onclick="window.history.back()" class="p-2 hover:bg-gray-100 rounded-lg text-gray-500">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    </button>
+                    <h1 class="text-xl font-bold text-gray-800">System Audit Logs</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="exportLogsToCSV()" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+                    </button>
+                    <button onclick="loadAuditLogs()" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Refresh">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </header>
+
+            <main class="w-full flex-grow p-6">
+                
+                <!-- Filters -->
+                <div class="bg-white rounded-xl border border-gray-200 p-4 mb-6 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Search</label>
+                            <div class="relative">
+                                <i data-lucide="search" class="absolute left-3 top-2.5 w-4 h-4 text-gray-400"></i>
+                                <input type="text" id="log-search" placeholder="Action, Details..." class="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">User Role</label>
+                            <select id="role-filter" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="all">All Roles</option>
+                                <option value="admin">Admin</option>
+                                <option value="teacher">Teacher</option>
+                                <option value="parent">Parent</option>
+                                <option value="guard">Guard</option>
+                                <option value="clinic_staff">Clinic Staff</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Date Range</label>
+                            <div class="flex gap-2">
+                                <input type="date" id="date-start" class="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm">
+                                <input type="date" id="date-end" class="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="applyFilters()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors">
+                                Apply Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Table -->
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">User</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Details</th>
+                                    <th class="px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Target</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-logs-body" class="divide-y divide-gray-100">
+                                <!-- Rows injected by JS -->
+                                <tr>
+                                    <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                                        Loading logs...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div class="bg-gray-50 px-6 py-3 border-t border-gray-200 flex justify-between items-center">
+                        <span class="text-sm text-gray-500" id="page-info">Showing 0-0 of 0</span>
+                        <div class="flex gap-2">
+                            <button id="prev-btn" onclick="changePage(-1)" disabled class="px-3 py-1 border border-gray-300 rounded text-sm bg-white disabled:opacity-50">Previous</button>
+                            <button id="next-btn" onclick="changePage(1)" disabled class="px-3 py-1 border border-gray-300 rounded text-sm bg-white disabled:opacity-50">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../assets/supabase-client.js"></script>
+    <script src="admin-core.js"></script>
+    <script src="admin-audit-logs.js"></script>
+</body>
+</html>

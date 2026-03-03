@@ -13,6 +13,50 @@
 // Local device settings keys (stored in localStorage per device)
 const DEVICE_SETTINGS_KEY = 'educare_guard_device_settings';
 
+// Debug flag - set to false in production
+const DEBUG_MODE = false;
+
+// ============================================================================
+// NOTIFICATION SYSTEM (Replaces native alert)
+// ============================================================================
+function showNotification(msg, type = 'success', duration = 3000) {
+    const existing = document.getElementById('notification-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'notification-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[999] flex items-center justify-center animate-fade-in p-4';
+
+    const colors = {
+        success: { bg: 'bg-emerald-50', icon: 'text-emerald-500', iconName: 'check-circle' },
+        error: { bg: 'bg-red-50', icon: 'text-red-500', iconName: 'alert-circle' },
+        info: { bg: 'bg-violet-50', icon: 'text-violet-600', iconName: 'info' }
+    };
+    const color = colors[type] || colors.success;
+
+    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
+    if (!dndEnabled && navigator.vibrate) {
+        navigator.vibrate(type === 'error' ? [100, 50, 100] : 100);
+    }
+
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up">
+        <div class="flex flex-col items-center text-center">
+            <div class="w-16 h-16 ${color.bg} ${color.icon} rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="${color.iconName}" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-xl font-black text-gray-800 mb-2">${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information'}</h3>
+            <p class="text-sm text-gray-500 font-medium mb-6">${msg}</p>
+            <button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(modal);
+    document.getElementById('notif-btn').onclick = () => modal.remove();
+    if (window.lucide) window.lucide.createIcons();
+
+    setTimeout(() => modal.remove(), duration);
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -183,7 +227,7 @@ async function loadGuardProfile() {
  */
 async function saveProfile() {
     if (!currentUser || !currentUser.id) {
-        alert('You must be logged in to update your profile');
+        showNotification('You must be logged in to update your profile', 'error');
         return;
     }
     
@@ -193,17 +237,17 @@ async function saveProfile() {
     
     // Validation
     if (!fullname) {
-        alert('Full name is required');
+        showNotification('Full name is required', 'error');
         return;
     }
     
     if (!email) {
-        alert('Email is required');
+        showNotification('Email is required', 'error');
         return;
     }
     
     if (phone && !phone.startsWith('09')) {
-        alert('Phone number must start with 09');
+        showNotification('Phone number must start with 09', 'error');
         return;
     }
     
@@ -218,11 +262,11 @@ async function saveProfile() {
             .eq('id', currentUser.id);
         
         if (error) {
-            alert('Error updating profile: ' + error.message);
+            showNotification('Error updating profile: ' + error.message, 'error');
             return;
         }
         
-        alert('Profile updated successfully!');
+        showNotification('Profile updated successfully!');
         
         // Update local session
         if (currentUser) {
@@ -233,7 +277,7 @@ async function saveProfile() {
         
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred while updating your profile');
+        showNotification('An error occurred while updating your profile', 'error');
     }
 }
 
@@ -246,7 +290,7 @@ async function saveProfile() {
  */
 async function changePassword() {
     if (!currentUser || !currentUser.id) {
-        alert('You must be logged in to change your password');
+        showNotification('You must be logged in to change your password', 'error');
         return;
     }
     
@@ -256,22 +300,22 @@ async function changePassword() {
     
     // Validation
     if (!currentPassword) {
-        alert('Current password is required');
+        showNotification('Current password is required', 'error');
         return;
     }
     
     if (!newPassword) {
-        alert('New password is required');
+        showNotification('New password is required', 'error');
         return;
     }
     
     if (newPassword.length < 6) {
-        alert('New password must be at least 6 characters');
+        showNotification('New password must be at least 6 characters', 'error');
         return;
     }
     
     if (newPassword !== confirmPassword) {
-        alert('New passwords do not match');
+        showNotification('New passwords do not match', 'error');
         return;
     }
     
@@ -284,12 +328,12 @@ async function changePassword() {
             .single();
         
         if (error) {
-            alert('Error verifying password: ' + error.message);
+            showNotification('Error verifying password: ' + error.message, 'error');
             return;
         }
         
         if (guard.password !== currentPassword) {
-            alert('Current password is incorrect');
+            showNotification('Current password is incorrect', 'error');
             return;
         }
         
@@ -300,11 +344,11 @@ async function changePassword() {
             .eq('id', currentUser.id);
         
         if (updateError) {
-            alert('Error changing password: ' + updateError.message);
+            showNotification('Error changing password: ' + updateError.message, 'error');
             return;
         }
         
-        alert('Password changed successfully!');
+        showNotification('Password changed successfully!');
         
         // Clear form
         document.getElementById('current-password').value = '';
@@ -313,7 +357,7 @@ async function changePassword() {
         
     } catch (error) {
         console.error('Error:', error);
-        alert('An error occurred while changing your password');
+        showNotification('An error occurred while changing your password', 'error');
     }
 }
 
@@ -346,7 +390,7 @@ function loadNotificationPreferences() {
  */
 async function saveNotificationPreferences() {
     if (!currentUser || !currentUser.id) {
-        alert('You must be logged in to save preferences');
+        showNotification('You must be logged in to save preferences', 'error');
         return;
     }
     
@@ -366,7 +410,7 @@ async function saveNotificationPreferences() {
         
     } catch (error) {
         console.error('Error saving preferences:', error);
-        alert('An error occurred while saving preferences');
+        showNotification('An error occurred while saving preferences', 'error');
     }
 }
 
@@ -380,21 +424,6 @@ async function saveNotificationPreferences() {
 function logout() {
     localStorage.removeItem('educare_session');
     localStorage.removeItem('educare_user');
+    sessionStorage.removeItem('teacher_identity_loaded');
     window.location.href = '../index.html';
-}
-
-/**
- * Show notification message
- */
-function showNotification(message) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
 }

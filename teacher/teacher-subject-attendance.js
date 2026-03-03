@@ -309,7 +309,14 @@ function getStatusBadge(status) {
  * PRESERVES: Gate time_in data when updating
  */
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
+    // UPDATED: Add double-submit prevention
+    const studentRow = document.querySelector(`button[onclick*="'${studentId}'"]`).closest('tr');
+    const buttons = studentRow.querySelectorAll('button');
+    
     try {
+        // Disable buttons to prevent double-submission
+        buttons.forEach(btn => btn.disabled = true);
+
         // FIX: Timezone adjustment to prevent saving to yesterday's date
         const localDate = new Date();
         localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
@@ -371,6 +378,13 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
             return;
         }
         
+        // NEW: Log the successful action
+        if (typeof logTeacherAction === 'function') {
+            logTeacherAction('SUBJECT_ATTENDANCE_MARK', 
+                { subject_name: subjectName, new_status: newStatus, overall_status: overallStatus }, 
+                studentId, 'student');
+        }
+
         showNotification(`Student marked as ${newStatus}`, 'success');
         
         // Refresh the list
@@ -382,6 +396,9 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
     } catch (err) {
         console.error('Error marking subject attendance:', err);
         showNotification('Error marking attendance', 'error');
+    } finally {
+        // Re-enable buttons
+        buttons.forEach(btn => btn.disabled = false);
     }
 }
 
