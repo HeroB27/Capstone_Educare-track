@@ -228,6 +228,13 @@ async function handleScan(studentId, qrCode) {
             return;
         }
 
+        // PATCH 2: Block deactivated/expelled students ("Ghost Student" Block)
+        // Check if student status is not 'Enrolled'
+        if (student.status && student.status !== 'Enrolled') {
+            showError(`Student account is ${student.status}. Please contact the school office.`);
+            return;
+        }
+
         // 3. Get last log for today to determine direction
         const lastLog = await getLastLogToday(studentId);
         

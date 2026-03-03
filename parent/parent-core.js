@@ -97,7 +97,9 @@ async function loadChildLiveStatus() {
         return null;
     }
     
-    const today = new Date().toISOString().split('T')[0];
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
 
     try {
         const { data: log, error } = await supabase

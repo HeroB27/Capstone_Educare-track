@@ -1,4 +1,3 @@
-// teacher-homeroom.js
 // Real-time Homeroom Attendance with Gate Status Integration
 
 // FIX: Add currentUser reference to prevent ReferenceError
@@ -96,12 +95,39 @@ async function loadHomeroomStudents() {
     const tbody = document.getElementById('homeroom-student-list');
     
     try {
+        // PATCH 3: Teacher Suspension Lock - Check for active suspensions
+        const todayStr = getLocalISOString();
+        
+        const { data: suspension } = await supabase
+            .from('holidays')
+            .select('*')
+            .eq('holiday_date', todayStr)
+            .eq('is_suspended', true)
+            .single();
+        
         // Get teacher's homeroom class
         const { data: homeroom, error: homeroomError } = await supabase
             .from('classes')
             .select('id, grade_level, section_name')
             .eq('adviser_id', currentUser.id)
             .single();
+        
+        // If suspended and affects this teacher's grade, show warning and halt
+        if (suspension && homeroom) {
+            const isAllGrades = suspension.target_grades === 'All';
+            const isMyGrade = suspension.target_grades?.includes(homeroom.grade_level);
+            
+            if (isAllGrades || isMyGrade) {
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center"><div class="bg-red-50 border border-red-200 rounded-2xl p-6"><i data-lucide="alert-circle" class="w-12 h-12 text-red-500 mx-auto mb-3"></i><h3 class="text-lg font-black text-red-700 mb-1">Classes Suspended Today</h3><p class="text-sm text-red-600 font-medium">${suspension.description}</p><p class="text-xs text-red-500 mt-2">Attendance tracking is disabled.</p></div></td></tr>`;
+                }
+                document.getElementById('homeroom-class-info').textContent = 'Classes Suspended';
+                document.getElementById('student-count').textContent = '-- students';
+                document.getElementById('attendance-rate').textContent = '--%';
+                if (window.lucide) window.lucide.createIcons();
+                return;
+            }
+        }
         
         if (homeroomError || !homeroom) {
             myHomeroomClassId = null;

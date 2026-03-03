@@ -1,10 +1,11 @@
 // teacher/teacher-gatekeeper-mode.js
 
 // Ensure teacher is logged in and has gatekeeper rights
-const currentUser = checkSession('teachers');
+var currentUser = window.currentUser || checkSession('teachers');
 if (!currentUser || !currentUser.is_gatekeeper) {
     // Use custom toast for early message before core loads
-    showToast("Unauthorized Access. Redirecting to dashboard.", 'error');
+    if (typeof showNotification === 'function') showNotification("Unauthorized Access. Redirecting to dashboard.", 'error');
+    else alert("Unauthorized Access. Redirecting to dashboard.");
     setTimeout(() => {
         window.location.href = 'teacher-dashboard.html';
     }, 2000);
@@ -83,7 +84,9 @@ async function processScan(studentIdText) {
     
     try {
         // 1. Check if today is a holiday/suspended day
-        const today = new Date().toISOString().split('T')[0];
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const today = localDate.toISOString().split('T')[0];
         const holidayCheck = await checkIsHoliday(today);
         
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
@@ -149,7 +152,9 @@ async function processScan(studentIdText) {
 
 // Handle attendance scan logic
 async function handleAttendanceScan(student) {
-    const today = new Date().toISOString().split('T')[0];
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     const now = new Date();
     const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     

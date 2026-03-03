@@ -283,8 +283,8 @@ async function loadSchedule() {
 // 6. Load Homeroom Students with Real-time Gate Status
 // NOTE: If teacher-homeroom.js is loaded, it has a more advanced version with real-time features
 // This version is kept for compatibility with other pages
-if (typeof loadHomeroomStudents !== 'function') {
-async function loadHomeroomStudents() {
+if (typeof window.loadHomeroomStudents !== 'function') {
+window.loadHomeroomStudents = async function() {
     const studentList = document.getElementById('homeroom-student-list');
     const searchInput = document.getElementById('student-search');
     const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
@@ -395,8 +395,8 @@ async function loadHomeroomStudents() {
     } catch (err) {
         console.error('Error in loadHomeroomStudents:', err);
     }
+};
 }
-} // End if statement
 
 // 7. Mark Attendance for Homeroom
 async function markAttendance(studentId, status) {
