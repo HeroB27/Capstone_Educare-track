@@ -247,6 +247,18 @@ async function saveSuspension(event) {
         
         if (error) throw error;
         
+        // CONSOLIDATED LOGIC: Auto-broadcast announcement when suspension is set
+        if (isActive) {
+            const typeLabel = type.replace(/_/g, ' ').toUpperCase();
+            await supabase.from('announcements').insert([{
+                title: `📢 ${typeLabel} ALERT: ${title}`,
+                content: `A ${typeLabel} has been declared from ${formatDate(startDate)} to ${formatDate(endDate)}. ${description}`,
+                target_parents: true,
+                target_teachers: true,
+                target_guards: true
+            }]);
+        }
+
         showNotification(id ? 'Suspension updated successfully' : 'Suspension added successfully', 'success');
         closeSuspensionModal();
         loadSuspensions();
@@ -344,7 +356,7 @@ window.deleteSuspension = deleteSuspension;
 
 // ============== ORIGINAL CODE BELOW ==============
 
-function switchTab(tabId) {
+function switchTab(event, tabId) {
     const tabs = ['thresholds', 'attendance-rules', 'notifications'];
     
     tabs.forEach(t => {
@@ -369,7 +381,7 @@ function switchTab(tabId) {
     });
 }
 
-async function saveThresholds() {
+async function saveThresholds(event) {
     const btn = event.currentTarget;
     setLoading(btn, true);
 
@@ -385,7 +397,24 @@ async function saveThresholds() {
     }
 }
 
-async function saveNotificationSettings() {
+// NEW: Save attendance rules settings
+async function saveAttendanceRules(event) {
+    const btn = event.currentTarget;
+    setLoading(btn, true);
+
+    const keys = ['auto_mark_absent', 'grace_period_minutes', 'require_parent_note'];
+    
+    try {
+        await performBulkUpsert(keys);
+        showNotification("Attendance rules updated successfully!", "success");
+    } catch (err) {
+        showNotification("Update failed: " + err.message, "error");
+    } finally {
+        setLoading(btn, false, '<i data-lucide="save" class="w-4 h-4"></i> Save Rules');
+    }
+}
+
+async function saveNotificationSettings(event) {
     const btn = event.currentTarget;
     setLoading(btn, true);
 
@@ -401,7 +430,7 @@ async function saveNotificationSettings() {
     }
 }
 
-async function saveWeekendSettings() {
+async function saveWeekendSettings(event) {
     const btn = event.currentTarget;
     setLoading(btn, true);
 

@@ -146,7 +146,7 @@ async function loadGradeSchedules() {
 }
 
 // 5. Save All Grade Schedules
-async function saveAllSchedules() {
+async function saveAllSchedules(event) {
     const btn = event.currentTarget;
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';

@@ -13,131 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(loadAnnouncements, 60000);
 });
 
-// --- SUSPENSION MODAL LOGIC ---
-
-function openSuspensionModal() { document.getElementById('suspensionModal').classList.remove('hidden'); }
-function closeSuspensionModal() { document.getElementById('suspensionModal').classList.add('hidden'); }
-
-function setCategory(cat) {
-    selectedCategory = cat;
-    document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`cat-${cat}`).classList.add('active');
-    document.getElementById('dynamicFields').classList.remove('hidden');
-    
-    const typeSelect = document.getElementById('eventType');
-    const options = {
-        'Calamity': ['Typhoon', 'Earthquake', 'Outbreak'],
-        'Holiday': ['National Holiday', 'Local Holiday', 'School Holiday'],
-        'Others': ['NAT Testing', 'Emergency']
-    };
-    typeSelect.innerHTML = `<option value="">Select Type...</option>` + options[cat].map(o => `<option value="${o}">${o}</option>`).join('');
-}
-
-function handleTypeChange() {
-    const type = document.getElementById('eventType').value;
-    const ruleInfo = document.getElementById('ruleInfo');
-    const container = document.getElementById('typeSelection');
-    
-    const existing = document.getElementById('signalContainer');
-    if (existing) existing.remove();
-
-    if (type === 'Typhoon') {
-        const html = `
-            <div id="signalContainer" class="mt-2 p-3 bg-violet-50 rounded-xl border border-violet-100">
-                <label class="block text-[9px] font-black text-violet-500 uppercase mb-1">Signal Level</label>
-                <select id="signalLevel" onchange="calculateSuspensionRules()" class="w-full border-none bg-transparent p-0 text-sm outline-none font-bold">
-                    <option value="1">Signal No. 1</option>
-                    <option value="2">Signal No. 2</option>
-                    <option value="3">Signal No. 3+</option>
-                </select>
-            </div>`;
-        container.insertAdjacentHTML('beforeend', html);
-        calculateSuspensionRules();
-    } else {
-        ruleInfo.classList.add('hidden');
-        ruleInfo.dataset.target = "All";
-    }
-}
-
-function calculateSuspensionRules() {
-    const signal = document.getElementById('signalLevel').value;
-    const info = document.getElementById('ruleInfo');
-    const desc = document.getElementById('ruleDesc');
-    const title = document.getElementById('ruleTitle');
-    
-    info.classList.remove('hidden');
-    if (signal === "1") {
-        title.innerText = "Signal No. 1 Policy";
-        desc.innerText = "Automatic suspension for Kinder only. Other levels proceed.";
-        info.dataset.target = "Kinder";
-    } else if (signal === "2") {
-        title.innerText = "Signal No. 2 Policy";
-        desc.innerText = "Suspension for Kinder to JHS (G10). Shift to Modular Learning.";
-        info.dataset.target = "Elementary,Junior High";
-    } else {
-        title.innerText = "Signal No. 3+ Policy";
-        desc.innerText = "Total suspension of all classes and school work.";
-        info.dataset.target = "All";
-    }
-}
-
-// DUAL-SAVE LOGIC: Holidays + Announcements
-async function saveLogicSuspension(event) {
-    const btn = event.currentTarget;
-    const originalText = btn.innerHTML;
-    setLoading(btn, true, 'Processing...');
-
-    // Get current admin user
-    const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
-    let adminId = null;
-    if (userStr) {
-        try {
-            const user = JSON.parse(userStr);
-            adminId = user.id;
-        } catch (e) {
-            console.error("Error parsing user:", e);
-        }
-    }
-
-    const payload = {
-        holiday_date: document.getElementById('eventDate').value,
-        description: `${document.getElementById('eventType').value}${document.getElementById('signalLevel') ? ' (S#'+document.getElementById('signalLevel').value+')' : ''} - ${document.getElementById('scheduleType').value}`,
-        target_grades: document.getElementById('ruleInfo').dataset.target || "All",
-        is_suspended: true,
-        notes: document.getElementById('eventNotes').value || ''
-    };
-
-    // 1. Insert into Holidays Table
-    const { error: holidayError } = await supabase.from('holidays').insert([payload]);
-
-    if (!holidayError) {
-        // 2. Insert into Announcements Table
-        const announcementPayload = {
-            title: `🚨 SUSPENSION: ${payload.description}`,
-            content: `Class suspension declared for ${payload.target_grades} on ${payload.holiday_date}. ${payload.notes}`,
-            target_parents: true, 
-            target_teachers: true, 
-            target_guards: true, 
-            target_clinic: true
-        };
-        
-        // Add admin ID if available (column requires SQL fix to exist)
-        if (adminId) {
-            announcementPayload.posted_by_admin_id = adminId;
-        }
-        
-        if (document.getElementById('autoAnnounce').checked) {
-            await supabase.from('announcements').insert([announcementPayload]);
-        }
-        showNotification("Suspension Recorded and Broadcasted!", "success");
-        closeSuspensionModal();
-        loadAnnouncements();
-    } else {
-        showNotification("Failed to save: " + holidayError.message, "error");
-    }
-    setLoading(btn, false, originalText);
-}
-
 // --- STANDARD ANNOUNCEMENT LOGIC ---
 
 async function loadAnnouncements() {
@@ -181,6 +56,37 @@ async function deleteAnnouncement(id) {
             }
         }
     );
+}
+
+// NEW: Category selection for announcements
+function setCategory(event, category) {
+    selectedCategory = category;
+    // Update UI to show selected category
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('border-violet-500', 'bg-violet-50');
+        btn.classList.add('border-gray-50');
+    });
+    const selectedBtn = document.getElementById('cat-' + category);
+    if (selectedBtn) {
+        selectedBtn.classList.remove('border-gray-50');
+        selectedBtn.classList.add('border-violet-500', 'bg-violet-50');
+    }
+}
+
+// NEW: Switch between Active and Scheduled announcements
+function switchAnnouncementTab(tab) {
+    currentAnnTab = tab;
+    // Update tab UI
+    document.getElementById('tab-active')?.classList.toggle('border-violet-600', tab === 'active');
+    document.getElementById('tab-active')?.classList.toggle('text-violet-600', tab === 'active');
+    document.getElementById('tab-active')?.classList.toggle('border-transparent', tab !== 'active');
+    document.getElementById('tab-active')?.classList.toggle('text-gray-500', tab !== 'active');
+    document.getElementById('tab-scheduled')?.classList.toggle('border-violet-600', tab === 'scheduled');
+    document.getElementById('tab-scheduled')?.classList.toggle('text-violet-600', tab === 'scheduled');
+    document.getElementById('tab-scheduled')?.classList.toggle('border-transparent', tab !== 'scheduled');
+    document.getElementById('tab-scheduled')?.classList.toggle('text-gray-500', tab !== 'scheduled');
+    // Reload announcements
+    loadAnnouncements();
 }
 
 // Helper: Loading Spinner

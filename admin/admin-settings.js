@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     injectStyles();
 });
 
-function switchTab(tabId) {
+function switchTab(event, tabId) {
     const tabs = ['gate-logic', 'auto-alerts', 'password-resets'];
     tabs.forEach(t => {
         document.getElementById(`section-${t}`)?.classList.add('hidden');
@@ -237,17 +237,15 @@ async function loadPasswordResets() {
     list.innerHTML = '<tr><td class="px-8 py-12 text-center text-gray-400 italic">Loading requests...</td></tr>';
 
     let queryBuilder = supabase
-        .from('notifications')
+        .from('password_resets')
         .select('*')
-        .eq('recipient_role', 'admins')
-        .eq('type', 'system_alert')
-        .eq('is_read', false);
+        .eq('status', 'pending');
 
     if (query) {
-        queryBuilder = queryBuilder.ilike('message', `%${query}%`);
+        queryBuilder = queryBuilder.ilike('username', `%${query}%`);
     }
 
-    const { data, error } = await queryBuilder.order('created_at', { ascending: true });
+    const { data, error } = await queryBuilder.order('created_at', { ascending: false });
 
     if (error) {
         list.innerHTML = '<tr><td class="px-8 py-12 text-center text-red-500">Error loading requests.</td></tr>';
@@ -261,7 +259,10 @@ async function loadPasswordResets() {
 
     list.innerHTML = data.map(req => `
         <tr class="hover:bg-violet-50/50 transition-colors">
-            <td class="px-8 py-5 font-medium text-gray-700">${req.message}</td>
+            <td class="px-8 py-5">
+                <span class="font-medium text-gray-700">${req.username}</span>
+                <span class="ml-2 px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded-full">${req.user_role}</span>
+            </td>
             <td class="px-8 py-5 text-sm text-gray-500">${new Date(req.created_at).toLocaleString()}</td>
             <td class="px-8 py-5 text-right">
                 <button onclick="resolvePasswordRequest(${req.id})" class="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-200 transition-all">Mark Resolved</button>
@@ -271,10 +272,14 @@ async function loadPasswordResets() {
 }
 
 async function resolvePasswordRequest(id) {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    const { error } = await supabase.from('password_resets').update({ 
+        status: 'reviewed',
+        resolved_at: new Date().toISOString()
+    }).eq('id', id);
+    
     if (error) showNotification("Failed to resolve request.", "error");
     else {
-        showNotification("Request marked as resolved.", "success");
+        showNotification("Request marked as reviewed.", "success");
         loadPasswordResets();
     }
 }

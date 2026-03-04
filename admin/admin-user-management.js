@@ -170,7 +170,7 @@ function renderUserTable() {
 
 // --- BRANCH REGISTRATION FLOW ---
 function openEnrollmentModal() { currentStep = 1; setEnrollType('parent'); document.getElementById('enrollmentModal').classList.remove('hidden'); }
-function setEnrollType(type) {
+function setEnrollType(event, type) {
     enrollType = type;
     document.getElementById('btn-type-parent').className = type === 'parent' ? 'px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all' : 'px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all';
     document.getElementById('btn-type-staff').className = type === 'staff' ? 'px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all' : 'px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all';
@@ -653,7 +653,7 @@ function closeEnrollmentModal() {
     document.getElementById('next-btn').innerText = "Next Step";
 }
 
-function switchView(v) { 
+function switchView(event, v) { 
     currentView = v; 
     renderUserTable(); 
     
