@@ -41,16 +41,27 @@ let currentChildLiveStatus = null; // Cache for live status
 /**
  * Load all children for the logged-in parent
  * fetches students linked to parent's account
+ * UPDATED: Extract parentId directly from localStorage
  */
 async function loadChildren() {
     try {
+        // FIX: Explicitly get parentId from localStorage to ensure it's available
+        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+        if (!userStr) {
+            console.error('No user session found in localStorage');
+            return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const parentId = user.id;
+        
+        console.log('Loading children for parentId:', parentId);
+        
+        // Use simple direct query - no complex joins that could fail
         const { data: children, error } = await supabase
             .from('students')
-            .select(`
-                *,
-                classes (grade_level, section_name, strand)
-            `)
-            .eq('parent_id', currentUser.id);
+            .select('*')
+            .eq('parent_id', parentId);
 
         if (error) {
             console.error('Error loading children:', error);

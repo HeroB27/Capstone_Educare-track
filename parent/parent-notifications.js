@@ -60,15 +60,31 @@ function setupNotificationsRealtime() {
 
 /**
  * Load all notifications for parent
+ * UPDATED: Fixed recipient_role to 'parents' (plural), extract parentId from localStorage
  */
 async function loadNotifications() {
     try {
+        // FIX: Explicitly get parentId from localStorage to ensure it's available
+        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+        if (!userStr) {
+            console.error('No user session found in localStorage');
+            showEmptyState();
+            return;
+        }
+        
+        const user = JSON.parse(userStr);
+        const parentId = user.id;
+        
+        console.log('Loading notifications for parentId:', parentId, 'role: parents');
+        
         const now = new Date().toISOString();
+        
+        // FIX: Query the correct 'notifications' table with proper recipient_role 'parents' (plural)
         const { data: notifications, error } = await supabase
             .from('notifications')
             .select('*')
-            .eq('recipient_id', currentUser.id)
-            .eq('recipient_role', 'parent')
+            .eq('recipient_id', parentId)
+            .eq('recipient_role', 'parents')  // FIX: Use 'parents' (plural) not 'parent'
             .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false })
             .limit(100);
@@ -80,6 +96,7 @@ async function loadNotifications() {
         }
 
         allNotifications = notifications || [];
+        console.log('Notifications loaded:', allNotifications.length);
         renderNotifications();
 
         document.getElementById('loading-indicator').classList.add('hidden');
@@ -282,14 +299,21 @@ async function markAsRead(notificationId) {
 
 /**
  * Mark all notifications as read
+ * UPDATED: Fixed recipient_role to 'parents' (plural)
  */
 async function markAllRead() {
     try {
+        // FIX: Get parentId from localStorage
+        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+        if (!userStr) return;
+        const user = JSON.parse(userStr);
+        const parentId = user.id;
+        
         await supabase
             .from('notifications')
             .update({ is_read: true })
-            .eq('recipient_id', currentUser.id)
-            .eq('recipient_role', 'parent')
+            .eq('recipient_id', parentId)
+            .eq('recipient_role', 'parents')  // FIX: Use 'parents' (plural)
             .eq('is_read', false);
 
         // Update local state
