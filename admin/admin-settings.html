@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings Hub - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -87,68 +88,46 @@
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
             <div class="mb-10 border-b border-gray-200">
                 <nav class="-mb-px flex space-x-12">
-                    <button onclick="switchTab(event, 'gate-logic')" id="btn-gate-logic" class="tab-btn active px-2 py-4 border-b-4 text-xs font-black uppercase tracking-widest transition-all">Gate Logic</button>
-                    <button onclick="switchTab(event, 'auto-alerts')" id="btn-auto-alerts" class="tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase text-xs tracking-widest transition-all">Auto-Alerts</button>
-                    <button onclick="switchTab(event, 'password-resets')" id="btn-password-resets" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase text-xs tracking-widest transition-all">
+                    <button onclick="switchTab(event, 'gate-logic')" id="btn-gate-logic" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
+                        Time Thresholds
+                    </button>
+                    <button onclick="switchTab(event, 'auto-alerts')" id="btn-auto-alerts" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
+                        Auto-Alerts
+                    </button>
+                    <button onclick="switchTab(event, 'password-resets')" id="btn-password-resets" class="relative tab-btn active px-2 py-4 border-b-4 border-violet-500 text-violet-600 font-black uppercase tracking-widest transition-all">
                         Password Resets
                         <span id="password-reset-badge" class="absolute -top-1 -right-3 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center hidden">0</span>
                     </button>
                 </nav>
             </div>
 
-            <section id="section-gate-logic" class="settings-section space-y-10">
+            <!-- TAB 1: Time Thresholds (Gate Logic) -->
+            <section id="section-gate-logic" class="settings-section hidden">
                 <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                        <div>
-                            <h3 class="font-black text-gray-800">Time Thresholds</h3>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Automatic Status Calculation Rules</p>
-                        </div>
-                        <button onclick="saveThresholds(event)" class="px-8 py-2.5 bg-violet-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Save Thresholds</button>
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+                        <h3 class="font-black text-gray-800">Gate Logic Time Thresholds</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Configure AM/PM gate timing and late thresholds.</p>
                     </div>
-                    <div class="p-10 grid grid-cols-1 md:grid-cols-2 gap-10">
-                        <div class="space-y-6">
-                            <div>
-                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Morning Gate Open</label>
-                                <input type="time" id="am_gate_open" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-violet-200 transition-all">
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Late Arrival Cutoff</label>
-                                <input type="time" id="am_late_threshold" class="w-full border-2 border-amber-50 bg-amber-50/20 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-amber-200 transition-all">
-                            </div>
-                        </div>
-                        <div class="space-y-6">
-                            <div>
-                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Standard Dismissal</label>
-                                <input type="time" id="pm_dismissal_time" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-violet-200 transition-all">
-                            </div>
-                            <div>
-                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Early Exit Restrictions Before</label>
-                                <input type="time" id="pm_early_cutoff" class="w-full border-2 border-orange-50 bg-orange-50/20 rounded-2xl px-5 py-3 mt-1 font-bold outline-none focus:border-orange-200 transition-all">
-                            </div>
-                        </div>
+                    <div class="p-8">
+                        <p class="text-gray-500">Gate Logic settings content goes here.</p>
                     </div>
                 </div>
             </section>
 
-            <section id="section-auto-alerts" class="settings-section hidden space-y-10">
+            <!-- TAB 2: Auto-Alerts -->
+            <section id="section-auto-alerts" class="settings-section hidden">
                 <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                        <h3 class="font-black text-gray-800">Parent Push Notifications</h3>
-                        <button onclick="saveNotificationSettings(event)" class="px-8 py-2.5 bg-violet-600 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-violet-200">Save Toggles</button>
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+                        <h3 class="font-black text-gray-800">Auto-Alerts Configuration</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Configure automatic notification alerts.</p>
                     </div>
-                    <div class="p-10 space-y-4 max-w-2xl">
-                        <label class="flex items-center justify-between p-6 bg-slate-50 border-2 border-transparent hover:border-violet-100 rounded-3xl cursor-pointer transition-all">
-                            <span class="font-bold text-gray-700">Alert Parent on Late Arrival</span>
-                            <input type="checkbox" id="notify_late" class="w-6 h-6 text-violet-600 rounded-lg">
-                        </label>
-                        <label class="flex items-center justify-between p-6 bg-slate-50 border-2 border-transparent hover:border-violet-100 rounded-3xl cursor-pointer transition-all">
-                            <span class="font-bold text-gray-700">Alert Parent on Absence</span>
-                            <input type="checkbox" id="notify_absent" class="w-6 h-6 text-violet-600 rounded-lg">
-                        </label>
+                    <div class="p-8">
+                        <p class="text-gray-500">Auto-Alerts settings content goes here.</p>
                     </div>
                 </div>
             </section>
 
+            <!-- TAB 3: Password Resets -->
             <section id="section-password-resets" class="settings-section hidden">
                 <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
                     <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center gap-4">

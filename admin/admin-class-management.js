@@ -20,8 +20,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadTeachers() {
-    const { data } = await supabase.from('teachers').select('id, full_name').eq('is_active', true).order('full_name');
-    teachers = data || [];
+    try {
+        const { data, error } = await supabase.from('teachers').select('id, full_name').eq('is_active', true).order('full_name');
+        if (error) throw error;
+        teachers = data || [];
+    } catch (err) {
+        console.error("Error loading teachers:", err);
+        showNotification("Failed to load teachers", "error");
+        return;
+    }
     const select = document.getElementById('adviserId');
     const subjSelect = document.getElementById('subjectTeacherId');
     const opts = '<option value="">Select Teacher</option>' + teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
@@ -34,29 +41,37 @@ async function loadClasses(grade) {
     renderGradeTabs();
     const grid = document.getElementById('classGrid');
     grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400 italic">Loading rosters...</div>';
-    const { data } = await supabase.from('classes').select('*, teachers(full_name), students(count)').eq('grade_level', grade);
     
-    // Display logic: For non-SHS show grade only, for SHS show grade + strand
-    grid.innerHTML = data?.length ? data.map(c => {
-        const isSHS = isSHSGrade(c.grade_level);
-        const displayName = isSHS 
-            ? `${c.grade_level} – ${c.strand || 'No Strand'}` 
-            : c.grade_level;
+    try {
+        const { data, error } = await supabase.from('classes').select('*, teachers(full_name), students(count)').eq('grade_level', grade);
+        if (error) throw error;
         
-        // For non-SHS, section_name is stored as the grade; for SHS use strand or section
-        const sectionDisplay = isSHS ? (c.strand || c.section_name || 'N/A') : c.grade_level;
-        
-        return `
-        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
-            <h3 class="text-xl font-black text-gray-900 leading-tight">${displayName}</h3>
-            <p class="text-xs font-bold text-violet-600 uppercase mt-1">${c.teachers?.full_name || 'No Adviser'}</p>
-            <div class="flex gap-2 mt-4 pt-4 border-t border-gray-50">
-                <button onclick="openSubjectLoad(${c.id}, '${sectionDisplay}')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600">Manage Subjects</button>
-                <button onclick="editClass(${c.id})" class="p-2 text-gray-300 hover:text-violet-500"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-                <button onclick="deleteClass(${c.id}, ${c.students?.[0]?.count || 0})" class="p-2 text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            </div>
-        </div>`;
-    }).join('') : '<div class="col-span-full py-12 text-center text-gray-400">No classes found.</div>';
+        // Display logic: For non-SHS show grade only, for SHS show grade + strand
+        grid.innerHTML = data?.length ? data.map(c => {
+            const isSHS = isSHSGrade(c.grade_level);
+            const displayName = isSHS 
+                ? `${c.grade_level} – ${c.strand || 'No Strand'}` 
+                : c.grade_level;
+            
+            // For non-SHS, section_name is stored as the grade; for SHS use strand or section
+            const sectionDisplay = isSHS ? (c.strand || c.section_name || 'N/A') : c.grade_level;
+            
+            return `
+            <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
+                <h3 class="text-xl font-black text-gray-900 leading-tight">${displayName}</h3>
+                <p class="text-xs font-bold text-violet-600 uppercase mt-1">${c.teachers?.full_name || 'No Adviser'}</p>
+                <div class="flex gap-2 mt-4 pt-4 border-t border-gray-50">
+                    <button onclick="openSubjectLoad(${c.id}, '${sectionDisplay}')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600">Manage Subjects</button>
+                    <button onclick="editClass(${c.id})" class="p-2 text-gray-300 hover:text-violet-500"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                    <button onclick="deleteClass(${c.id}, ${c.students?.[0]?.count || 0})" class="p-2 text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+            </div>`;
+        }).join('') : '<div class="col-span-full py-12 text-center text-gray-400">No classes found.</div>';
+    } catch (err) {
+        console.error("Error loading classes:", err);
+        grid.innerHTML = '<div class="col-span-full py-12 text-center text-red-500">Error loading classes</div>';
+        showNotification("Failed to load classes", "error");
+    }
     lucide.createIcons();
 }
 
@@ -68,24 +83,35 @@ async function openSubjectLoad(id, section) {
 }
 
 async function loadSubjectList(classId) {
-    const { data } = await supabase.from('subject_loads').select('*, teachers(full_name)').eq('class_id', classId);
-    document.getElementById('subjectList').innerHTML = data?.map(s => {
-        // Format time and days
-        const startTime = s.schedule_time_start ? s.schedule_time_start.substring(0, 5) : '';
-        const endTime = s.schedule_time_end ? s.schedule_time_end.substring(0, 5) : '';
-        const timeDisplay = startTime && endTime ? `${startTime} - ${endTime}` : 'No schedule';
-        const daysDisplay = s.schedule_days || 'No days set';
+    const container = document.getElementById('subjectList');
+    if (!container) return;
+    
+    try {
+        const { data, error } = await supabase.from('subject_loads').select('*, teachers(full_name)').eq('class_id', classId);
+        if (error) throw error;
         
-        return `
-        <div class="flex justify-between items-center p-4 bg-white border rounded-xl mb-2">
-            <div>
-                <p class="font-bold text-gray-800">${s.subject_name}</p>
-                <p class="text-xs text-violet-600 font-bold uppercase">${s.teachers?.full_name}</p>
-                <p class="text-xs text-gray-500 mt-1">📅 ${daysDisplay} | ⏰ ${timeDisplay}</p>
-            </div>
-            <button onclick="deleteSubject(${s.id})" class="text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-        </div>`;
-    }).join('') || '<p class="text-center text-gray-400 py-4">No subjects assigned yet.</p>';
+        container.innerHTML = data?.map(s => {
+            // Format time and days
+            const startTime = s.schedule_time_start ? s.schedule_time_start.substring(0, 5) : '';
+            const endTime = s.schedule_time_end ? s.schedule_time_end.substring(0, 5) : '';
+            const timeDisplay = startTime && endTime ? `${startTime} - ${endTime}` : 'No schedule';
+            const daysDisplay = s.schedule_days || 'No days set';
+            
+            return `
+            <div class="flex justify-between items-center p-4 bg-white border rounded-xl mb-2">
+                <div>
+                    <p class="font-bold text-gray-800">${s.subject_name}</p>
+                    <p class="text-xs text-violet-600 font-bold uppercase">${s.teachers?.full_name}</p>
+                    <p class="text-xs text-gray-500 mt-1">📅 ${daysDisplay} | ⏰ ${timeDisplay}</p>
+                </div>
+                <button onclick="deleteSubject(${s.id})" class="text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>`;
+        }).join('') || '<p class="text-center text-gray-400 py-4">No subjects assigned yet.</p>';
+    } catch (err) {
+        console.error("Error loading subjects:", err);
+        container.innerHTML = '<p class="text-center text-red-500 py-4">Error loading subjects</p>';
+        showNotification("Failed to load subjects", "error");
+    }
     lucide.createIcons();
 }
 
@@ -299,6 +325,11 @@ async function openAddSubjectModal() {
 function closeAddSubjectModal() { document.getElementById('addSubjectModal').classList.add('hidden'); }
 function closeSubjectLoadModal() { document.getElementById('subjectLoadModal').classList.add('hidden'); }
 
+// Close class modal - adds hidden class to modal background
+function closeClassModal() {
+    document.getElementById('classModal').classList.add('hidden');
+}
+
 async function deleteSubject(id) {
     showConfirmationModal(
         "Remove Subject?",
@@ -413,3 +444,18 @@ function showNotification(msg, type='info', callback=null) {
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+// Make functions globally accessible for HTML onclick handlers
+window.closeClassModal = closeClassModal;
+window.openClassModal = openClassModal;
+window.editClass = editClass;
+window.deleteClass = deleteClass;
+window.openSubjectLoad = openSubjectLoad;
+window.closeSubjectLoadModal = closeSubjectLoadModal;
+window.openAddSubjectModal = openAddSubjectModal;
+window.closeAddSubjectModal = closeAddSubjectModal;
+window.deleteSubject = deleteSubject;
+window.loadClasses = loadClasses;
+window.saveClass = saveClass;
+window.saveSubject = saveSubject;

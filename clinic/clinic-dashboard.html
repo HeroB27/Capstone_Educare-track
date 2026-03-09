@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clinic Dashboard - Educare</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -203,26 +204,26 @@
     </main>
 
     <!-- Patient Details Modal -->
-    <div id="patient-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="px-8 py-6 border-b flex justify-between items-center">
-                <h3 class="text-xl font-black text-gray-900">Patient Details</h3>
-                <button onclick="closePatientModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+    <div id="patient-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Patient Details</h3>
+                <button onclick="closePatientModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div id="patient-modal-content" class="p-8">
+            <div id="patient-modal-content" class="p-8 overflow-y-auto custom-scrollbar flex-1">
                 <!-- Content loaded dynamically -->
             </div>
         </div>
     </div>
 
     <!-- Discharge Modal -->
-    <div id="discharge-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg mx-4">
-            <div class="px-8 py-6 border-b flex justify-between items-center bg-gradient-to-r from-red-600 to-red-500 text-white rounded-t-3xl">
-                <h3 class="text-xl font-black">Discharge Patient</h3>
-                <button onclick="closeDischargeModal()" class="p-2 hover:bg-white/20 rounded-xl transition-colors">
+    <div id="discharge-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Discharge Patient</h3>
+                <button onclick="closeDischargeModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>

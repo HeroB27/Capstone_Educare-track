@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!checkSession('admins')) return;
     }
     
+    // Initialize tabs - set default active tab
+    switchTab(null, 'password-resets');
+    
     await loadAllSettings();
     loadPasswordResetBadge();
     injectDeviceSettingsUI();
@@ -13,24 +16,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function switchTab(event, tabId) {
+    if (event && event.preventDefault) event.preventDefault();
+    
     const tabs = ['gate-logic', 'auto-alerts', 'password-resets'];
     tabs.forEach(t => {
-        document.getElementById(`section-${t}`)?.classList.add('hidden');
+        const section = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`btn-${t}`);
+        
+        // Hide all sections
+        if (section) {
+            if (t === tabId) {
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+            }
+        }
+        
+        // Update button styles
         if (btn) {
-            btn.classList.remove('active', 'border-violet-500', 'text-violet-600');
-            btn.classList.add('border-transparent', 'text-gray-400');
+            if (t === tabId) {
+                btn.classList.remove('border-transparent', 'text-gray-400');
+                btn.classList.add('border-violet-500', 'text-violet-600');
+            } else {
+                btn.classList.remove('border-violet-500', 'text-violet-600');
+                btn.classList.add('border-transparent', 'text-gray-400');
+            }
         }
     });
-    
-    const section = document.getElementById(`section-${tabId}`);
-    const activeBtn = document.getElementById(`btn-${tabId}`);
-    
-    if (section) section.classList.remove('hidden');
-    if (activeBtn) {
-        activeBtn.classList.add('active', 'border-violet-500', 'text-violet-600');
-        activeBtn.classList.remove('border-transparent', 'text-gray-400');
-    }
 
     if (tabId === 'password-resets') {
         loadPasswordResets();
@@ -364,3 +376,13 @@ function showNotification(msg, type='info', callback=null) {
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.switchTab = switchTab;
+window.saveThresholds = saveThresholds;
+window.saveNotificationSettings = saveNotificationSettings;
+window.saveDevicePreferences = saveDevicePreferences;
+window.submitPasswordChange = submitPasswordChange;
+window.resolvePasswordRequest = resolvePasswordRequest;
+window.deleteAllResolved = deleteAllResolved;
+window.loadPasswordResets = loadPasswordResets;

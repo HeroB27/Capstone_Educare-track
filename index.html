@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Educare</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/supabase-client.js"></script>
@@ -47,19 +48,19 @@
     </div>
 
     <!-- Password Reset Modal -->
-    <div id="reset-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-2xl w-96 p-6 transform transition-all scale-100">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-800">Reset Password</h3>
-                <button onclick="closeResetModal()" class="text-gray-400 hover:text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div id="reset-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
+                <h3 class="font-black text-xl uppercase tracking-tight">Reset Password</h3>
+                <button onclick="closeResetModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
 
             <!-- Step 1: Request Token -->
-            <div id="reset-step-1" class="space-y-4">
+            <div id="reset-step-1" class="p-8 space-y-4">
                 <p class="text-sm text-gray-500">Enter your username to receive a reset token.</p>
                 <input type="text" id="reset-username" placeholder="Enter Username" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none">
                 <button onclick="requestResetToken()" id="btn-request-token" class="w-full bg-violet-600 text-white font-bold py-3 rounded-xl hover:bg-violet-700 transition shadow-lg shadow-violet-200">
@@ -71,7 +72,7 @@
             </div>
 
             <!-- Step 2: Submit Token -->
-            <div id="reset-step-2" class="space-y-4 hidden">
+            <div id="reset-step-2" class="p-8 space-y-4 hidden">
                 <p class="text-sm text-gray-500">Enter the token and your new password.</p>
                 <input type="text" id="reset-token" placeholder="Enter 6-Digit Token" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none font-mono tracking-widest text-center uppercase">
                 <input type="password" id="reset-new-pass" placeholder="New Password" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none">
@@ -154,8 +155,9 @@
             }
         }
 
-        // --- SIMPLE PASSWORD RESET LOGIC (No database table needed) ---
-        // Uses sessionStorage instead of database
+        // --- PASSWORD RESET LOGIC (Database-based) ---
+        // Uses password_resets table in Supabase
+        // Admin can view/manage requests in admin-settings.html
 
         function handleForgotPassword() {
             document.getElementById('reset-modal').classList.remove('hidden');
@@ -167,11 +169,6 @@
             document.getElementById('reset-username').value = '';
             document.getElementById('reset-token').value = '';
             document.getElementById('reset-new-pass').value = '';
-            // Clear session storage
-            sessionStorage.removeItem('reset_token');
-            sessionStorage.removeItem('reset_username');
-            sessionStorage.removeItem('reset_role');
-            sessionStorage.removeItem('reset_expires');
         }
 
         function showResetStep(step) {
@@ -210,14 +207,23 @@
                 // 2. Generate Token
                 const token = Math.random().toString(36).substring(2, 8).toUpperCase();
                 
-                // 3. Store token in sessionStorage (simple demo - in production use DB)
-                sessionStorage.setItem('reset_token', token);
-                sessionStorage.setItem('reset_username', username);
-                sessionStorage.setItem('reset_role', foundRole);
-                sessionStorage.setItem('reset_expires', Date.now() + 3600000); // 1 hour
+                // 3. Store token in database (for admin tracking)
+                const expiresAt = new Date(Date.now() + 3600000).toISOString(); // 1 hour
+                const { error: insertError } = await supabase.from('password_resets').insert({
+                    username: username,
+                    user_role: foundRole,
+                    token: token,
+                    status: 'pending',
+                    expires_at: expiresAt
+                });
+
+                if (insertError) {
+                    console.error('Failed to record reset request:', insertError);
+                    // Continue anyway - the token is still valid for the user
+                }
 
                 // 4. Show token to user
-                alert(`[DEMO MODE] Your reset token is: ${token}\n\n(In production, this would be sent to your email)`);
+                alert(`Your reset token is: ${token}\n\n(In production, this would be sent to your email)\n\nAn admin will review your request.`);
                 
                 showResetStep(2);
 
@@ -231,6 +237,7 @@
 
         async function submitResetPassword() {
             const token = document.getElementById('reset-token').value.trim().toUpperCase();
+            const username = document.getElementById('reset-username').value.trim();
             const newPass = document.getElementById('reset-new-pass').value;
             const btn = document.getElementById('btn-submit-reset');
 
@@ -241,29 +248,39 @@
             btn.innerText = "Updating...";
 
             try {
-                // 1. Verify Token from sessionStorage
-                const storedToken = sessionStorage.getItem('reset_token');
-                const storedUsername = sessionStorage.getItem('reset_username');
-                const storedRole = sessionStorage.getItem('reset_role');
-                const expires = parseInt(sessionStorage.getItem('reset_expires'));
+                // 1. Verify Token from database
+                const { data: resetRecord, error: fetchError } = await supabase
+                    .from('password_resets')
+                    .select('*')
+                    .eq('token', token)
+                    .eq('username', username)
+                    .eq('status', 'pending')
+                    .gte('expires_at', new Date().toISOString())
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
 
-                if (!storedToken || token !== storedToken) throw new Error("Invalid token.");
-                if (Date.now() > expires) throw new Error("Token has expired. Please start over.");
-                if (!storedRole) throw new Error("Session expired. Please start over.");
+                if (fetchError || !resetRecord) throw new Error("Invalid or expired token. Please start over.");
 
                 // 2. Update User Password
                 const { error: updateError } = await supabase
-                    .from(storedRole)
+                    .from(resetRecord.user_role)
                     .update({ password: newPass })
-                    .eq('username', storedUsername);
+                    .eq('username', resetRecord.username);
 
                 if (updateError) throw updateError;
 
-                // 3. Clear session
-                sessionStorage.removeItem('reset_token');
-                sessionStorage.removeItem('reset_username');
-                sessionStorage.removeItem('reset_role');
-                sessionStorage.removeItem('reset_expires');
+                // 3. Mark reset request as completed
+                const { error: completeError } = await supabase
+                    .from('password_resets')
+                    .update({ 
+                        status: 'completed',
+                        new_password: newPass,
+                        resolved_at: new Date().toISOString()
+                    })
+                    .eq('id', resetRecord.id);
+
+                if (completeError) console.error('Failed to update reset status:', completeError);
 
                 alert("Password updated successfully! You can now login.");
                 closeResetModal();

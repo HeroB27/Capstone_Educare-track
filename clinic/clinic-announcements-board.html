@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Announcements - Educare Clinic</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -106,14 +107,14 @@
 
     <!-- Announcement Detail Modal -->
     <div id="announcement-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
-            <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50">
-                <h3 id="modal-title" class="text-xl font-black text-gray-900">Announcement Details</h3>
-                <button onclick="closeAnnouncementModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-all">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 id="modal-title" class="font-black text-xl uppercase tracking-tight">Announcement Details</h3>
+                <button onclick="closeAnnouncementModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div id="modal-content" class="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div id="modal-content" class="p-8 overflow-y-auto custom-scrollbar flex-1">
             </div>
         </div>
     </div>

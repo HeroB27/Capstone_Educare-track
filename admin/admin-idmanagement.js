@@ -18,20 +18,60 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Load template settings from database
 async function loadTemplateSettings() {
-    const { data } = await supabase.from('id_templates').select('settings').eq('template_type', 'student').single();
+    const { data } = await supabase.from('id_templates').select('settings').eq('template_type', 'student').maybeSingle();
     if (data && data.settings) {
         templateSettings = data.settings;
     }
 }
 
-// Load all students with their IDs
+// Load all students with their IDs - FIXED: Use separate queries instead of joins
 async function loadStudentIDs() {
     const grid = document.getElementById('idGrid');
-    const { data } = await supabase.from('students').select('*, classes(grade_level, section_name), parents(full_name, contact_number)').order('full_name');
-    studentRecords = data || [];
+    
+    // Step 1: Fetch all students
+    const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('*')
+        .order('full_name');
+    
+    if (studentsError) {
+        console.error('Error fetching students:', studentsError);
+        studentRecords = [];
+        renderIDGrid([]);
+        return;
+    }
+    
+    // Step 2: Fetch classes separately
+    const { data: classes, error: classesError } = await supabase
+        .from('classes')
+        .select('id, grade_level, section_name');
+    
+    // Step 3: Fetch parents separately
+    const { data: parents, error: parentsError } = await supabase
+        .from('parents')
+        .select('id, full_name, contact_number');
+    
+    // Step 4: Map class and parent data to students in JavaScript
+    const classMap = {};
+    if (classes) {
+        classes.forEach(c => { classMap[c.id] = c; });
+    }
+    
+    const parentMap = {};
+    if (parents) {
+        parents.forEach(p => { parentMap[p.id] = p; });
+    }
+    
+    // Merge data manually
+    studentRecords = (students || []).map(s => ({
+        ...s,
+        classes: s.class_id ? classMap[s.class_id] : null,
+        parents: s.parent_id ? parentMap[s.parent_id] : null
+    }));
     
     // Update student count
-    document.getElementById('studentCount').textContent = `${studentRecords.length} Students`;
+    const countEl = document.getElementById('studentCount');
+    if (countEl) countEl.textContent = `${studentRecords.length} Students`;
     
     renderIDGrid(studentRecords);
 }
@@ -281,3 +321,9 @@ function showNotification(msg, type='info', callback=null) {
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.viewID = viewID;
+window.closeViewIdModal = closeViewIdModal;
+window.reissueID = reissueID;
+window.filterStudents = filterStudents;

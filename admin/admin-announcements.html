@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Announcements & Suspensions - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -129,11 +130,11 @@
         </div>
     </main>
 
-    <div id="suspensionModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-            <div class="bg-red-600 px-8 py-6 flex justify-between items-center text-white">
+    <div id="suspensionModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white">
                 <h3 class="font-black text-xl uppercase tracking-tight">Declare Suspension</h3>
-                <button onclick="closeSuspensionModal()"><i data-lucide="x"></i></button>
+                <button onclick="closeSuspensionModal()" class="modal-close-btn w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
             </div>
             <div class="p-8 space-y-6">
                 <div>
@@ -155,7 +156,7 @@
                     <textarea id="eventNotes" rows="3" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-red-200 font-bold" placeholder="Additional details for parents..."></textarea>
                 </div>
             </div>
-            <div class="px-8 py-6 bg-gray-50 flex justify-between items-center border-t border-gray-100">
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-between items-center">
                 <label class="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" id="autoAnnounce" checked class="w-5 h-5 text-red-600 rounded-lg">
                     <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto-Alert Portals</span>
@@ -166,11 +167,11 @@
     </div>
 
     <!-- Create/Edit Announcement Modal -->
-    <div id="announcementModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="bg-violet-600 px-8 py-6 flex justify-between items-center text-white shrink-0">
+    <div id="announcementModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white shrink-0">
                 <h3 class="font-black text-xl uppercase tracking-tight" id="annModalTitle">Post Broadcast</h3>
-                <button onclick="closeAnnouncementModal()"><i data-lucide="x"></i></button>
+                <button onclick="closeAnnouncementModal()" class="modal-close-btn w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
             </div>
             <div class="p-8 space-y-6 overflow-y-auto custom-scrollbar">
                 <input type="hidden" id="annId">
@@ -216,7 +217,7 @@
                     <p class="text-[10px] text-gray-400 mt-2 ml-1 font-medium">Leave blank to post immediately.</p>
                 </div>
             </div>
-            <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3 border-t border-gray-100 shrink-0">
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end gap-3">
                 <button onclick="closeAnnouncementModal()" class="px-6 py-3 text-gray-400 font-bold uppercase text-xs tracking-widest hover:text-gray-600 transition-colors">Cancel</button>
                 <button onclick="saveAnnouncement()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Save Broadcast</button>
             </div>

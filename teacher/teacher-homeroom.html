@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Homeroom Class - Teacher Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -17,6 +18,14 @@
         body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* Print Styles - Hide UI elements when printing */
+        @media print {
+            .non-printable { display: none !important; }
+            .printable-area { padding: 0; margin: 0; }
+            .bg-white { box-shadow: none; border: 1px solid #ddd; }
+            #student-details-modal { display: none !important; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex">
@@ -167,6 +176,51 @@
             </div>
         </div>
     </main>
+
+    <!-- Student Details Modal -->
+    <div id="student-details-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" onclick="if(event.target === this) closeStudentModal()">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-bold text-white">Student Details</h3>
+                    <button onclick="closeStudentModal()" class="text-white/80 hover:text-white hover:bg-white/20 rounded-full p-2 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-center mb-6">
+                        <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i data-lucide="user" class="w-10 h-10 text-blue-600"></i>
+                        </div>
+                    </div>
+                    <div class="text-center mb-6">
+                        <h4 id="modal-student-name" class="text-xl font-bold text-gray-900">Student Name</h4>
+                        <p id="modal-student-id" class="text-sm text-gray-500">Student ID</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-gray-50 rounded-xl p-4">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                            <p id="modal-student-status" class="font-bold text-gray-800">--</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-4">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Time In</p>
+                            <p id="modal-student-timein" class="font-bold text-gray-800">--:--</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex gap-3">
+                    <button onclick="closeStudentModal()" class="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors">
+                        Close
+                    </button>
+                    <button onclick="viewAttendanceFromModal()" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors">
+                        View History
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="teacher-core.js"></script>
     <script src="teacher-homeroom.js"></script>

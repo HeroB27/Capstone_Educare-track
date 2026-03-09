@@ -727,6 +727,7 @@ async function loadClinicPassInterface() {
         
     } catch (err) {
         console.error('Error loading clinic pass interface:', err);
+        showNotification('Failed to load clinic pass interface', 'error');
     }
 }
 
@@ -775,6 +776,7 @@ async function loadClinicStats() {
         
     } catch (err) {
         console.error('Error in loadClinicStats:', err);
+        showNotification('Failed to load clinic statistics', 'error');
     }
 }
 
@@ -2331,6 +2333,7 @@ async function loadLiveDashboardStats() {
         const { data: clinicVisits } = await supabase
             .from('clinic_visits')
             .select('student_id')
+            .eq('status', 'In Clinic')  // FIX: Added status filter
             .gte('time_in', today)
             .is('time_out', null)
             .in('student_id', studentIds);

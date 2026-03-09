@@ -90,11 +90,11 @@ async function loadAnalyticsData(event) {
 
 /**
  * Fetch attendance trend over time grouped by date
- * Queries attendance_logs and joins with excuse_letters to identify excused absences
- * UPDATED: Now also parses remarks field for subject-specific attendance
+ * UPDATED: Now fetches attendance_logs and excuse_letters separately, then merges in JavaScript
+ * This fixes the PGRST200 error caused by trying to join tables without a direct foreign key relationship
  */
 async function fetchAttendanceTrend(dateStart, dateEnd) {
-    // Fetch all attendance logs within date range
+    // Fetch all attendance logs within date range (no join)
     const { data: logs, error } = await supabase
         .from('attendance_logs')
         .select(`
@@ -102,10 +102,7 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
             log_date,
             status,
             remarks,
-            student_id,
-            excuse_letters (
-                status
-            )
+            student_id
         `)
         .gte('log_date', dateStart)
         .lte('log_date', dateEnd)
@@ -116,6 +113,38 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
         return [];
     }
 
+    // If no logs, return empty data
+    if (!logs || logs.length === 0) {
+        return {
+            labels: [],
+            present: [],
+            late: [],
+            absent: [],
+            excused: []
+        };
+    }
+
+    // Get unique student IDs and dates for fetching excuse letters
+    const studentIds = [...new Set(logs.map(l => l.student_id))];
+    const dates = [...new Set(logs.map(l => l.log_date))];
+
+    // Fetch excuse letters separately
+    let excusedMap = new Map(); // Key: "student_id-date", Value: true
+    if (studentIds.length > 0 && dates.length > 0) {
+        const { data: excuses } = await supabase
+            .from('excuse_letters')
+            .select('student_id, date_absent, status')
+            .in('student_id', studentIds)
+            .in('date_absent', dates)
+            .eq('status', 'Approved');
+
+        if (excuses) {
+            excuses.forEach(e => {
+                excusedMap.set(`${e.student_id}-${e.date_absent}`, true);
+            });
+        }
+    }
+
     // Group by date
     const dateGroups = {};
     logs.forEach(log => {
@@ -124,13 +153,10 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
             dateGroups[date] = { Present: 0, Late: 0, Absent: 0, Excused: 0 };
         }
 
-        // OPTION B: Check if excused (from excuse_letters with approved status)
-        const isExcused = log.excuse_letters && 
-            Array.isArray(log.excuse_letters) && 
-            log.excuse_letters.some(e => e.status === 'Approved');
+        // Check if excused by looking up in the map
+        const isExcused = excusedMap.has(`${log.student_id}-${log.log_date}`);
 
-        // OPTION B: Parse remarks field for subject-specific attendance
-        // This gives us the ACTUAL overall status based on subject attendance
+        // Parse remarks field for subject-specific attendance
         const calculatedStatus = calculateStatusFromRemarks(log.remarks, log.status);
         
         const status = calculatedStatus; // Use calculated status from remarks
@@ -236,7 +262,7 @@ async function fetchStatusDistribution(dateStart, dateEnd) {
 
         if (isExcused) {
             counts.Excused++;
-        } else if (status === 'Present') {
+        } else if (status === 'Present' || status === 'On Time') {
             counts.Present++;
         } else if (status === 'Late') {
             counts.Late++;
@@ -335,7 +361,7 @@ async function fetchClassPerformance(dateStart, dateEnd) {
             const classId = studentClassMap[log.student_id];
             if (classId && classAttendance[classId]) {
                 classAttendance[classId].total++;
-                if (log.status === 'Present') {
+                if (log.status === 'Present' || log.status === 'On Time') {
                     classAttendance[classId].present++;
                 }
             }
@@ -363,9 +389,15 @@ async function fetchClassPerformance(dateStart, dateEnd) {
 
 /**
  * Fetch students with >10 absences (critical watchlist)
- * Note: Using 10 as threshold for demo (can be adjusted to 20)
+ * FIX #2: Added 30-day default limit to prevent browser crash from large dataset
  */
 async function fetchCriticalAbsences() {
+    // FIX: Default to last 30 days to prevent loading entire database history
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setMinutes(thirtyDaysAgo.getMinutes() - thirtyDaysAgo.getTimezoneOffset());
+    const dateLimit = thirtyDaysAgo.toISOString().split('T')[0];
+    
     // Get all students
     const { data: students } = await supabase
         .from('students')
@@ -373,23 +405,25 @@ async function fetchCriticalAbsences() {
 
     if (!students || students.length === 0) return [];
 
-    // Get excused dates for all students
+    // Get excused dates for all students (limited to last 30 days)
     const studentIds = students.map(s => s.id);
     const { data: excuses } = await supabase
         .from('excuse_letters')
         .select('student_id, date_absent, status')
         .in('student_id', studentIds)
-        .eq('status', 'Approved');
+        .eq('status', 'Approved')
+        .gte('date_absent', dateLimit);
 
     const excusedDates = new Set();
     if (excuses) {
         excuses.forEach(e => excusedDates.add(`${e.student_id}-${e.date_absent}`));
     }
 
-    // Get all attendance logs
+    // FIX: Get attendance logs only from last 30 days
     const { data: logs } = await supabase
         .from('attendance_logs')
-        .select('student_id, log_date, status');
+        .select('student_id, log_date, status')
+        .gte('log_date', dateLimit);
 
     // Count absences per student
     const absenceCounts = {};
@@ -397,14 +431,16 @@ async function fetchCriticalAbsences() {
         absenceCounts[s.id] = { name: s.full_name, id: s.student_id_text, absent: 0 };
     });
 
-    logs.forEach(log => {
-        if (absenceCounts[log.student_id]) {
-            const isExcused = excusedDates.has(`${log.student_id}-${log.log_date}`);
-            if (log.status === 'Absent' && !isExcused) {
-                absenceCounts[log.student_id].absent++;
+    if (logs) {
+        logs.forEach(log => {
+            if (absenceCounts[log.student_id]) {
+                const isExcused = excusedDates.has(`${log.student_id}-${log.log_date}`);
+                if (log.status === 'Absent' && !isExcused) {
+                    absenceCounts[log.student_id].absent++;
+                }
             }
-        }
-    });
+        });
+    }
 
     // Filter students with >10 absences
     const critical = Object.values(absenceCounts)
@@ -864,3 +900,7 @@ function initializeEmptyCharts() {
         }
     });
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.loadAnalyticsData = loadAnalyticsData;
+window.exportToCSV = exportToCSV;

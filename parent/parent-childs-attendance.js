@@ -4,6 +4,7 @@
 let currentViewDate = new Date();
 let attendanceData = {};
 let holidays = {};
+let attendanceChart = null;
 
 /**
  * Initialize attendance page
@@ -41,6 +42,9 @@ async function loadAttendanceCalendar() {
         
         // Calculate and show stats
         calculateStats();
+        
+        // Render Chart
+        renderTrendChart();
 
         document.getElementById('loading-indicator').classList.add('hidden');
         document.getElementById('attendance-content').classList.remove('hidden');
@@ -336,6 +340,61 @@ function showDayDetails(dateStr, attendance, holiday) {
             </div>
         `;
     }
+}
+
+/**
+ * Render the monthly trend chart
+ */
+function renderTrendChart() {
+    const ctx = document.getElementById('attendanceChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (attendanceChart) {
+        attendanceChart.destroy();
+    }
+
+    // Prepare data
+    const year = currentViewDate.getFullYear();
+    const month = currentViewDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const labels = [];
+    const dataPoints = [];
+    
+    // Simple trend: 1 for Present/Late, 0 for Absent, null for future/weekend
+    for (let day = 1; day <= daysInMonth; day++) {
+        labels.push(day);
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const log = attendanceData[dateStr];
+        
+        if (log) dataPoints.push(1); // Present/Late/Excused
+        else if (new Date(dateStr) > new Date()) dataPoints.push(null); // Future
+        else if (new Date(dateStr).getDay() % 6 === 0) dataPoints.push(null); // Weekend
+        else dataPoints.push(0); // Absent
+    }
+
+    attendanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Attendance',
+                data: dataPoints,
+                backgroundColor: dataPoints.map(v => v === 1 ? '#22c55e' : '#ef4444'),
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { display: false },
+                x: { grid: { display: false } }
+            }
+        }
+    });
 }
 
 /**

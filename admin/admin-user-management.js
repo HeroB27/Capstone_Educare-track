@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     injectCloseButtons();
     injectStyles();
     injectPasswordGenerators();
+    // Setup modal close handlers for static modals
+    setupModalClose('enrollmentModal');
+    setupModalClose('editUserModal');
     if (window.lucide) lucide.createIcons();
 });
 
@@ -169,7 +172,7 @@ function renderUserTable() {
 }
 
 // --- BRANCH REGISTRATION FLOW ---
-function openEnrollmentModal() { currentStep = 1; setEnrollType('parent'); document.getElementById('enrollmentModal').classList.remove('hidden'); }
+function openEnrollmentModal() { currentStep = 1; setEnrollType(null, 'parent'); document.getElementById('enrollmentModal').classList.remove('hidden'); }
 function setEnrollType(event, type) {
     enrollType = type;
     document.getElementById('btn-type-parent').className = type === 'parent' ? 'px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all' : 'px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all';
@@ -190,7 +193,10 @@ function setEnrollType(event, type) {
     if (stepper) stepper.classList.toggle('invisible', type !== 'parent');
 
     document.getElementById('next-btn').innerText = type === 'parent' ? "Next Step" : "Complete Registration";
-    currentStep = 1; updateModalUI();
+    currentStep = 1;
+    updateModalUI();
+    // Ensure first step is shown when modal opens
+    showStep(1);
 }
 
 function nextStep() {
@@ -301,7 +307,7 @@ async function submitStaffFinal() {
     
     if (!name || !phone || !username || !password) return showNotification("All fields are required.", "error");
 
-    const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : role === 'clinic_staff' ? 'clinic_id_text' : role === 'admins' ? 'admin_id_text' : null;
+    const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : role === 'clinic_staff' ? 'clinic_id_text' : null;
     const payload = { 
         full_name: name, 
         contact_number: phone, 
@@ -329,9 +335,35 @@ async function submitStaffFinal() {
     
     try {
         const { error } = await supabase.from(role).insert([payload]);
-        if (error) throw error;
-        showNotification("Staff Registration Successful!", "success", () => location.reload());
-    } catch (e) { showNotification(e.message, "error"); }
+        if (error) {
+            // FIX #3: Handle unique constraint violation (ID already exists)
+            if (error.code === '23505') {
+                showNotification("Generated ID already exists. Please try again.", "error");
+                return;
+            }
+            throw error;
+        }
+        showNotification("Staff Registration Successful!", "success");
+        closeEnrollmentModal();
+        // Clear staff form fields
+        document.getElementById('s-name').value = '';
+        document.getElementById('s-phone').value = '';
+        document.getElementById('s-user').value = '';
+        document.getElementById('s-pass').value = '';
+        document.getElementById('s-email').value = '';
+        document.getElementById('s-department').value = '';
+        document.getElementById('s-role-title').value = '';
+        const confirmArea = document.getElementById('staff-confirm-area');
+        if (confirmArea) confirmArea.classList.add('hidden');
+        loadUsers();
+    } catch (e) { 
+        // FIX #3: Handle unique constraint violation
+        if (e.code === '23505' || (e.message && e.message.includes('duplicate'))) {
+            showNotification("Generated ID already exists. Please try again.", "error");
+        } else {
+            showNotification(e.message, "error"); 
+        }
+    }
 }
 
 async function finalizeParentStudent() {
@@ -372,8 +404,29 @@ async function finalizeParentStudent() {
         const { data: createdStu, error: sErr } = await supabase.from('students').insert(studentPayload).select();
         if (sErr) throw sErr;
         await renderBulkPrint(createdStu, parentInfo);
-        showNotification("Family Registered Successfully!", "success"); closeEnrollmentModal(); loadUsers();
-    } catch (e) { showNotification(e.message, "error"); btn.disabled = false; btn.innerText = "Finalize & Print"; }
+        showNotification("Family Registered Successfully!", "success"); 
+        closeEnrollmentModal(); 
+        // Clear parent enrollment form fields
+        document.getElementById('p-name').value = '';
+        document.getElementById('p-phone').value = '';
+        document.getElementById('p-address').value = '';
+        document.getElementById('p-role').value = '';
+        document.getElementById('p-user').value = '';
+        document.getElementById('p-pass').value = '';
+        document.getElementById('student-form-container').innerHTML = '';
+        studentData = [];
+        parentInfo = {};
+        currentStep = 1;
+        loadUsers();
+    } catch (e) { 
+        // FIX #3: Handle unique constraint violation (ID already exists)
+        if (e.code === '23505' || (e.message && e.message.includes('duplicate'))) {
+            showNotification("Generated ID already exists. Please try again.", "error");
+        } else {
+            showNotification(e.message, "error"); 
+        }
+        btn.disabled = false; btn.innerText = "Finalize & Print"; 
+    }
 }
 
 // --- EDIT SYNC LOGIC ---
@@ -452,7 +505,7 @@ async function openEditModal(table, id) {
 async function saveUserEdit() {
     const id = document.getElementById('edit-user-id').value;
     const table = document.getElementById('edit-user-table').value;
-    const userOrig = allUsers.find(u => u.table === table && u.id == id);
+    const userOrig = allUsers.find(u => u.table === table && u.id === id);
     
     const tablesWithAddress = ['parents', 'students'];
     const newPassword = document.getElementById('edit-password').value;
@@ -493,7 +546,14 @@ async function saveUserEdit() {
         if (table === 'parents' && (userOrig.full_name !== updated.full_name || userOrig.contact_number !== updated.contact_number || userOrig.address !== updated.address)) {
             await supabase.from('students').update({ address: updated.address, emergency_contact: updated.contact_number }).eq('parent_id', id);
         }
-        showNotification("Account & Linked Data Updated!", "success"); closeEditModal(); loadUsers();
+        showNotification("Account & Linked Data Updated!", "success"); closeEditModal(); 
+        // Clear edit form fields
+        document.getElementById('edit-password').value = '';
+        const roleSpecificContainer = document.getElementById('role-specific-fields-container');
+        if (roleSpecificContainer) roleSpecificContainer.remove();
+        const gatekeeperContainer = document.getElementById('gatekeeper-toggle-container');
+        if (gatekeeperContainer) gatekeeperContainer.remove();
+        loadUsers();
     } catch (e) { showNotification(e.message, "error"); }
 }
 
@@ -548,12 +608,13 @@ async function renderBulkPrint(list, p) {
 // --- UTILITIES ---
 function showStep(s) { 
     currentStep = s; 
-    document.querySelectorAll('[id^="step-"]').forEach(el => { el.classList.add('hidden'); el.classList.remove('animate-fade-in-up'); }); 
+    // Only target step container divs, not the stepper dots
+    document.querySelectorAll('#parent-flow-container > [id^="step-"]').forEach(el => { el.classList.add('hidden'); el.classList.remove('animate-fade-in-up'); }); 
     const step = document.getElementById(`step-${s}`);
     if(step) { step.classList.remove('hidden'); step.classList.add('animate-fade-in-up'); }
     document.getElementById('back-btn').classList.toggle('hidden', s===1); 
     document.getElementById('next-btn').innerText = s===5 ? (enrollType==='parent'?"Finalize & Print":"Complete Registration") : "Next Step"; 
-    updateModalUI(); 
+    updateModalUI();
 }
 
 // --- LOAD CLASSES FOR STUDENT ASSIGNMENT ---
@@ -702,6 +763,34 @@ function injectCloseButtons() {
         }
     });
     if (window.lucide) lucide.createIcons();
+}
+
+/**
+ * Setup modal close handlers - X button + background click
+ * @param {string} modalId - The ID of the modal element
+ */
+function setupModalClose(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+
+    // Find close button: look for class 'modal-close', 'close-btn', or 'modal-close-btn'
+    const closeBtn = modal.querySelector('.modal-close, .close-btn, .modal-close-btn');
+    
+    // Add click handler for close button
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            modal.classList.add('hidden');
+        });
+    }
+
+    // Add background click handler (clicking outside the modal content)
+    modal.addEventListener('click', (e) => {
+        // Only close if clicking directly on the modal backdrop, not on child elements
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
 }
 
 // PHASE 3: Data Export Functions
@@ -1006,3 +1095,27 @@ function showNotification(msg, type='info', callback=null) {
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+// Make functions globally accessible for HTML onclick handlers
+window.nextStep = nextStep;
+window.prevStep = prevStep;
+window.openEnrollmentModal = openEnrollmentModal;
+window.closeEnrollmentModal = closeEnrollmentModal;
+window.setEnrollType = setEnrollType;
+window.showStep = showStep;
+window.switchView = switchView;
+window.closeEditModal = closeEditModal;
+window.openEditModal = openEditModal;
+window.saveUserEdit = saveUserEdit;
+window.deleteUser = deleteUser;
+window.toggleStatus = toggleStatus;
+window.filterUsers = filterUsers;
+window.addStudentForm = addStudentForm;
+window.collectStudents = collectStudents;
+window.exportUsersToCSV = exportUsersToCSV;
+window.openDirectResetPassword = openDirectResetPassword;
+window.submitDirectPasswordReset = submitDirectPasswordReset;
+window.generateResetToken = generateResetToken;
+window.toggleStaffFields = toggleStaffFields;
+window.setupModalClose = setupModalClose;

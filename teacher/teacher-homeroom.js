@@ -221,13 +221,13 @@ async function preFetchTodayData() {
         todayAttendance[record.student_id].push(record);
     });
     
-    // Fetch today's clinic visits (status = 'Checked In' and no time_out)
+    // Fetch today's clinic visits (status = 'In Clinic' and no time_out)
     const { data: visits } = await supabase
         .from('clinic_visits')
         .select('student_id, status')
         .in('student_id', studentIds)
         .is('time_out', null)
-        .in('status', ['Pending', 'Checked In', 'Approved']);
+        .in('status', ['In Clinic', 'Approved']);
     
     // Build clinic visits lookup
     visits?.forEach(visit => {
@@ -403,21 +403,50 @@ function filterStudents() {
 // STUDENT DETAILS - Added from teacher-homeroomlist.js
 // =============================================================================
 
+let currentStudentId = null;
+
 /**
- * View student details
+ * View student details - Opens modal instead of alert
  */
 async function viewStudentDetails(studentId) {
     const student = homeroomStudents.find(s => s.id === studentId);
     if (!student) return;
     
-    // For now, show a simple alert. Could be enhanced with a modal.
+    currentStudentId = studentId;
     const records = todayAttendance[studentId];
     const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
     
     const status = latestRecord?.status || 'No Record';
     const timeIn = latestRecord?.time_in || '--:--';
     
-    alert(`Student: ${student.full_name}\nID: ${student.student_id_text}\nStatus: ${status}\nTime In: ${timeIn}`);
+    // Update modal content
+    document.getElementById('modal-student-name').textContent = student.full_name;
+    document.getElementById('modal-student-id').textContent = 'ID: ' + (student.student_id_text || student.id);
+    document.getElementById('modal-student-status').textContent = status;
+    document.getElementById('modal-student-timein').textContent = timeIn;
+    
+    // Show modal
+    const modal = document.getElementById('student-details-modal');
+    modal.classList.remove('hidden');
+    lucide.createIcons();
+}
+
+/**
+ * Close student details modal
+ */
+function closeStudentModal() {
+    const modal = document.getElementById('student-details-modal');
+    modal.classList.add('hidden');
+    currentStudentId = null;
+}
+
+/**
+ * View attendance from modal - navigates to analytics
+ */
+function viewAttendanceFromModal() {
+    if (currentStudentId) {
+        window.location.href = `teacher-data-analytics.html?student=${currentStudentId}`;
+    }
 }
 
 /**

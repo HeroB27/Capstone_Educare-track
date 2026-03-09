@@ -110,6 +110,10 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.saveTemplate = saveTemplate;
+window.updatePreview = updatePreview;
+
 function showNotification(msg, type='info', callback=null) {
     const existing = document.getElementById('notification-modal');
     if(existing) existing.remove();

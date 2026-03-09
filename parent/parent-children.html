@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Children - Parent Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -48,14 +49,14 @@
 
     <!-- Child Detail Modal -->
     <div id="child-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b flex justify-between items-center">
-                <h3 id="modal-child-name" class="font-bold text-lg text-gray-800">Child Details</h3>
-                <button onclick="closeModal()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 id="modal-child-name" class="font-black text-xl uppercase tracking-tight">Child Details</h3>
+                <button onclick="closeModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            <div id="modal-content" class="p-6 overflow-y-auto">
+            <div id="modal-content" class="p-8 overflow-y-auto flex-1">
                 <!-- Details loaded here -->
             </div>
         </div>
@@ -63,14 +64,14 @@
 
     <!-- Compare Children Modal -->
     <div id="compare-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b flex justify-between items-center">
-                <h3 class="font-bold text-lg text-gray-800">Compare Children</h3>
-                <button onclick="closeCompareModal()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Compare Children</h3>
+                <button onclick="closeCompareModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            <div id="compare-content" class="p-6 overflow-y-auto">
+            <div id="compare-content" class="p-8 overflow-y-auto flex-1">
                 <!-- Comparison loaded here -->
             </div>
         </div>

@@ -148,6 +148,7 @@ async function loadSubjectStudents(subjectLoadId) {
             const { data: visits } = await supabase
                 .from('clinic_visits')
                 .select('student_id, status')
+                .eq('status', 'In Clinic')  // FIX: Added status filter
                 .is('time_out', null) // Active visit
                 .in('student_id', studentIds);
             (visits || []).forEach(v => todayClinicVisits[v.student_id] = v);

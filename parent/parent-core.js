@@ -324,10 +324,21 @@ function getInitials(fullName) {
 
 /**
  * Format time for display
+ * Handles both full datetime strings and time-only strings (HH:MM:SS)
  */
 function formatTime(dateString) {
     if (!dateString) return '--:--';
-    const date = new Date(dateString);
+    
+    let date;
+    // Handle time-only strings (HH:MM:SS) from Supabase
+    if (dateString.includes(':') && !dateString.includes('T')) {
+        date = new Date(`1970-01-01T${dateString}`);
+    } else {
+        date = new Date(dateString);
+    }
+    
+    if (isNaN(date.getTime())) return '--:--';
+    
     return date.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit',

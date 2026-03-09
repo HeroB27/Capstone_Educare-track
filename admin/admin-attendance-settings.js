@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (satToggle) {
         satToggle.addEventListener('change', handleSaturdayToggle);
     }
+    
+    // Setup modal close handlers
+    setupModalClose('suspension-modal');
 });
 
 // 2. Load Settings from Supabase
@@ -37,6 +40,7 @@ async function loadAllSettings() {
         handleSaturdayToggle();
     } catch (err) {
         console.error("Error loading settings:", err);
+        showNotification("Failed to load settings. Please refresh the page.", "error");
     }
 }
 
@@ -46,6 +50,33 @@ function handleSaturdayToggle() {
     if (satClassSection) {
         satClassSection.classList.toggle('hidden', !satEnabled);
     }
+}
+
+// Modal Utility: Setup close handlers for a modal
+// Finds close buttons by class 'modal-close', 'close-btn', or 'modal-close-btn'
+// Adds click handler to close modal by adding 'hidden' class
+// Adds background click handler to close modal when clicking backdrop
+function setupModalClose(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    // Find close buttons by class
+    const closeButtons = modal.querySelectorAll('.modal-close, .close-btn, .modal-close-btn');
+    
+    // Add click handler to close buttons
+    closeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    });
+    
+    // Add background click handler to close modal when clicking directly on backdrop
+    modal.addEventListener('click', (e) => {
+        // Only close if clicking directly on the modal backdrop (not on children)
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
 }
 
 // 3. Load Suspensions
@@ -253,9 +284,11 @@ async function saveSuspension(event) {
             await supabase.from('announcements').insert([{
                 title: `📢 ${typeLabel} ALERT: ${title}`,
                 content: `A ${typeLabel} has been declared from ${formatDate(startDate)} to ${formatDate(endDate)}. ${description}`,
+                priority: 'high',
                 target_parents: true,
                 target_teachers: true,
-                target_guards: true
+                target_guards: true,
+                target_clinic: false
             }]);
         }
 
@@ -347,12 +380,18 @@ async function deleteSuspension(id) {
     }
 }
 
-// Make functions globally available
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
 window.openSuspensionModal = openSuspensionModal;
 window.closeSuspensionModal = closeSuspensionModal;
 window.editSuspension = editSuspension;
 window.toggleSuspension = toggleSuspension;
 window.deleteSuspension = deleteSuspension;
+window.switchTab = switchTab;
+window.saveThresholds = saveThresholds;
+window.saveAttendanceRules = saveAttendanceRules;
+window.saveWeekendSettings = saveWeekendSettings;
+window.saveNotificationSettings = saveNotificationSettings;
+window.saveSuspension = saveSuspension;
 
 // ============== ORIGINAL CODE BELOW ==============
 

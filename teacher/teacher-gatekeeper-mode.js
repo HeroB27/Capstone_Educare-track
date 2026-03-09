@@ -1,4 +1,4 @@
-// teacher/teacher-gatekeeper-mode.js
+// teacher/teacher-gatekeeper-mode.js - jsQR Implementation
 
 // Ensure teacher is logged in and has gatekeeper rights
 var currentUser = window.currentUser || checkSession('teachers');
@@ -12,9 +12,13 @@ if (!currentUser || !currentUser.is_gatekeeper) {
 }
 
 // Global variables for scanner logic
-let html5QrcodeScanner;
-let lastScanResult = null;
-const SCAN_DEBOUNCE_MS = 3000; // 3 seconds between scans of the same ID
+let videoStream = null;
+let video = null;
+let canvas = null;
+let canvasContext = null;
+let animationFrameId = null;
+const scanCooldowns = new Map(); // Map<studentId, timestamp>
+const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes (Fix #4)
 
 // NEW: QR Code format validation regex
 // Matches: EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G001-A1B2)
@@ -41,40 +45,135 @@ function initializeDateTime() {
     setInterval(updateTime, 1000);
 }
 
-// Initialize the QR code scanner
+// Initialize the QR code scanner with jsQR
 function initializeScanner() {
-    if (typeof Html5QrcodeScanner === "undefined") {
-        console.error("html5-qrcode library not loaded.");
+    if (typeof jsQR === 'undefined') {
+        console.error("jsQR library not loaded.");
+        const statusIndicator = document.getElementById('status-indicator');
+        if (statusIndicator) {
+            statusIndicator.innerHTML = `<p class="text-red-400">Error: QR scanner library not loaded. Please refresh the page.</p>`;
+        }
         return;
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-        // Validate QR code format first
-        if (!validateStudentId(decodedText)) {
-            showNotification('Invalid QR Code format. Please scan a valid ID.', 'error');
-            return;
-        }
+    const readerElement = document.getElementById('qr-reader');
+    if (!readerElement) {
+        console.error('Reader element not found');
+        return;
+    }
+    
+    // Create video element for camera stream
+    video = document.createElement('video');
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('autoplay', 'true');
+    video.muted = true;
+    
+    // Create canvas for capturing frames
+    canvas = document.createElement('canvas');
+    canvasContext = canvas.getContext('2d', { willReadFrequently: true });
+    
+    // Append video element to reader container
+    readerElement.appendChild(video);
+    
+    // Start camera
+    startCamera();
+}
+
+/**
+ * Start the camera and begin scanning
+ */
+async function startCamera() {
+    try {
+        // Request camera access
+        videoStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment', // Use back camera on mobile
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
+            audio: false
+        });
         
-        if (lastScanResult === decodedText) {
+        // Set video source
+        video.srcObject = videoStream;
+        
+        // Wait for video to load
+        video.onloadedmetadata = () => {
+            video.play();
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            // Start scanning loop
+            scanFrame();
+        };
+        
+    } catch (error) {
+        console.error('Error starting camera:', error);
+        const statusIndicator = document.getElementById('status-indicator');
+        if (statusIndicator) {
+            statusIndicator.innerHTML = `<p class="text-red-400">Error starting camera. Please allow camera access.</p>`;
+        }
+    }
+}
+
+/**
+ * Scan each video frame for QR codes
+ */
+function scanFrame() {
+    if (!video || !video.readyState === video.HAVE_ENOUGH_DATA) {
+        animationFrameId = requestAnimationFrame(scanFrame);
+        return;
+    }
+    
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // Draw current frame to canvas
+        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Get image data
+        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Use jsQR to detect QR code
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+        });
+        
+        if (code) {
+            // QR code detected!
+            const now = Date.now();
+            handleQRDetection(code.data);
+        }
+    }
+    
+    // Continue scanning
+    animationFrameId = requestAnimationFrame(scanFrame);
+}
+
+/**
+ * Handle QR code detection
+ * @param {string} decodedText - The scanned QR code data
+ */
+function handleQRDetection(decodedText) {
+    // Validate QR code format first
+    if (!validateStudentId(decodedText)) {
+        showNotification('Invalid QR Code format. Please scan a valid ID.', 'error');
+        return;
+    }
+    
+    // Fix #4 & #5: Robust Duplicate Scan Prevention
+    const now = Date.now();
+    if (scanCooldowns.has(decodedText)) {
+        const lastTime = scanCooldowns.get(decodedText);
+        if (now - lastTime < ANTI_DUPLICATE_THRESHOLD) {
+            // Debounce the warning too (don't spam toast every frame)
+            if (now - lastTime > 2000 && (now - lastTime) < 3000) {
+                 showNotification('Duplicate scan detected - student already processed.', 'warning');
+            }
             return;
         }
-        lastScanResult = decodedText;
-        setTimeout(() => { lastScanResult = null; }, SCAN_DEBOUNCE_MS);
-
-        processScan(decodedText);
     }
+    
+    scanCooldowns.set(decodedText, now);
 
-    function onScanFailure(error) {
-        // This can be noisy, so it's commented out.
-        // console.warn(`QR scan error: ${error}`);
-    }
-
-    html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader", 
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-    );
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    processScan(decodedText);
 }
 
 // Main logic to process a scan
@@ -111,6 +210,21 @@ async function processScan(studentIdText) {
             
             if (!qrError && qrStudent) {
                 studentData = qrStudent;
+            }
+        }
+
+        // Fix #1: Fallback ID Extraction (if full string fails)
+        // Extracts 'A1B2' from 'EDU-2026-G001-A1B2'
+        if (!studentData && SCAN_REGEX.test(studentIdText)) {
+            const parts = studentIdText.split('-');
+            if (parts.length >= 4) {
+                const extractedId = parts[3];
+                const { data: extractedStudent } = await supabase
+                    .from('students')
+                    .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
+                    .eq('student_id_text', extractedId)
+                    .single();
+                if (extractedStudent) studentData = extractedStudent;
             }
         }
         
@@ -186,10 +300,22 @@ async function handleAttendanceScan(student) {
             throw new Error('Exit scans are disabled during morning entry hours.');
         }
 
+        // Fix #2: Calculate Exit Status (Early vs Late vs Normal)
+        const dismissalTime = await getDismissalTime(gradeLevel);
+        let exitStatus = 'Normal Exit';
+
+        if (isEarlyExit(currentTime, dismissalTime)) {
+            exitStatus = 'Early Exit';
+        } else if (isLateExit(currentTime, dismissalTime)) {
+            exitStatus = 'Late Exit';
+        }
+
         await supabase
             .from('attendance_logs')
-            .update({ time_out: now.toISOString(), status: 'Normal Exit' }) // Status will be recalculated later if needed
+            .update({ time_out: now.toISOString(), status: exitStatus })
             .eq('id', existingLog.id);
+        
+        status = exitStatus; // Update for notifications
     } else {
         // New entry - check if late
         const lateThreshold = await getLateThreshold(gradeLevel);
@@ -360,6 +486,12 @@ function isEarlyExit(scanTime, dismissalTime) {
     return compareTimes(scanTime, dismissalTime) < 0;
 }
 
+// Fix #2: Check if student is leaving late (30 mins after dismissal)
+function isLateExit(scanTime, dismissalTime) {
+    // Returns true if scanTime > dismissalTime + 30 mins
+    return compareTimes(scanTime, dismissalTime) > 30;
+}
+
 // Additional: Validate student ID format before database query
 function validateStudentId(studentId) {
     if (!studentId || typeof studentId !== 'string') {
@@ -368,6 +500,24 @@ function validateStudentId(studentId) {
     
     // Validate format: EDU-YYYY-LLLL-XXXX
     return SCAN_REGEX.test(studentId.trim());
+}
+
+// Fix #12: Missing Holiday Check Function
+async function checkIsHoliday(dateStr) {
+    try {
+        const { data, error } = await supabase
+            .from('holidays')
+            .select('*')
+            .eq('holiday_date', dateStr)
+            .single();
+        
+        if (data && data.is_suspended) {
+            return { isHoliday: true, isSuspended: true, description: data.description };
+        }
+        return { isHoliday: false };
+    } catch (e) {
+        return { isHoliday: false };
+    }
 }
 
 // FIX: Unlock browser audio context for scanner beeps
@@ -381,3 +531,13 @@ document.body.addEventListener('click', () => {
         // Audio not supported or already unlocked
     }
 }, { once: true }); // Only runs once per page load
+
+// Stop scanner when page unloads
+window.addEventListener('beforeunload', () => {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+    }
+});

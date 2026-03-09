@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!checkSession('admins')) return;
     }
     
+    // Setup modal close handlers
+    setupModalClose('holiday-modal');
+    setupModalClose('delete-modal');
+    
     await loadHolidays();
     loadStats();
     setupEventListeners();
@@ -19,6 +23,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
         .subscribe();
 });
+
+// Modal Utility Function - Sets up close handlers (X button + background click)
+// Finds close buttons by class: 'modal-close', 'close-btn', 'modal-close-btn'
+function setupModalClose(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    // Find close buttons by class
+    const closeButtons = modal.querySelectorAll('.modal-close, .close-btn, .modal-close-btn');
+    
+    // Add click handler to close buttons
+    closeButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            modal.classList.add('hidden');
+        });
+    });
+    
+    // Add background click handler to close modal when clicking directly on backdrop
+    modal.addEventListener('click', (e) => {
+        // Only close if clicking on the modal backdrop itself (not on children)
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+}
 
 // 2. Setup Event Listeners
 function setupEventListeners() {
@@ -401,3 +431,30 @@ function showNotification(msg, type = 'info') {
     document.getElementById('notif-btn').onclick = () => modal.remove();
     if (window.lucide) lucide.createIcons();
 }
+
+// Delete confirmation handler - triggered from delete modal
+let pendingDeleteDate = null;
+
+function confirmDelete() {
+    if (pendingDeleteDate) {
+        deleteHoliday(pendingDeleteDate);
+        pendingDeleteDate = null;
+        document.getElementById('delete-modal').classList.add('hidden');
+    }
+}
+
+// Open delete confirmation modal
+function openDeleteModal(date) {
+    pendingDeleteDate = date;
+    document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.openHolidayModal = openHolidayModal;
+window.closeHolidayModal = closeHolidayModal;
+window.saveHoliday = saveHoliday;
+window.loadHolidays = loadHolidays;
+window.editHoliday = editHoliday;
+window.deleteHoliday = deleteHoliday;
+window.confirmDelete = confirmDelete;
+window.openDeleteModal = openDeleteModal;

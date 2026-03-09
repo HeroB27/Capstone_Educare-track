@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clinic Pass - Teacher Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -190,17 +191,22 @@
     </main>
 
     <!-- Success Modal -->
-    <div id="success-modal" class="fixed inset-0 bg-black/20 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-2xl shadow-2xl w-[400px] overflow-hidden">
-            <div class="bg-gradient-to-r from-green-500 to-green-600 px-6 py-4 flex items-center gap-3">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <h3 class="text-white font-bold text-lg">Success</h3>
+    <div id="success-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="check-circle" class="w-6 h-6"></i>
+                    <h3 class="font-black text-xl uppercase tracking-tight">Success</h3>
+                </div>
+                <button onclick="closeModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
-            <div class="p-6">
-                <p class="text-gray-600" id="success-message">Clinic pass has been issued successfully.</p>
+            <div class="p-8">
+                <p class="text-gray-600 font-medium" id="success-message">Clinic pass has been issued successfully.</p>
             </div>
-            <div class="px-6 py-4 bg-gray-50 flex justify-end">
-                <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all duration-200">Close</button>
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end shrink-0">
+                <button onclick="closeModal()" class="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-bold">Close</button>
             </div>
         </div>
     </div>

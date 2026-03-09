@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visit Records - Educare Clinic</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -192,26 +193,31 @@
 
     <!-- Visit Details Modal -->
     <div id="visit-details-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-[640px] max-h-[90vh] overflow-hidden">
-            <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50">
-                <h3 class="text-xl font-black text-gray-900">Visit Details</h3>
-                <button onclick="closeVisitDetailsModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-all">
-                    <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Visit Details</h3>
+                <button onclick="closeVisitDetailsModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div id="visit-details-content" class="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div id="visit-details-content" class="p-8 overflow-y-auto custom-scrollbar flex-1">
             </div>
         </div>
     </div>
 
     <!-- Edit Notes Modal -->
     <div id="edit-notes-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-[560px] max-h-[90vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6">
-                <h3 class="text-white font-black text-lg">Update Nurse Notes</h3>
-                <p class="text-red-100 text-sm font-medium">Document observations and actions taken</p>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <div>
+                    <h3 class="font-black text-xl uppercase tracking-tight">Update Nurse Notes</h3>
+                    <p class="text-red-100 text-sm font-medium">Document observations and actions taken</p>
+                </div>
+                <button onclick="closeEditNotesModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
-            <form id="edit-notes-form" onsubmit="handleUpdateNotes(event)" class="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <form id="edit-notes-form" onsubmit="handleUpdateNotes(event)" class="p-8 overflow-y-auto custom-scrollbar flex-1">
                 <input type="hidden" id="edit-notes-visit-id">
                 <div class="space-y-6">
                     <div>

@@ -230,3 +230,6 @@ function showNotification(msg, type = 'info') {
     document.getElementById('notif-btn').onclick = () => modal.remove();
     if (window.lucide) lucide.createIcons();
 }
+
+// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
+window.saveAllSchedules = saveAllSchedules;

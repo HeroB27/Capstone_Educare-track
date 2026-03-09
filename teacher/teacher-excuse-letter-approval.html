@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excuse Letter Approval - Teacher Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
@@ -154,15 +155,18 @@
     </main>
 
     <!-- Detail Modal -->
-    <div id="detail-modal" class="fixed inset-0 bg-black/20 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-2xl shadow-2xl w-[600px] max-h-[90vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4">
-                <h3 class="text-white font-bold text-lg">Excuse Letter Details</h3>
+    <div id="detail-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Excuse Letter Details</h3>
+                <button onclick="closeDetailModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
             </div>
-            <div class="p-6 max-h-[60vh] overflow-y-auto" id="modal-content">
+            <div class="p-8 overflow-y-auto custom-scrollbar flex-1" id="modal-content">
                 <!-- Modal content will be loaded here -->
             </div>
-            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3" id="modal-actions">
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end gap-3 shrink-0" id="modal-actions">
                 <!-- Actions will be loaded here -->
             </div>
         </div>

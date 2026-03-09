@@ -167,13 +167,13 @@ async function preFetchTodayData() {
         todayAttendance[record.student_id].push(record);
     });
     
-    // Fetch today's clinic visits (status = 'Checked In' and no time_out)
+    // Fetch today's clinic visits (status = 'In Clinic' and no time_out)
     const { data: visits } = await supabase
         .from('clinic_visits')
         .select('student_id, status')
         .in('student_id', studentIds)
         .is('time_out', null)
-        .in('status', ['Pending', 'Checked In', 'Approved']);
+        .in('status', ['In Clinic', 'Approved']);
     
     // Build clinic visits lookup
     visits?.forEach(visit => {

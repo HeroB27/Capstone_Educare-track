@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ID Management - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
@@ -104,20 +105,20 @@
     </main>
 
     <!-- View ID Modal -->
-    <div id="viewIdModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center animate-fade-in">
-        <div class="bg-white rounded-[32px] shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-fade-in-up">
-            <div class="p-8 border-b border-gray-100 flex items-center justify-between">
-                <h3 class="text-2xl font-black text-gray-900">Student ID Preview</h3>
-                <button onclick="closeViewIdModal()" class="p-2 hover:bg-gray-100 rounded-xl transition-all">
-                    <i data-lucide="x" class="w-6 h-6 text-gray-500"></i>
+    <div id="viewIdModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Student ID Preview</h3>
+                <button onclick="closeViewIdModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="p-8">
+            <div class="p-8 overflow-y-auto custom-scrollbar flex-1">
                 <div id="idPreviewContainer" class="flex gap-8 justify-center items-center flex-wrap">
                     <!-- ID preview will be rendered here -->
                 </div>
             </div>
-            <div class="p-8 border-t border-gray-100 flex justify-end gap-4">
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end gap-4 shrink-0">
                 <button onclick="closeViewIdModal()" class="px-8 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold transition-all hover:bg-gray-200">Close</button>
             </div>
         </div>

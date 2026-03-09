@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance Settings - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -314,11 +315,11 @@
     </main>
 
     <!-- Suspension Modal -->
-    <div id="suspension-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 backdrop-blur-sm">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 m-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modal-title" class="text-xl font-bold text-gray-800">Add Suspension / Break</h3>
-                <button onclick="closeSuspensionModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-6 h-6"></i></button>
+    <div id="suspension-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
+                <h3 id="modal-title" class="font-black text-xl uppercase tracking-tight">Add Suspension / Break</h3>
+                <button onclick="closeSuspensionModal()" class="modal-close-btn w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <form id="suspension-form" onsubmit="saveSuspension(event)" class="space-y-4">
                 <input type="hidden" id="suspension-id">

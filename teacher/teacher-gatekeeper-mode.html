@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- FIX: Add missing scanner library -->
     <title>Gatekeeper Mode - Educare Teacher</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js" type="text/javascript"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
@@ -105,13 +106,20 @@
     </main>
     
     <!-- Manual Entry Modal -->
-    <div id="manual-entry-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-            <h3 class="text-xl font-bold mb-4">Manual Entry</h3>
-            <input type="text" id="manual-student-id" placeholder="Enter Student ID" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-mono text-center text-lg focus:outline-none focus:border-emerald-500 mb-4">
-            <div class="flex gap-3">
-                <button onclick="closeManualEntry()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors">Cancel</button>
-                <button onclick="submitManualEntry()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition-colors">Submit</button>
+    <div id="manual-entry-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <h3 class="font-black text-xl uppercase tracking-tight">Manual Entry</h3>
+                <button onclick="closeManualEntry()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-8">
+                <input type="text" id="manual-student-id" placeholder="Enter Student ID" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-800 font-mono text-center text-lg focus:outline-none focus:border-blue-500 mb-6">
+                <div class="flex gap-3">
+                    <button onclick="closeManualEntry()" class="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 transition-colors">Cancel</button>
+                    <button onclick="submitManualEntry()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-white transition-colors">Submit</button>
+                </div>
             </div>
         </div>
     </div>
@@ -134,3 +142,4 @@
         lucide.createIcons();
     });
 </script>
+
