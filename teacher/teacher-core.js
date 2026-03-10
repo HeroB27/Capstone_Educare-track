@@ -171,8 +171,8 @@ function renderScheduleOnDashboard() {
     container.innerHTML = mySubjectLoads.map(load => `
         <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group mb-4 flex justify-between items-center">
             <div>
-                <h4 class="font-bold text-gray-800 text-lg leading-tight">${load.subject_name}</h4>
-                <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">${load.classes?.grade_level} - ${load.classes?.section_name}</p>
+                <h4 class="font-bold text-gray-800 text-lg leading-tight">${load.subject_name || 'Unknown Subject'}</h4>
+                <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">${load.classes?.grade_level || 'Unknown Grade'} - ${load.classes?.section_name || 'No Section'}</p>
                 <div class="flex items-center gap-2 mt-3 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
                     <i data-lucide="clock" class="w-3 h-3"></i>
                     ${load.schedule_time_start?.substring(0, 5) || ''} - ${load.schedule_time_end?.substring(0, 5) || ''}

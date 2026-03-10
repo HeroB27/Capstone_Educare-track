@@ -470,15 +470,24 @@
 
                 // If they have homeroom students, get their attendance and excuses
                 if (studentIds.length > 0) {
-                    const { data: attendance } = await supabase
+                    // FIX: Get all attendance logs and group by student to get the LATEST status
+                    const { data: attLogs } = await supabase
                         .from('attendance_logs')
-                        .select('status')
-                        .in('student_id', studentIds)
-                        .eq('log_date', today);
+                        .select('student_id, status')
+                        .eq('log_date', today)
+                        .in('student_id', studentIds);
 
-                    if (attendance) {
-                        present = attendance.filter(a => ['Present', 'On Time', 'Excused'].includes(a.status)).length;
-                        late = attendance.filter(a => a.status === 'Late').length;
+                    if (attLogs && attLogs.length > 0) {
+                        // Group by student to get the LATEST status (protecting against double scans)
+                        const latestStatus = {};
+                        attLogs.forEach(log => {
+                            latestStatus[log.student_id] = log.status; // Overwrites older ones naturally
+                        });
+
+                        Object.values(latestStatus).forEach(status => {
+                            if (status === 'On Time' || status === 'Excused') present++;
+                            if (status === 'Late') late++;
+                        });
                     }
 
                     const { data: pendingExcuses } = await supabase
