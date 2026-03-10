@@ -1,21 +1,20 @@
 // admin/admin-class-management.js
+
 let teachers = [];
-let selectedGrade = 'Kinder';
-let currentOpenClass = null;
+let currentOpenClass = null; // Stores the DB ID of the class when managing subjects
 
-// Grade levels array
-const GRADE_LEVELS = ['Kinder', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10', 'G11', 'G12'];
+// The "Built-In" Structure of the School
+const GRADE_LEVELS = [
+    'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 
+    'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+];
 
-// Check if grade is SHS (G11 or G12)
-function isSHSGrade(grade) {
-    return grade === 'G11' || grade === 'G12';
-}
+const SHS_STRANDS = ['STEM', 'HUMSS', 'ABM', 'ICT'];
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!checkSession('admins')) return;
     await loadTeachers();
-    renderGradeTabs();
-    loadClasses(selectedGrade);
+    loadAllClasses();
     injectStyles();
 });
 
@@ -24,95 +23,272 @@ async function loadTeachers() {
         const { data, error } = await supabase.from('teachers').select('id, full_name').eq('is_active', true).order('full_name');
         if (error) throw error;
         teachers = data || [];
+        
+        const opts = '<option value="">Select Teacher...</option>' + 
+            teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
+            
+        document.getElementById('adviserId').innerHTML = opts;
+        document.getElementById('subjectTeacherId').innerHTML = opts; // For Subject Modal
     } catch (err) {
         console.error("Error loading teachers:", err);
         showNotification("Failed to load teachers", "error");
-        return;
     }
-    const select = document.getElementById('adviserId');
-    const subjSelect = document.getElementById('subjectTeacherId');
-    const opts = '<option value="">Select Teacher</option>' + teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
-    if (select) select.innerHTML = opts;
-    if (subjSelect) subjSelect.innerHTML = opts;
 }
 
-async function loadClasses(grade) {
-    selectedGrade = grade; 
-    renderGradeTabs();
+async function loadAllClasses() {
     const grid = document.getElementById('classGrid');
-    grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400 italic">Loading rosters...</div>';
+    grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400 italic">Loading all classes...</div>';
     
+    // Build array of all 19 required classes
+    let requiredClasses = [];
+    GRADE_LEVELS.forEach(grade => {
+        if (grade === 'Grade 11' || grade === 'Grade 12') {
+            SHS_STRANDS.forEach(strand => {
+                requiredClasses.push({ grade_level: grade, strand: strand, displayName: `${grade} - ${strand}` });
+            });
+        } else {
+            requiredClasses.push({ grade_level: grade, strand: null, displayName: grade });
+        }
+    });
+
     try {
-        const { data, error } = await supabase.from('classes').select('*, teachers(full_name), students(count)').eq('grade_level', grade);
+        // Fetch ALL classes from DB in a single query
+        const { data: dbClasses, error } = await supabase
+            .from('classes')
+            .select('*, teachers(full_name)');
+            
         if (error) throw error;
         
-        // Display logic: For non-SHS show grade only, for SHS show grade + strand
-        grid.innerHTML = data?.length ? data.map(c => {
-            const isSHS = isSHSGrade(c.grade_level);
-            const displayName = isSHS 
-                ? `${c.grade_level} – ${c.strand || 'No Strand'}` 
-                : c.grade_level;
+        grid.innerHTML = requiredClasses.map(reqClass => {
+            // Match against DB results using both grade_level and strand
+            const existingDbRecord = dbClasses?.find(c => 
+                c.grade_level === reqClass.grade_level && 
+                (c.strand === reqClass.strand || (!c.strand && !reqClass.strand))
+            );
+            const adviserName = existingDbRecord?.teachers?.full_name || 'Unassigned';
+            const dbId = existingDbRecord ? existingDbRecord.id : null;
+            const currentAdviserId = existingDbRecord ? existingDbRecord.adviser_id : '';
             
-            // For non-SHS, section_name is stored as the grade; for SHS use strand or section
-            const sectionDisplay = isSHS ? (c.strand || c.section_name || 'N/A') : c.grade_level;
-            
+            const statusColor = existingDbRecord ? 'text-emerald-500 bg-emerald-50' : 'text-amber-500 bg-amber-50';
+            const statusText = existingDbRecord ? 'Active' : 'Pending Adviser';
+
+            // Buttons Logic: If it exists in DB, show Manage Subjects + Edit Adviser. If not, just Assign Adviser.
+            let actionButtons = '';
+            if (existingDbRecord) {
+                actionButtons = `
+                    <div class="flex gap-2">
+                        <button onclick="openSubjectLoad(${dbId}, '${reqClass.displayName}')" class="flex-1 py-2.5 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-200">Manage Subjects</button>
+                        <button onclick="openAdviserModal('${reqClass.grade_level}', '${reqClass.strand || ''}', ${dbId}, '${currentAdviserId}')" class="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:text-violet-600 hover:bg-violet-50 transition-all" title="Change Adviser">
+                            <i data-lucide="user-cog" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteClass(${dbId}, '${reqClass.displayName}')" class="p-2.5 bg-red-50 text-red-400 rounded-xl hover:bg-red-100 hover:text-red-500 transition-all" title="Delete Class">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>`;
+            } else {
+                actionButtons = `
+                    <button onclick="openAdviserModal('${reqClass.grade_level}', '${reqClass.strand || ''}', null, '')" class="w-full py-2.5 bg-gray-50 border border-dashed border-gray-300 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600 hover:border-violet-300 transition-all">
+                        + Assign Adviser
+                    </button>`;
+            }
+
             return `
-            <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group">
-                <h3 class="text-xl font-black text-gray-900 leading-tight">${displayName}</h3>
-                <p class="text-xs font-bold text-violet-600 uppercase mt-1">${c.teachers?.full_name || 'No Adviser'}</p>
-                <div class="flex gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <button onclick="openSubjectLoad(${c.id}, '${sectionDisplay}')" class="flex-1 py-2 bg-gray-50 text-gray-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 hover:text-violet-600">Manage Subjects</button>
-                    <button onclick="editClass(${c.id})" class="p-2 text-gray-300 hover:text-violet-500"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-                    <button onclick="deleteClass(${c.id}, ${c.students?.[0]?.count || 0})" class="p-2 text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col h-full">
+                <div class="flex justify-between items-start mb-3">
+                    <h3 class="text-lg font-black text-gray-900 leading-tight">${reqClass.displayName}</h3>
+                    <span class="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${statusColor}">${statusText}</span>
                 </div>
+                
+                <div class="mb-4 flex-1">
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Homeroom Adviser</p>
+                    <p class="text-sm font-bold ${existingDbRecord ? 'text-gray-800' : 'text-gray-400 italic'}">${adviserName}</p>
+                </div>
+
+                ${actionButtons}
             </div>`;
-        }).join('') : '<div class="col-span-full py-12 text-center text-gray-400">No classes found.</div>';
+        }).join('');
+        lucide.createIcons();
+        
     } catch (err) {
         console.error("Error loading classes:", err);
         grid.innerHTML = '<div class="col-span-full py-12 text-center text-red-500">Error loading classes</div>';
-        showNotification("Failed to load classes", "error");
     }
-    lucide.createIcons();
 }
 
-async function openSubjectLoad(id, section) {
+// Delete class function
+async function deleteClass(classId, className) {
+    if (!confirm(`Are you sure you want to delete "${className}"? This will also remove all subject assignments.`)) return;
+    
+    try {
+        const { error } = await supabase.from('classes').delete().eq('id', classId);
+        if (error) throw error;
+        
+        showNotification('Class deleted successfully!', 'success');
+        loadAllClasses();
+    } catch (err) {
+        console.error("Error deleting class:", err);
+        showNotification('Failed to delete class.', 'error');
+    }
+}
+
+// === ADVISER ASSIGNMENT LOGIC ===
+function openAdviserModal(gradeLevel, strand, existingClassId, currentAdviserId) {
+    const displayName = strand ? `${gradeLevel} - ${strand}` : gradeLevel;
+    document.getElementById('displayClassName').innerText = displayName;
+    document.getElementById('targetGradeLevel').value = gradeLevel;
+    document.getElementById('targetStrand').value = strand;
+    document.getElementById('existingClassId').value = existingClassId || '';
+    document.getElementById('adviserId').value = currentAdviserId || '';
+    document.getElementById('adviserModal').classList.remove('hidden');
+}
+
+function closeAdviserModal() {
+    document.getElementById('adviserModal').classList.add('hidden');
+}
+
+async function saveAdviser() {
+    const gradeLevel = document.getElementById('targetGradeLevel').value;
+    const strand = document.getElementById('targetStrand').value || null;
+    const existingId = document.getElementById('existingClassId').value;
+    const adviserId = document.getElementById('adviserId').value;
+    
+    if (!adviserId) {
+        showNotification('Please select a teacher from the list.', 'error');
+        return;
+    }
+
+    const payload = {
+        grade_level: gradeLevel,
+        section_name: strand ? strand : gradeLevel, 
+        strand: strand,
+        adviser_id: parseInt(adviserId),
+        school_year: '2025-2026'
+    };
+
+    try {
+        let error;
+        if (existingId) {
+            const res = await supabase.from('classes').update(payload).eq('id', existingId);
+            error = res.error;
+        } else {
+            const res = await supabase.from('classes').insert([payload]);
+            error = res.error;
+        }
+        if (error) throw error;
+
+        showNotification('Adviser assigned successfully!', 'success');
+        closeAdviserModal();
+        loadAllClasses();
+    } catch (err) {
+        console.error(err);
+        showNotification('Failed to assign adviser.', 'error');
+    }
+}
+
+// === SUBJECT MANAGEMENT LOGIC ===
+async function openSubjectLoad(id, sectionDisplay) {
     currentOpenClass = id;
-    document.getElementById('subjectLoadTitle').innerText = `Subjects: ${section}`;
+    document.getElementById('subjectLoadTitle').innerText = `${sectionDisplay} Subjects`;
     document.getElementById('subjectLoadModal').classList.remove('hidden');
     loadSubjectList(id);
 }
 
+function closeSubjectLoadModal() { 
+    document.getElementById('subjectLoadModal').classList.add('hidden'); 
+}
+
+function openAddSubjectModal() { 
+    document.getElementById('addSubjectModal').classList.remove('hidden'); 
+}
+
+function closeAddSubjectModal() { 
+    document.getElementById('addSubjectModal').classList.add('hidden'); 
+}
+
 async function loadSubjectList(classId) {
     const container = document.getElementById('subjectList');
-    if (!container) return;
-    
+    container.innerHTML = '<p class="text-center text-gray-400 py-4">Loading subjects...</p>';
     try {
         const { data, error } = await supabase.from('subject_loads').select('*, teachers(full_name)').eq('class_id', classId);
         if (error) throw error;
         
         container.innerHTML = data?.map(s => {
-            // Format time and days
             const startTime = s.schedule_time_start ? s.schedule_time_start.substring(0, 5) : '';
             const endTime = s.schedule_time_end ? s.schedule_time_end.substring(0, 5) : '';
             const timeDisplay = startTime && endTime ? `${startTime} - ${endTime}` : 'No schedule';
             const daysDisplay = s.schedule_days || 'No days set';
             
             return `
-            <div class="flex justify-between items-center p-4 bg-white border rounded-xl mb-2">
+            <div class="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-xl mb-2 hover:border-violet-200 transition-all">
                 <div>
                     <p class="font-bold text-gray-800">${s.subject_name}</p>
-                    <p class="text-xs text-violet-600 font-bold uppercase">${s.teachers?.full_name}</p>
-                    <p class="text-xs text-gray-500 mt-1">📅 ${daysDisplay} | ⏰ ${timeDisplay}</p>
+                    <p class="text-xs text-violet-600 font-bold uppercase mt-0.5">${s.teachers?.full_name || 'No Teacher'}</p>
+                    <p class="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-wider">📅 ${daysDisplay} &nbsp;|&nbsp; ⏰ ${timeDisplay}</p>
                 </div>
-                <button onclick="deleteSubject(${s.id})" class="text-gray-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                <div class="flex gap-2">
+                    <button onclick="openEditSubject(${s.id}, '${s.subject_name}', ${s.teacher_id}, '${s.schedule_time_start || ''}', '${s.schedule_time_end || ''}', '${s.schedule_days || ''}')" class="p-2 text-gray-300 hover:text-violet-600 bg-gray-50 rounded-lg hover:bg-violet-50 transition-all" title="Edit Teacher"><i data-lucide="user-cog" class="w-4 h-4"></i></button>
+                    <button onclick="deleteSubject(${s.id})" class="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-lg hover:bg-red-50 transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
             </div>`;
-        }).join('') || '<p class="text-center text-gray-400 py-4">No subjects assigned yet.</p>';
+        }).join('') || '<p class="text-center text-gray-400 py-4 italic">No subjects assigned yet.</p>';
+        lucide.createIcons();
     } catch (err) {
         console.error("Error loading subjects:", err);
         container.innerHTML = '<p class="text-center text-red-500 py-4">Error loading subjects</p>';
-        showNotification("Failed to load subjects", "error");
     }
-    lucide.createIcons();
+}
+
+// Open edit subject modal
+function openEditSubject(subjectId, subjectName, teacherId, startTime, endTime, days) {
+    // Populate teacher dropdown
+    const teacherSelect = document.getElementById('editSubjectTeacherId');
+    teacherSelect.innerHTML = '<option value="">Select Teacher...</option>' + 
+        teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
+    
+    document.getElementById('editSubjectId').value = subjectId;
+    document.getElementById('editSubjectName').value = subjectName;
+    document.getElementById('editSubjectTeacherId').value = teacherId || '';
+    document.getElementById('editSubjectStartTime').value = startTime;
+    document.getElementById('editSubjectEndTime').value = endTime;
+    
+    // Set days
+    document.querySelectorAll('.edit-day-checkbox').forEach(cb => {
+        cb.checked = days.split(',').includes(cb.value);
+    });
+    
+    document.getElementById('editSubjectModal').classList.remove('hidden');
+}
+
+function closeEditSubjectModal() {
+    document.getElementById('editSubjectModal').classList.add('hidden');
+}
+
+async function saveEditSubject() {
+    const subjectId = document.getElementById('editSubjectId').value;
+    const subjectName = document.getElementById('editSubjectName').value;
+    const teacherId = document.getElementById('editSubjectTeacherId').value;
+    const startTime = document.getElementById('editSubjectStartTime').value;
+    const endTime = document.getElementById('editSubjectEndTime').value;
+    
+    const dayCheckboxes = document.querySelectorAll('.edit-day-checkbox:checked');
+    const days = Array.from(dayCheckboxes).map(cb => cb.value).join(',');
+    
+    const payload = {
+        subject_name: subjectName,
+        teacher_id: teacherId ? parseInt(teacherId) : null,
+        schedule_time_start: startTime || null,
+        schedule_time_end: endTime || null,
+        schedule_days: days || null
+    };
+    
+    const { error } = await supabase.from('subject_loads').update(payload).eq('id', subjectId);
+    if (error) {
+        showNotification(error.message, "error");
+    } else {
+        closeEditSubjectModal();
+        loadSubjectList(currentOpenClass);
+        showNotification("Subject updated successfully", "success");
+    }
 }
 
 async function saveSubject() {
@@ -121,19 +297,13 @@ async function saveSubject() {
     const startTime = document.getElementById('subjectStartTime').value;
     const endTime = document.getElementById('subjectEndTime').value;
     
-    if (!subjectName) {
-        showNotification('Please enter a subject name.', 'error');
+    if (!subjectName || !teacherId) {
+        showNotification('Please enter a subject name and select a teacher.', 'error');
         return;
     }
     
-    if (!teacherId) {
-        showNotification('Please select a teacher.', 'error');
-        return;
-    }
-    
-    // Get selected days
     const dayCheckboxes = document.querySelectorAll('.day-checkbox:checked');
-    const days = Array.from(dayCheckboxes).map(cb => cb.value).join('');
+    const days = Array.from(dayCheckboxes).map(cb => cb.value).join(',');
     
     const payload = {
         class_id: currentOpenClass,
@@ -147,13 +317,11 @@ async function saveSubject() {
     const { error } = await supabase.from('subject_loads').insert([payload]);
     if (!error) { 
         closeAddSubjectModal(); 
-        // Clear form
         document.getElementById('subjectName').value = '';
         document.getElementById('subjectTeacherId').value = '';
         document.getElementById('subjectStartTime').value = '';
         document.getElementById('subjectEndTime').value = '';
         document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
-        
         loadSubjectList(currentOpenClass); 
         showNotification("Subject added successfully", "success");
     } else {
@@ -161,252 +329,36 @@ async function saveSubject() {
     }
 }
 
-function renderGradeTabs() {
-    document.getElementById('gradeTabs').innerHTML = GRADE_LEVELS.map(g => `<button onclick="loadClasses('${g}')" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedGrade === g ? 'bg-violet-600 text-white shadow-lg' : 'bg-white text-gray-400 hover:bg-gray-50'}">${g}</button>`).join('');
-}
-
-// Populate grade dropdown with all grade levels
-function populateGradeDropdown(selectedValue = '') {
-    const select = document.getElementById('gradeLevel');
-    const options = GRADE_LEVELS.map(g => `<option value="${g}" ${g === selectedValue ? 'selected' : ''}>${g}</option>`).join('');
-    select.innerHTML = '<option value="">Select Grade Level</option>' + options;
-}
-
-// Toggle section/strand fields based on grade selection
-function handleGradeChange() {
-    const grade = document.getElementById('gradeLevel').value;
-    const isSHS = isSHSGrade(grade);
-    
-    // Show/hide section field for non-SHS, hide for SHS
-    document.getElementById('sectionField').classList.toggle('hidden', isSHS);
-    // Show/hide strand field for SHS
-    document.getElementById('strandField').classList.toggle('hidden', !isSHS);
-    
-    // Clear the hidden field values when grade changes
-    document.getElementById('sectionName').value = '';
-    document.getElementById('strandSelect').value = '';
-}
-
-// Open class modal - populate dropdowns and show/hide fields based on grade
-function openClassModal(classData = null) {
-    const modal = document.getElementById('classModal');
-    const title = document.getElementById('classModalTitle');
-    
-    // Clear form
-    document.getElementById('classId').value = '';
-    document.getElementById('sectionName').value = '';
-    document.getElementById('strandSelect').value = '';
-    
-    // Populate grade dropdown
-    populateGradeDropdown(classData?.grade_level || '');
-    
-    // Attach grade change listener
-    document.getElementById('gradeLevel').addEventListener('change', handleGradeChange);
-    
-    if (classData) {
-        // Edit mode - populate existing data
-        title.innerText = 'Edit Class';
-        document.getElementById('classId').value = classData.id;
-        document.getElementById('sectionName').value = classData.section_name || '';
-        document.getElementById('strandSelect').value = classData.strand || '';
-        document.getElementById('adviserId').value = classData.adviser_id || '';
-        
-        // Trigger grade change to show correct fields
-        handleGradeChange();
-    } else {
-        // Create mode
-        title.innerText = 'Register Class';
-        // Default to selected grade tab
-        const gradeSelect = document.getElementById('gradeLevel');
-        if (selectedGrade) {
-            gradeSelect.value = selectedGrade;
-            handleGradeChange();
-        }
-    }
-    
-    modal.classList.remove('hidden');
-}
-
-// Edit class - fetch data and open modal
-async function editClass(id) {
-    const { data, error } = await supabase.from('classes').select('*').eq('id', id).single();
-    if (error) {
-        showNotification(error.message, 'error');
-        return;
-    }
-    openClassModal(data);
-}
-
-// Save class - insert or update with duplicate checking
-async function saveClass() {
-    const id = document.getElementById('classId').value;
-    const grade = document.getElementById('gradeLevel').value;
-    
-    if (!grade) {
-        showNotification('Please select a grade level.', 'error');
-        return;
-    }
-    
-    const isSHS = isSHSGrade(grade);
-    let sectionName = null;
-    let strand = null;
-    
-    if (isSHS) {
-        // For SHS, get strand
-        strand = document.getElementById('strandSelect').value;
-        if (!strand) {
-            showNotification('Please select a strand for Senior High School.', 'error');
-            return;
-        }
-        // Section name for SHS will be the strand
-        sectionName = strand;
-    } else {
-        // For non-SHS, section name is the grade level
-        sectionName = grade;
-    }
-    
-    const adviserId = document.getElementById('adviserId').value;
-    if (!adviserId) {
-        showNotification('Please select a homeroom adviser.', 'error');
-        return;
-    }
-    
-    // Check for duplicates
-    if (!id) {
-        // Creating new class - check if exists
-        let query = supabase.from('classes').select('id').eq('grade_level', grade);
-        
-        if (isSHS) {
-            query = query.eq('strand', strand);
-        }
-        
-        const { data: existing } = await query;
-        
-        if (existing && existing.length > 0) {
-            if (isSHS) {
-                showNotification(`A class for ${grade} - ${strand} already exists.`, 'error');
-            } else {
-                showNotification(`A class for ${grade} already exists. Each grade level can only have one class.`, 'error');
-            }
-            return;
-        }
-    }
-    
-    const payload = {
-        grade_level: grade,
-        section_name: sectionName,
-        strand: isSHS ? strand : null,
-        adviser_id: adviserId,
-        school_year: '2025-2026'
-    };
-    
-    let error;
-    if (id) {
-        // Update existing
-        ({ error } = await supabase.from('classes').update(payload).eq('id', id));
-    } else {
-        // Insert new
-        ({ error } = await supabase.from('classes').insert([payload]));
-    }
-    
-    if (error) {
-        showNotification(error.message, 'error');
-    } else {
-        showNotification(id ? 'Class updated successfully!' : 'Class created successfully!', 'success');
-        closeClassModal();
-        loadClasses(selectedGrade);
-    }
-}
-async function openAddSubjectModal() { 
-    // Ensure teachers are loaded in the dropdown
-    await loadTeachers();
-    document.getElementById('addSubjectModal').classList.remove('hidden'); 
-}
-function closeAddSubjectModal() { document.getElementById('addSubjectModal').classList.add('hidden'); }
-function closeSubjectLoadModal() { document.getElementById('subjectLoadModal').classList.add('hidden'); }
-
-// Close class modal - adds hidden class to modal background
-function closeClassModal() {
-    document.getElementById('classModal').classList.add('hidden');
-}
-
 async function deleteSubject(id) {
-    showConfirmationModal(
-        "Remove Subject?",
-        "Are you sure you want to remove this subject?",
-        async () => {
-            const { error } = await supabase.from('subject_loads').delete().eq('id', id);
-            if(error) showNotification(error.message, 'error');
-            else {
-                loadSubjectList(currentOpenClass);
-                showNotification('Subject removed', 'success');
-            }
-        }
-    );
+    const { error } = await supabase.from('subject_loads').delete().eq('id', id);
+    if(error) {
+        showNotification(error.message, 'error');
+    } else {
+        loadSubjectList(currentOpenClass);
+        showNotification('Subject removed', 'success');
+    }
 }
 
-async function deleteClass(id, cnt) { 
-    if(cnt>0) {
-        showNotification('Cannot delete class: Reassign students first!', 'error'); 
-        return;
-    } 
-    
-    // Check for subjects associated with this class
-    const { count, error: countErr } = await supabase.from('subject_loads').select('*', { count: 'exact', head: true }).eq('class_id', id);
-    
-    let confirmMsg = 'Are you sure you want to delete this class?';
-    if (count > 0) confirmMsg = `This class has ${count} subjects assigned. Deleting it will remove these subjects. Continue?`;
-
-    showConfirmationModal(
-        "Delete Class?",
-        confirmMsg,
-        async () => {
-            // 1. Delete associated subjects first
-            const { error: subjError } = await supabase.from('subject_loads').delete().eq('class_id', id);
-            
-            if (subjError) {
-                showNotification("Error deleting subjects: " + subjError.message, 'error');
-                return;
-            }
-
-            // 2. Delete the class
-            const { error: classError } = await supabase.from('classes').delete().eq('id', id);
-
-            if (classError) {
-                showNotification(classError.message, 'error');
-            } else {
-                loadClasses(selectedGrade);
-                showNotification('Class deleted successfully', 'success');
-            }
-        }
-    );
-}
+// Global functions for DOM access
+window.closeAdviserModal = closeAdviserModal;
+window.openAdviserModal = openAdviserModal;
+window.saveAdviser = saveAdviser;
+window.loadAllClasses = loadAllClasses;
+window.openSubjectLoad = openSubjectLoad;
+window.closeSubjectLoadModal = closeSubjectLoadModal;
+window.deleteClass = deleteClass;
+window.openEditSubject = openEditSubject;
+window.closeEditSubjectModal = closeEditSubjectModal;
+window.saveEditSubject = saveEditSubject;
+window.openAddSubjectModal = openAddSubjectModal;
+window.closeAddSubjectModal = closeAddSubjectModal;
+window.saveSubject = saveSubject;
+window.deleteSubject = deleteSubject;
 
 function injectStyles() {
     const style = document.createElement('style');
     style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
     document.head.appendChild(style);
-}
-
-function showConfirmationModal(title, message, onConfirm) {
-    const existing = document.getElementById('confirmation-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="alert-triangle" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200">Confirm</button></div></div></div>`;
-
-    document.body.appendChild(modal);
-
-    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
-    document.getElementById('confirm-action-btn').onclick = () => {
-        modal.remove();
-        if (onConfirm) onConfirm();
-    };
-    
-    if (window.lucide) lucide.createIcons();
 }
 
 function showNotification(msg, type='info', callback=null) {
@@ -415,47 +367,15 @@ function showNotification(msg, type='info', callback=null) {
 
     const modal = document.createElement('div');
     modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
+    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in';
     
     const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
     const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
     const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
 
-    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
-    if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
-        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = type === 'error' ? 220 : 550;
-            gain.gain.setValueAtTime(0.05, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-            osc.start(); osc.stop(ctx.currentTime + 0.2);
-        } catch(e){}
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
+    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${type === 'error' ? 'Error' : 'Success'}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay</button></div></div>`;
     
     document.body.appendChild(modal);
     document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
     if(window.lucide) lucide.createIcons();
 }
-
-// ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
-// Make functions globally accessible for HTML onclick handlers
-window.closeClassModal = closeClassModal;
-window.openClassModal = openClassModal;
-window.editClass = editClass;
-window.deleteClass = deleteClass;
-window.openSubjectLoad = openSubjectLoad;
-window.closeSubjectLoadModal = closeSubjectLoadModal;
-window.openAddSubjectModal = openAddSubjectModal;
-window.closeAddSubjectModal = closeAddSubjectModal;
-window.deleteSubject = deleteSubject;
-window.loadClasses = loadClasses;
-window.saveClass = saveClass;
-window.saveSubject = saveSubject;

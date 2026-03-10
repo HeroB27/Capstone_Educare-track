@@ -47,9 +47,6 @@
             <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
-            </a>
             <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
@@ -92,8 +89,9 @@
                     <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">School-wide Communication Log</p>
                 </div>
                 <div class="flex gap-4">
-                    <button onclick="openSuspensionModal()" class="px-8 py-3 bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest">Declare Suspension</button>
-                    <button onclick="openAnnouncementModal()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest">Post Broadcast</button>
+                    <button onclick="openAnnouncementModal()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">
+                        <i data-lucide="plus" class="w-4 h-4 inline-block mr-1 -mt-0.5"></i> Post Broadcast
+                    </button>
                 </div>
             </div>
 
@@ -129,42 +127,6 @@
             </div>
         </div>
     </main>
-
-    <div id="suspensionModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white">
-                <h3 class="font-black text-xl uppercase tracking-tight">Declare Suspension</h3>
-                <button onclick="closeSuspensionModal()" class="modal-close-btn w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
-            </div>
-            <div class="p-8 space-y-6">
-                <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Suspension Reason</label>
-                    <div class="grid grid-cols-3 gap-2 mt-2">
-                        <button onclick="setCategory(event, 'Calamity')" id="cat-Calamity" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Calamity</span></button>
-                        <button onclick="setCategory(event, 'Holiday')" id="cat-Holiday" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="calendar" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Holiday</span></button>
-                        <button onclick="setCategory(event, 'Others')" id="cat-Others" class="category-btn py-3 rounded-2xl border-2 border-gray-50 flex flex-col items-center gap-1 transition-all"><i data-lucide="more-horizontal" class="w-4 h-4"></i><span class="text-[9px] font-black uppercase">Others</span></button>
-                    </div>
-                </div>
-                <div id="dynamicFields" class="hidden space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <input type="date" id="eventDate" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-red-200 font-bold">
-                        <select id="scheduleType" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-red-200 font-bold">
-                            <option value="Full Day">Full Day</option>
-                            <option value="Half Day AM">Half Day AM</option>
-                        </select>
-                    </div>
-                    <textarea id="eventNotes" rows="3" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-red-200 font-bold" placeholder="Additional details for parents..."></textarea>
-                </div>
-            </div>
-            <div class="px-8 py-6 bg-gray-50 border-t flex justify-between items-center">
-                <label class="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" id="autoAnnounce" checked class="w-5 h-5 text-red-600 rounded-lg">
-                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Auto-Alert Portals</span>
-                </label>
-                <button onclick="saveLogicSuspension()" class="px-10 py-3 bg-red-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-red-200">Confirm</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Create/Edit Announcement Modal -->
     <div id="announcementModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">

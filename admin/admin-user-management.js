@@ -199,41 +199,41 @@ function setEnrollType(event, type) {
     showStep(1);
 }
 
-function nextStep() {
+async function nextStep() {
     if (enrollType === 'staff') {
-        // Show confirmation step for staff
         const confirmArea = document.getElementById('staff-confirm-area');
         if (confirmArea.classList.contains('hidden')) {
-            // First click - show confirmation
             if (!showStaffConfirmation()) return;
             document.getElementById('next-btn').innerText = "Confirm & Register";
             return;
         } else {
-            // Second click - submit
             return submitStaffFinal();
         }
     }
     const val = (id) => document.getElementById(id)?.value?.trim();
 
-    if (currentStep === 1) { // Parent Info
+    if (currentStep === 1) { 
         if (!val('p-name') || !val('p-phone')) return showNotification("Full Name and Phone are required.", "error");
         parentInfo = { full_name: val('p-name'), address: val('p-address'), relationship_type: val('p-role'), contact_number: val('p-phone') };
         showStep(2);
-    } else if (currentStep === 2) { // Account Creation
+    } else if (currentStep === 2) { 
         if (!val('p-user') || !val('p-pass')) return showNotification("Username and Password are required.", "error");
         parentInfo.username = val('p-user');
         parentInfo.password = val('p-pass');
         renderParentSummary();
-        if (document.getElementById('student-form-container').children.length === 0) addStudentForm();
         showStep(3);
-    } else if (currentStep === 3) { // Student Info
-        collectStudents();
-        if (studentData.length === 0 || !studentData[0].name) return showNotification("Please add at least one student.", "error");
-        renderStudentSummary();
+    } else if (currentStep === 3) { 
+        // FIXED: Transition to Step 4 and await the async form addition so it doesn't trap the user
+        if (document.getElementById('student-form-container').children.length === 0) await addStudentForm();
         showStep(4);
-    } else if (currentStep === 4) { // Review
+    } else if (currentStep === 4) { 
+        if (!collectStudents()) return; 
+        if (studentData.length === 0 || !studentData[0].name) return showNotification("Please add at least one student and fill in their name.", "error");
+        renderStudentSummary();
         showStep(5);
-    } else if (currentStep === 5) { finalizeParentStudent(); }
+    } else if (currentStep === 5) { 
+        finalizeParentStudent();
+    }
 }
 
 // --- FINAL SUBMISSION LOGIC ---
@@ -307,7 +307,7 @@ async function submitStaffFinal() {
     
     if (!name || !phone || !username || !password) return showNotification("All fields are required.", "error");
 
-    const idKey = role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : role === 'clinic_staff' ? 'clinic_id_text' : null;
+    const idKey = role === 'admins' ? 'admin_id_text' : role === 'teachers' ? 'teacher_id_text' : role === 'guards' ? 'guard_id_text' : role === 'clinic_staff' ? 'clinic_id_text' : null;
     const payload = { 
         full_name: name, 
         contact_number: phone, 
@@ -368,9 +368,8 @@ async function submitStaffFinal() {
 
 async function finalizeParentStudent() {
     const btn = document.getElementById('next-btn');
-    btn.disabled = true; btn.innerText = "Syncing...";
+    btn.disabled = true; btn.innerText = "Syncing & Uploading...";
     
-    // UPDATED: Check for duplicate LRN before insertion
     const lrns = studentData.map(s => s.lrn);
     for (let lrn of lrns) {
         const isValid = await checkDuplicateFields(lrn, null);
@@ -380,7 +379,6 @@ async function finalizeParentStudent() {
         }
     }
     
-    // Check parent username duplicate
     const parentUserValid = await checkDuplicateFields(null, parentInfo.username);
     if (!parentUserValid) {
         btn.disabled = false; btn.innerText = "Finalize & Print";
@@ -390,23 +388,45 @@ async function finalizeParentStudent() {
     try {
         const { data: parent, error: pErr } = await supabase.from('parents').insert([{ ...parentInfo, parent_id_text: generateID('parents', parentInfo.contact_number), is_active: true }]).select().single();
         if (pErr) throw pErr;
-        const studentPayload = studentData.map(s => ({ 
-            full_name: s.name, 
-            lrn: s.lrn, 
-            student_id_text: generateID('students', s.lrn, s.grade),
-            parent_id: parent.id, 
-            address: parentInfo.address, 
-            emergency_contact: parentInfo.contact_number, 
-            gender: s.gender || null,
-            class_id: s.class_id || null,
-            status: 'Enrolled' 
-        }));
+        
+        const studentPayload = [];
+        for (let s of studentData) {
+            let photoUrl = null;
+            // NEW: Upload photo to Supabase Storage
+            if (s.photo_file) {
+                const fileExt = s.photo_file.name.split('.').pop();
+                const fileName = `stu-${s.lrn}-${Date.now()}.${fileExt}`;
+                
+                const { error: uploadErr } = await supabase.storage.from('profiles').upload(fileName, s.photo_file);
+                if (!uploadErr) {
+                    const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(fileName);
+                    photoUrl = urlData.publicUrl;
+                } else {
+                    console.error("Photo upload failed:", uploadErr);
+                }
+            }
+            
+            studentPayload.push({ 
+                full_name: s.name, 
+                lrn: s.lrn, 
+                student_id_text: generateID('students', s.lrn, null),
+                parent_id: parent.id, 
+                address: parentInfo.address, 
+                emergency_contact: parentInfo.contact_number, 
+                gender: s.gender || null,
+                class_id: s.class_id || null,
+                profile_photo_url: photoUrl,
+                status: 'Enrolled' 
+            });
+        }
+        
         const { data: createdStu, error: sErr } = await supabase.from('students').insert(studentPayload).select();
         if (sErr) throw sErr;
+        
         await renderBulkPrint(createdStu, parentInfo);
         showNotification("Family Registered Successfully!", "success"); 
         closeEnrollmentModal(); 
-        // Clear parent enrollment form fields
+        
         document.getElementById('p-name').value = '';
         document.getElementById('p-phone').value = '';
         document.getElementById('p-address').value = '';
@@ -419,7 +439,6 @@ async function finalizeParentStudent() {
         currentStep = 1;
         loadUsers();
     } catch (e) { 
-        // FIX #3: Handle unique constraint violation (ID already exists)
         if (e.code === '23505' || (e.message && e.message.includes('duplicate'))) {
             showNotification("Generated ID already exists. Please try again.", "error");
         } else {
@@ -633,7 +652,34 @@ async function addStudentForm() {
     const classes = await loadClasses();
     const id = Date.now();
     const classOptions = classes.map(c => `<option value="${c.id}">${c.grade_level} - ${c.section_name}</option>`).join('');
-    document.getElementById('student-form-container').insertAdjacentHTML('beforeend', `<div class="stu-form p-6 bg-gray-50 rounded-3xl border border-gray-100" id="b-${id}"><div class="grid grid-cols-2 gap-4"><input type="text" class="stu-name col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="Child's Full Name"><select class="stu-gender border rounded-xl px-4 py-3 font-bold"><option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select><select class="stu-grade border rounded-xl px-4 py-3 font-bold" onchange="const b=this.closest('.stu-form').querySelector('.s-area'); (this.value==='G11'||this.value==='G12')?b.classList.remove('hidden'):b.classList.add('hidden')"><option value="Kinder">Kinder</option>${Array.from({length:10},(_,i)=>`<option value="G${i+1}">Grade ${i+1}</option>`).join('')}<option value="G11">Grade 11</option><option value="G12">Grade 12</option></select><div class="s-area hidden"><select class="stu-strand w-full border rounded-xl px-4 py-3 font-bold"><option value="ABM">ABM</option><option value="STEM">STEM</option><option value="TVL-ICT">TVL-ICT</option></select></div><select class="stu-class border rounded-xl px-4 py-3 font-bold"><option value="">Select Class (Optional)</option>${classOptions}</select><input type="text" class="stu-lrn col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="12-Digit LRN"></div></div>`);
+    
+    const formHtml = `
+    <div class="stu-form p-6 bg-gray-50 rounded-3xl border border-gray-100 mb-4" id="b-${id}">
+        <div class="grid grid-cols-2 gap-4">
+            <input type="text" class="stu-name col-span-2 border rounded-xl px-4 py-3 font-bold" placeholder="Child's Full Name">
+            <select class="stu-gender border rounded-xl px-4 py-3 font-bold">
+                <option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option>
+            </select>
+            <select class="stu-class border rounded-xl px-4 py-3 font-bold">
+                <option value="">Select Class (Grade & Section)</option>
+                ${classOptions}
+            </select>
+            <input type="text" class="stu-lrn border rounded-xl px-4 py-3 font-bold" placeholder="12-Digit LRN">
+            
+            <div class="col-span-2 flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 mt-2">
+                <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 overflow-hidden shrink-0" id="preview-${id}">
+                    <i data-lucide="camera" class="w-5 h-5"></i>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-[10px] font-black text-violet-600 uppercase mb-1">Student Photo Profile (Optional)</label>
+                    <input type="file" accept="image/*" class="stu-photo w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 transition-all cursor-pointer" onchange="const f=this.files[0]; if(f){ const r=new FileReader(); r.onload=e=>document.getElementById('preview-${id}').innerHTML='<img src=&quot;'+e.target.result+'&quot; class=&quot;w-full h-full object-cover&quot;>'; r.readAsDataURL(f); }">
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    document.getElementById('student-form-container').insertAdjacentHTML('beforeend', formHtml);
+    if (window.lucide) lucide.createIcons();
 }
 function renderParentSummary() { 
     // UPDATED: Use escapeHtml to prevent XSS
@@ -643,23 +689,20 @@ function renderParentSummary() {
     document.getElementById('p-summary').innerHTML = `<div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PARENT NAME</p>${safeName}</div><div><p class="text-[8px] text-violet-400 uppercase tracking-widest">PHONE</p>${safeContact}</div><div class="col-span-2"><p class="text-[8px] text-violet-400 uppercase tracking-widest">ADDRESS</p>${safeAddress}</div>`; 
 }
 function renderStudentSummary() { 
-    // UPDATED: Use escapeHtml to prevent XSS
     document.getElementById('s-summary-container').innerHTML = studentData.map((s,i)=> {
         const safeName = escapeHtml(s.name);
-        const safeGrade = escapeHtml(s.grade);
-        return `<div class="p-4 bg-violet-50 rounded-2xl border border-violet-100 font-bold text-xs">Student #${i+1}: ${safeName} (${safeGrade})</div>`;
+        return `<div class="p-4 bg-violet-50 rounded-2xl border border-violet-100 font-bold text-xs">Student #${i+1}: ${safeName}</div>`;
     }).join(''); 
 }
 function collectStudents() {
     studentData = Array.from(document.querySelectorAll('.stu-form')).map(f => ({
         name: f.querySelector('.stu-name').value.trim(),
-        grade: f.querySelector('.stu-grade').value,
         lrn: f.querySelector('.stu-lrn').value.trim(),
         gender: f.querySelector('.stu-gender').value,
-        class_id: f.querySelector('.stu-class').value || null
+        class_id: f.querySelector('.stu-class').value || null,
+        photo_file: f.querySelector('.stu-photo').files[0] || null
     }));
 
-    // Validate LRN length
     for (let s of studentData) {
         if (s.lrn.length !== 12 || isNaN(s.lrn)) {
             showNotification("LRN must be exactly 12 digits.", "error");
@@ -716,16 +759,29 @@ function closeEnrollmentModal() {
 
 function switchView(event, v) { 
     currentView = v; 
-    renderUserTable(); 
+    const mainView = document.getElementById('main-users-view');
+    const prView = document.getElementById('password-resets-view');
     
-    // Update Tab UI
+    if (v === 'password-resets') {
+        if (mainView) mainView.classList.add('hidden');
+        if (prView) prView.classList.remove('hidden');
+        loadPasswordResetsUM();
+    } else {
+        if (prView) prView.classList.add('hidden');
+        if (mainView) mainView.classList.remove('hidden');
+        renderUserTable(); 
+    }
+    
     const btnStaff = document.getElementById('tab-staff');
-    const btnParent = document.getElementById('tab-parent');
-    const activeClass = "px-6 py-2 bg-violet-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-violet-200 transition-all";
-    const inactiveClass = "px-6 py-2 bg-white text-gray-400 border border-gray-100 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-50 transition-all";
+    const btnParents = document.getElementById('tab-parents'); // Fixed plural ID reference
+    const btnPR = document.getElementById('tab-password-resets');
+    
+    const activeClass = "font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all";
+    const inactiveClass = "font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all";
     
     if (btnStaff) btnStaff.className = v === 'staff' ? activeClass : inactiveClass;
-    if (btnParent) btnParent.className = v === 'parent' ? activeClass : inactiveClass;
+    if (btnParents) btnParents.className = v === 'parents' ? activeClass : inactiveClass;
+    if (btnPR) btnPR.className = v === 'password-resets' ? activeClass : inactiveClass;
 }
 
 function filterUsers() { renderUserTable(); }
@@ -1096,6 +1152,55 @@ function showNotification(msg, type='info', callback=null) {
     if(window.lucide) lucide.createIcons();
 }
 
+// ===== PASSWORD RESET FUNCTIONS FOR USER MANAGEMENT =====
+async function loadPasswordResetsUM() {
+    const list = document.getElementById('password-reset-list-um');
+    const query = document.getElementById('password-reset-search')?.value || '';
+    list.innerHTML = '<tr><td class="px-8 py-12 text-center text-gray-400 italic">Loading requests...</td></tr>';
+
+    let queryBuilder = supabase.from('password_resets').select('*').eq('used', false);
+    if (query) queryBuilder = queryBuilder.ilike('username', `%${query}%`);
+    
+    const { data, error } = await queryBuilder.order('created_at', { ascending: false });
+
+    if (error) {
+        list.innerHTML = '<tr><td class="px-8 py-12 text-center text-red-500">Error loading requests.</td></tr>';
+        return;
+    }
+    if (!data || data.length === 0) {
+        list.innerHTML = '<tr><td class="px-8 py-12 text-center text-gray-400 italic">No pending password reset requests.</td></tr>';
+        return;
+    }
+    list.innerHTML = data.map(req => `
+        <tr class="hover:bg-violet-50/50 transition-colors">
+            <td class="px-8 py-5">
+                <span class="font-medium text-gray-700">${req.username}</span>
+                <span class="ml-2 px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded-full">${req.user_role}</span>
+            </td>
+            <td class="px-8 py-5 text-sm text-gray-500">${new Date(req.created_at).toLocaleString()}</td>
+            <td class="px-8 py-5 text-right">
+                <button onclick="resolvePasswordRequestUM('${req.id}')" class="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-200 transition-all">Mark Resolved</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function resolvePasswordRequestUM(id) {
+    const { error } = await supabase.from('password_resets').update({ used: true }).eq('id', id);
+    if (error) showNotification("Failed to resolve request.", "error");
+    else { showNotification("Request marked as reviewed.", "success"); loadPasswordResetsUM(); }
+}
+
+async function deleteAllResolvedUM() {
+    if (!confirm("Are you sure you want to delete all resolved requests?")) return;
+    try {
+        const { error } = await supabase.from('password_resets').delete().eq('used', true);
+        if (error) throw error;
+        showNotification("All resolved requests have been deleted.", "success");
+        loadPasswordResetsUM();
+    } catch (e) { showNotification("Error: " + e.message, "error"); }
+}
+
 // ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
 // Make functions globally accessible for HTML onclick handlers
 window.nextStep = nextStep;
@@ -1105,6 +1210,10 @@ window.closeEnrollmentModal = closeEnrollmentModal;
 window.setEnrollType = setEnrollType;
 window.showStep = showStep;
 window.switchView = switchView;
+window.filterUsers = filterUsers;
+window.loadPasswordResetsUM = loadPasswordResetsUM;
+window.resolvePasswordRequestUM = resolvePasswordRequestUM;
+window.deleteAllResolvedUM = deleteAllResolvedUM;
 window.closeEditModal = closeEditModal;
 window.openEditModal = openEditModal;
 window.saveUserEdit = saveUserEdit;

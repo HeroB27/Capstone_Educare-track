@@ -1,6 +1,10 @@
 // admin/admin-calendar.js
 // Manages School Calendar - Holidays and Suspension Days
 
+// Visual Calendar Global Variables
+let currentNavDate = new Date();
+let flatHolidaysData = []; // Store raw db rows here
+
 // 1. Initialize Page
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof checkSession === 'function') {
@@ -80,6 +84,10 @@ async function loadHolidays() {
 
         if (error) throw error;
 
+        // Store raw data for visual calendar and render it
+        flatHolidaysData = data;
+        renderVisualCalendar();
+
         // Apply type filter
         let filteredData = data;
         if (filterType === 'suspension') {
@@ -93,14 +101,33 @@ async function loadHolidays() {
             return;
         }
 
-        const today = new Date().toISOString().split('T')[0];
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        // GROUPING ALGORITHM - Groups contiguous days with same description
+        const groupedHolidays = [];
+        filteredData.forEach(row => {
+            const existingGroup = groupedHolidays.find(g => g.description === row.description && g.is_suspended === row.is_suspended);
+            if (existingGroup) {
+                existingGroup.end_date = row.holiday_date;
+                existingGroup.duration += 1;
+            } else {
+                groupedHolidays.push({
+                    ...row,
+                    start_date: row.holiday_date,
+                    end_date: row.holiday_date,
+                    duration: 1
+                });
+            }
+        });
 
-        list.innerHTML = filteredData.map(holiday => {
-            const isPast = holiday.holiday_date < today;
-            const isSuspension = holiday.is_suspended === true;
-            const isUpcoming = holiday.holiday_date >= today;
-            const isThisMonth = holiday.holiday_date.startsWith(currentMonth);
+        const today = new Date().toISOString().split('T')[0];
+
+        list.innerHTML = groupedHolidays.map(group => {
+            const isPast = group.end_date < today;
+            const isSuspension = group.is_suspended === true;
+            
+            // Format date display
+            const sDate = new Date(group.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const eDate = new Date(group.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const dateDisplay = group.duration > 1 ? `${sDate} - ${eDate}` : sDate;
 
             return `
                 <tr class="hover:bg-violet-50/50 transition-colors ${isPast ? 'opacity-60' : ''}">
@@ -110,32 +137,31 @@ async function loadHolidays() {
                                 <i data-lucide="${isSuspension ? 'ban' : 'cake'}" class="w-5 h-5 ${isSuspension ? 'text-red-600' : 'text-violet-600'}"></i>
                             </div>
                             <div>
-                                <p class="font-black text-gray-800">${formatDate(holiday.holiday_date)}</p>
-                                <p class="text-xs text-gray-400">${getDayName(holiday.holiday_date)}</p>
+                                <p class="font-black text-gray-800">${dateDisplay}</p>
+                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${group.duration > 1 ? group.duration + ' Days' : '1 Day'}</p>
                             </div>
                         </div>
                     </td>
                     <td class="px-6 py-5">
-                        <p class="font-bold text-gray-800">${holiday.description || 'No description'}</p>
+                        <p class="font-bold text-gray-800">${group.description || 'No description'}</p>
                     </td>
                     <td class="px-6 py-5">
-                        <span class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${isSuspension 
-                            ? 'bg-red-100 text-red-700' 
-                            : 'bg-emerald-100 text-emerald-700'}">
-                            ${isSuspension ? 'Suspension' : 'Holiday'}
-                        </span>
+                        <div class="flex flex-col gap-1 items-start">
+                            <span class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${isSuspension ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                                ${isSuspension ? 'Suspension' : 'Holiday'}
+                            </span>
+                            ${(isSuspension && group.time_coverage && group.time_coverage !== 'Full Day') 
+                                ? `<span class="px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700">${group.time_coverage}</span>` : ''}
+                        </div>
                     </td>
                     <td class="px-6 py-5">
-                        <span class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-600">
-                            ${holiday.target_grades || 'All'}
+                        <span class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-gray-100 text-gray-600">
+                            ${group.target_grades || 'All Levels'}
                         </span>
                     </td>
                     <td class="px-6 py-5 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <button onclick="editHoliday('${holiday.holiday_date}')" class="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all">
-                                <i data-lucide="pencil" class="w-4 h-4"></i>
-                            </button>
-                            <button onclick="deleteHoliday('${holiday.holiday_date}')" class="p-2.5 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-all">
+                            <button onclick="deleteHolidayGroup('${group.description}')" class="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 hover:text-red-600 transition-all" title="Delete Event">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>
@@ -176,33 +202,95 @@ async function loadStats() {
     }
 }
 
+// VISUAL CALENDAR FUNCTIONS
+// Change month navigation
+function changeMonth(offset) {
+    if (offset === 0) currentNavDate = new Date();
+    else currentNavDate.setMonth(currentNavDate.getMonth() + offset);
+    renderVisualCalendar();
+}
+
+// Render the visual calendar grid
+function renderVisualCalendar() {
+    const year = currentNavDate.getFullYear();
+    const month = currentNavDate.getMonth();
+    
+    document.getElementById('calendar-month-year').textContent = currentNavDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const grid = document.getElementById('calendar-grid');
+    grid.innerHTML = '';
+    
+    // Blank previous month cells
+    for (let i = 0; i < firstDay; i++) {
+        grid.innerHTML += `<div class="bg-gray-50/50 p-2"></div>`;
+    }
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const cellDate = new Date(year, month, day);
+        // Adjust for local timezone offset string
+        const dateStr = new Date(cellDate.getTime() - (cellDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        
+        const isToday = dateStr === todayStr;
+        const isWeekend = cellDate.getDay() === 0 || cellDate.getDay() === 6;
+        
+        // Check if this day has an event
+        const eventInfo = flatHolidaysData.find(h => h.holiday_date === dateStr);
+        let eventHtml = '';
+        
+        if (eventInfo) {
+            const isSuspension = eventInfo.is_suspended;
+            const barColor = isSuspension ? 'bg-red-500' : 'bg-emerald-500';
+            const lightColor = isSuspension ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700';
+            const label = eventInfo.time_coverage !== 'Full Day' ? `${eventInfo.description} (${eventInfo.time_coverage})` : eventInfo.description;
+            
+            eventHtml = `
+                <div class="mt-1 w-full flex overflow-hidden rounded shadow-sm">
+                    <div class="w-1 ${barColor} shrink-0"></div>
+                    <div class="${lightColor} text-[9px] font-bold p-1 truncate w-full text-left" title="${label}">${label}</div>
+                </div>`;
+        }
+
+        grid.innerHTML += `
+            <div onclick="openHolidayModal(null, '${dateStr}')" class="bg-white p-2 border border-transparent hover:border-violet-300 hover:shadow-md cursor-pointer transition-all flex flex-col group relative ${isWeekend ? 'bg-gray-50' : ''}">
+                <div class="flex justify-between items-start">
+                    <span class="text-sm font-bold ${isToday ? 'bg-violet-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : 'text-gray-700'}">${day}</span>
+                    <i data-lucide="plus" class="w-3 h-3 text-violet-300 opacity-0 group-hover:opacity-100 transition-opacity mt-1"></i>
+                </div>
+                <div class="flex-1 mt-1 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+                    ${eventHtml}
+                </div>
+            </div>`;
+    }
+    lucide.createIcons();
+}
+
 // 5. Open Modal for Adding/Editing
-function openHolidayModal(editDate = null) {
+function openHolidayModal(editDate = null, clickedDate = null) {
     const modal = document.getElementById('holiday-modal');
     const title = document.getElementById('modal-title');
-    const dateInput = document.getElementById('holiday-date');
-    const descInput = document.getElementById('holiday-description');
-    const typeRadios = document.getElementsByName('holiday-type');
-    const targetSelect = document.getElementById('holiday-target-grades');
-    const editDateInput = document.getElementById('edit-holiday-date');
-
-    // Reset form
-    dateInput.value = '';
-    descInput.value = '';
-    targetSelect.value = 'All';
-    typeRadios[0].checked = true; // Default to suspension
-    editDateInput.value = '';
+    document.getElementById('holiday-start-date').value = '';
+    document.getElementById('holiday-end-date').value = '';
+    document.getElementById('holiday-description').value = '';
+    document.getElementById('holiday-target-grades').value = 'All Levels';
+    document.getElementById('holiday-coverage').value = 'Full Day';
+    document.getElementsByName('holiday-type')[0].checked = true;
+    document.getElementById('edit-holiday-date').value = '';
 
     if (editDate) {
-        // Edit mode - load existing data
         title.innerText = 'Edit Holiday';
         loadHolidayForEdit(editDate);
     } else {
-        // Add mode
         title.innerText = 'Add Holiday';
-        dateInput.value = getTodayDate();
+        // If they clicked a specific date on the calendar grid, use it. Otherwise use today.
+        const defaultDate = clickedDate ? clickedDate : getTodayDate();
+        document.getElementById('holiday-start-date').value = defaultDate;
+        document.getElementById('holiday-end-date').value = defaultDate;
     }
-
     modal.classList.remove('hidden');
     lucide.createIcons();
 }
@@ -224,17 +312,12 @@ async function loadHolidayForEdit(date) {
 
         if (data) {
             document.getElementById('edit-holiday-date').value = data.holiday_date;
-            document.getElementById('holiday-date').value = data.holiday_date;
+            document.getElementById('holiday-start-date').value = data.holiday_date;
+            document.getElementById('holiday-end-date').value = data.holiday_date;
             document.getElementById('holiday-description').value = data.description || '';
-            document.getElementById('holiday-target-grades').value = data.target_grades || 'All';
-            
-            // Set radio button
-            const typeRadios = document.getElementsByName('holiday-type');
-            if (data.is_suspended === true) {
-                typeRadios[0].checked = true;
-            } else {
-                typeRadios[1].checked = true;
-            }
+            document.getElementById('holiday-target-grades').value = data.target_grades || 'All Levels';
+            document.getElementById('holiday-coverage').value = data.time_coverage || 'Full Day';
+            document.getElementsByName('holiday-type')[data.is_suspended ? 0 : 1].checked = true;
         }
     } catch (err) {
         console.error("Error loading holiday:", err);
@@ -242,78 +325,131 @@ async function loadHolidayForEdit(date) {
     }
 }
 
-// 7. Save Holiday (Add or Update)
+// 7. Save Holiday (Add or Update) - With Multi-Day Support
+let pendingAnnouncement = null;
+
 async function saveHoliday() {
     const editDate = document.getElementById('edit-holiday-date').value;
-    const holidayDate = document.getElementById('holiday-date').value;
+    const startDate = document.getElementById('holiday-start-date').value;
+    const endDate = document.getElementById('holiday-end-date').value;
     const description = document.getElementById('holiday-description').value;
-    const typeRadios = document.getElementsByName('holiday-type');
-    const isSuspended = typeRadios[0].checked ? true : false;
+    const isSuspended = document.getElementsByName('holiday-type')[0].checked;
     const targetGrades = document.getElementById('holiday-target-grades').value;
+    const timeCoverage = document.getElementById('holiday-coverage').value;
 
-    // Validation
-    if (!holidayDate) {
-        showNotification("Please select a date", "error");
-        return;
-    }
-    if (!description.trim()) {
-        showNotification("Please enter a description", "error");
-        return;
-    }
+    if (!startDate || !endDate) return showNotification("Please select start and end dates", "error");
+    if (new Date(startDate) > new Date(endDate)) return showNotification("Start date cannot be after end date", "error");
+    if (!description.trim()) return showNotification("Please enter a description", "error");
 
-    const payload = {
-        holiday_date: holidayDate,
-        description: description.trim(),
-        is_suspended: isSuspended,
-        target_grades: targetGrades
-    };
+    const payloadArray = [];
+    let currentDate = new Date(startDate);
+    const finalDate = new Date(endDate);
+
+    while (currentDate <= finalDate) {
+        payloadArray.push({
+            holiday_date: currentDate.toISOString().split('T')[0],
+            description: description.trim(),
+            is_suspended: isSuspended,
+            target_grades: targetGrades,
+            time_coverage: isSuspended ? timeCoverage : 'Full Day'
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
 
     try {
-        const { error } = await supabase
-            .from('holidays')
-            .upsert(payload, { onConflict: 'holiday_date' });
-
+        const { error } = await supabase.from('holidays').upsert(payloadArray, { onConflict: 'holiday_date' });
         if (error) throw error;
-
-        showNotification(editDate ? "Holiday updated successfully!" : "Holiday added successfully!", "success");
+        
         closeHolidayModal();
         loadHolidays();
         loadStats();
 
+        // NEW: If it's a suspension, ask if they want to announce it
+        if (isSuspended && !editDate) {
+            pendingAnnouncement = { description, startDate, endDate, targetGrades, timeCoverage };
+            document.getElementById('announce-suspension-modal').classList.remove('hidden');
+        } else {
+            showNotification(editDate ? "Holiday updated successfully!" : "Dates registered successfully!", "success");
+        }
     } catch (err) {
-        console.error("Error saving holiday:", err);
+        console.error(err);
         showNotification("Error saving holiday: " + err.message, "error");
     }
 }
+
+// 8. Announcer Functions for Suspension Modal
+function closeAnnounceModal() {
+    pendingAnnouncement = null;
+    document.getElementById('announce-suspension-modal').classList.add('hidden');
+    showNotification("Suspension saved into Calendar.", "info");
+}
+
+async function confirmAndAnnounceSuspension() {
+    if (!pendingAnnouncement) return;
+    const btn = document.getElementById('confirm-announce-btn');
+    btn.disabled = true; btn.innerText = "Broadcasting...";
+
+    const adminId = checkSession('admins')?.id || null;
+    const sDate = new Date(pendingAnnouncement.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const eDate = new Date(pendingAnnouncement.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dateStr = pendingAnnouncement.startDate === pendingAnnouncement.endDate ? sDate : `${sDate} to ${eDate}`;
+    
+    const title = `CLASS SUSPENSION: ${pendingAnnouncement.description}`;
+    const content = `Please be advised that classes are suspended on ${dateStr}. Coverage: ${pendingAnnouncement.timeCoverage}. Affected Grades: ${pendingAnnouncement.targetGrades}.`;
+
+    try {
+        const { error } = await supabase.from('announcements').insert([{
+            title: title, content: content, posted_by_admin_id: adminId, priority: 'High', type: 'General',
+            target_parents: true, target_students: true, target_teachers: true, target_guards: true, target_clinic: true
+        }]);
+        if (error) throw error;
+        
+        document.getElementById('announce-suspension-modal').classList.add('hidden');
+        showNotification("Suspension saved & Announcement broadcasted!", "success");
+    } catch (err) {
+        showNotification("Error broadcasting announcement: " + err.message, "error");
+    } finally {
+        btn.disabled = false; btn.innerText = "Yes, Announce";
+        pendingAnnouncement = null;
+    }
+}
+
+// ATTENDANCE INTERCEPTOR UTILITY (For Guard/Teacher modules to call)
+window.checkSuspensionStatus = async function(dateStr) {
+    try {
+        const { data, error } = await supabase.from('holidays').select('*').eq('holiday_date', dateStr).single();
+        if (error || !data) return { isSuspended: false, coverage: null, targetGrades: null };
+        return { isSuspended: data.is_suspended, coverage: data.time_coverage || 'Full Day', targetGrades: data.target_grades };
+    } catch (err) { return { isSuspended: false, coverage: null, targetGrades: null }; }
+};
 
 // 8. Edit Holiday
 function editHoliday(date) {
     openHolidayModal(date);
 }
 
-// 9. Delete Holiday
-function deleteHoliday(date) {
-    showConfirmationModal(
-        "Delete Holiday?",
-        "Are you sure you want to delete this holiday?",
-        async () => {
-            try {
-                const { error } = await supabase
-                    .from('holidays')
-                    .delete()
-                    .eq('holiday_date', date);
+// 9. Delete Holiday (Grouped - deletes all rows with same description)
+let pendingDeleteDesc = null;
 
-                if (error) throw error;
+function deleteHolidayGroup(description) {
+    pendingDeleteDesc = description;
+    document.getElementById('delete-modal').classList.remove('hidden');
+}
 
-                showNotification("Holiday deleted successfully!", "success");
-                loadHolidays();
-                loadStats();
-            } catch (err) {
-                console.error("Error deleting holiday:", err);
-                showNotification("Error deleting holiday: " + err.message, "error");
-            }
-        }
-    );
+async function confirmDelete() {
+    if (!pendingDeleteDesc) return;
+    try {
+        const { error } = await supabase.from('holidays').delete().eq('description', pendingDeleteDesc);
+        if (error) throw error;
+        showNotification("Event deleted successfully!", "success");
+        loadHolidays();
+        loadStats();
+    } catch (err) {
+        showNotification("Error deleting: " + err.message, "error");
+    } finally {
+        pendingDeleteDesc = null;
+        document.getElementById('delete-modal').classList.add('hidden');
+    }
 }
 
 // Helper Functions
@@ -456,5 +592,8 @@ window.saveHoliday = saveHoliday;
 window.loadHolidays = loadHolidays;
 window.editHoliday = editHoliday;
 window.deleteHoliday = deleteHoliday;
+window.deleteHolidayGroup = deleteHolidayGroup;
 window.confirmDelete = confirmDelete;
 window.openDeleteModal = openDeleteModal;
+window.closeAnnounceModal = closeAnnounceModal;
+window.confirmAndAnnounceSuspension = confirmAndAnnounceSuspension;

@@ -47,9 +47,6 @@
             <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
-            </a>
             <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
@@ -88,67 +85,82 @@
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
             <div class="mb-10 border-b border-gray-200">
                 <nav class="-mb-px flex space-x-12">
-                    <button onclick="switchTab(event, 'gate-logic')" id="btn-gate-logic" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
-                        Time Thresholds
+                    <button onclick="switchTab(event, 'my-account')" id="btn-my-account" class="relative tab-btn px-2 py-4 border-b-4 border-violet-500 text-violet-600 font-black uppercase tracking-widest transition-all hover:text-gray-600">
+                        My Account
                     </button>
-                    <button onclick="switchTab(event, 'auto-alerts')" id="btn-auto-alerts" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
-                        Auto-Alerts
-                    </button>
-                    <button onclick="switchTab(event, 'password-resets')" id="btn-password-resets" class="relative tab-btn active px-2 py-4 border-b-4 border-violet-500 text-violet-600 font-black uppercase tracking-widest transition-all">
-                        Password Resets
-                        <span id="password-reset-badge" class="absolute -top-1 -right-3 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center hidden">0</span>
+                    <button onclick="switchTab(event, 'theme')" id="btn-theme" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
+                        Theme
                     </button>
                 </nav>
             </div>
 
-            <!-- TAB 1: Time Thresholds (Gate Logic) -->
-            <section id="section-gate-logic" class="settings-section hidden">
+            <!-- TAB 1: My Account -->
+            <section id="section-my-account" class="settings-section hidden">
                 <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
                     <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
-                        <h3 class="font-black text-gray-800">Gate Logic Time Thresholds</h3>
-                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Configure AM/PM gate timing and late thresholds.</p>
+                        <h3 class="font-black text-gray-800">My Account</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Change your admin account password.</p>
                     </div>
                     <div class="p-8">
-                        <p class="text-gray-500">Gate Logic settings content goes here.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- TAB 2: Auto-Alerts -->
-            <section id="section-auto-alerts" class="settings-section hidden">
-                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
-                        <h3 class="font-black text-gray-800">Auto-Alerts Configuration</h3>
-                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Configure automatic notification alerts.</p>
-                    </div>
-                    <div class="p-8">
-                        <p class="text-gray-500">Auto-Alerts settings content goes here.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- TAB 3: Password Resets -->
-            <section id="section-password-resets" class="settings-section hidden">
-                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center gap-4">
-                        <div>
-                            <h3 class="font-black text-gray-800">Password Reset Requests</h3>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Requests from users who forgot their password.</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="relative">
-                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-                                <input type="text" id="password-reset-search" oninput="loadPasswordResets()" placeholder="Search by username..." class="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:border-violet-400 focus:outline-none transition-all">
+                        <div class="max-w-md mx-auto space-y-6">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Current Password</label>
+                                <input type="password" id="cp-current" class="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all" placeholder="Enter current password">
                             </div>
-                            <button onclick="deleteAllResolved()" class="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all">Delete All Resolved</button>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">New Password</label>
+                                <input type="password" id="cp-new" class="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all" placeholder="Enter new password">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Confirm Password</label>
+                                <input type="password" id="cp-confirm" class="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all" placeholder="Confirm new password">
+                            </div>
+                            <button onclick="submitPasswordChange()" class="w-full py-4 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-200 hover:scale-[1.02] active:scale-[0.98]">Update Password</button>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <tbody id="password-reset-list" class="divide-y divide-gray-50">
-                                <!-- Requests will be loaded here by JS -->
-                            </tbody>
-                        </table>
+                </div>
+            </section>
+
+            <!-- TAB 2: Theme Preferences -->
+            <section id="section-theme" class="settings-section hidden">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+                        <h3 class="font-black text-gray-800">Theme Preferences</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Customize your dashboard appearance.</p>
+                    </div>
+                    <div class="p-8 space-y-8">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                                <h4 class="font-black text-gray-800 mb-4">Accent Color</h4>
+                                <div class="flex gap-3">
+                                    <button onclick="setThemeColor('violet')" data-color-btn="violet" class="w-10 h-10 rounded-full bg-violet-600 hover:scale-110 transition-all ring-2 ring-offset-2 ring-violet-600"></button>
+                                    <button onclick="setThemeColor('blue')" data-color-btn="blue" class="w-10 h-10 rounded-full bg-blue-600 hover:scale-110 transition-all ring-2 ring-transparent hover:ring-blue-600"></button>
+                                    <button onclick="setThemeColor('emerald')" data-color-btn="emerald" class="w-10 h-10 rounded-full bg-emerald-600 hover:scale-110 transition-all ring-2 ring-transparent hover:ring-emerald-600"></button>
+                                    <button onclick="setThemeColor('amber')" data-color-btn="amber" class="w-10 h-10 rounded-full bg-amber-500 hover:scale-110 transition-all ring-2 ring-transparent hover:ring-amber-500"></button>
+                                    <button onclick="setThemeColor('rose')" data-color-btn="rose" class="w-10 h-10 rounded-full bg-rose-600 hover:scale-110 transition-all ring-2 ring-transparent hover:ring-rose-600"></button>
+                                </div>
+                            </div>
+                            <div class="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                                <h4 class="font-black text-gray-800 mb-4">Sidebar Style</h4>
+                                <div class="flex gap-3">
+                                    <button onclick="setSidebarStyle('dark')" class="px-4 py-2 bg-violet-900 text-white rounded-lg font-bold text-xs uppercase">Dark</button>
+                                    <button onclick="setSidebarStyle('light')" class="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold text-xs uppercase hover:bg-gray-300">Light</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-black text-gray-800">Compact Mode</h4>
+                                    <p class="text-sm text-gray-500">Use smaller spacing throughout the dashboard.</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="compact-mode" onchange="saveThemePreferences()" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                                </label>
+                            </div>
+                        </div>
+                        <button onclick="saveThemePreferences()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-200">Save Theme Settings</button>
                     </div>
                 </div>
             </section>

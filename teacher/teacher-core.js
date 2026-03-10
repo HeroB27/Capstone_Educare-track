@@ -566,9 +566,29 @@ async function loadSubjectStudents(subjectLoadId) {
 
 // 10. Mark Subject-Specific Attendance
 // UPDATED: Now auto-calculates and updates the main status field based on subject attendance
+// UPDATED: Now checks for suspensions before marking attendance
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
     try {
         const today = new Date().toISOString().split('T')[0];
+
+        // 0. Check if today is a suspension day
+        if (typeof checkIsHoliday === 'function') {
+            const holidayCheck = await checkIsHoliday(today);
+            const currentHour = new Date().getHours();
+            
+            if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
+                // For half-day suspensions, still allow marking
+                if (holidayCheck.timeCoverage === 'Full Day' || !holidayCheck.timeCoverage) {
+                    showWarning(`School is suspended today (${holidayCheck.description || 'Full Day'}). Attendance cannot be marked.`);
+                    return;
+                }
+                // For half-day, warn but allow
+                if ((holidayCheck.timeCoverage === 'Morning' && currentHour >= 12) ||
+                    (holidayCheck.timeCoverage === 'Afternoon' && currentHour < 12)) {
+                    showNotification(`Warning: Morning/Afternoon suspension active. Proceeding with caution.`, 'info');
+                }
+            }
+        }
 
         // 1. Fetch the existing log to preserve its data
         const { data: existingLog, error: fetchError } = await supabase

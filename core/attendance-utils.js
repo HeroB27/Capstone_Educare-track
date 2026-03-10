@@ -211,3 +211,78 @@ window.checkAttendanceAllowed = checkAttendanceAllowed;
 window.checkStudentAttendanceAllowed = checkStudentAttendanceAllowed;
 window.getAttendanceStatus = getAttendanceStatus;
 
+/**
+ * ============================================================================
+ * HOLIDAYS/SUSPENSION CHECK UTILITY (NEW - March 2026)
+ * ============================================================================
+ * Queries the holidays table to check if a specific date is a suspension day.
+ * Used by Guard Scanner and Teacher Attendance modules BEFORE marking
+ * a student absent or late.
+ * 
+ * Usage:
+ * - Guard Scanner: Call checkSuspensionStatus(dateStr) before allowing scan
+ * - Teacher Attendance: Call checkSuspensionStatus(dateStr) before marking attendance
+ * 
+ * Returns: { isSuspended: boolean, coverage: 'Full Day' | 'Morning' | 'Afternoon' | null }
+ * ============================================================================
+ */
+
+/**
+ * Check if a specific date is a suspension day and get time coverage info
+ * @param {string} dateStr - Date in YYYY-MM-DD format (e.g., '2026-03-10')
+ * @returns {Promise<{isSuspended: boolean, coverage: string | null}>}
+ */
+async function checkSuspensionStatus(dateStr) {
+    // Default response: not suspended
+    const result = {
+        isSuspended: false,
+        coverage: null
+    };
+    
+    if (!dateStr) {
+        console.warn('[checkSuspensionStatus] No date provided');
+        return result;
+    }
+    
+    try {
+        // Query the holidays table for the specific date
+        const { data: holiday, error } = await supabase
+            .from('holidays')
+            .select('holiday_date, is_suspended, time_coverage')
+            .eq('holiday_date', dateStr)
+            .maybeSingle();
+        
+        if (error) {
+            console.error('[checkSuspensionStatus] Query error:', error);
+            return result;
+        }
+        
+        // Check if holiday exists and is a suspension
+        if ( holiday && holiday.is_suspended === true) {
+            result.isSuspended = true;
+            
+            // Map time_coverage to standardized values
+            // Database values: 'Full Day', 'Morning Only', 'Afternoon Only'
+            // Return values: 'Full Day', 'Morning', 'Afternoon'
+            if (holiday.time_coverage === 'Morning Only') {
+                result.coverage = 'Morning';
+            } else if (holiday.time_coverage === 'Afternoon Only') {
+                result.coverage = 'Afternoon';
+            } else {
+                result.coverage = 'Full Day';
+            }
+            
+            console.log('[checkSuspensionStatus] Date', dateStr, 'is suspended:', result);
+        }
+        
+        return result;
+        
+    } catch (err) {
+        console.error('[checkSuspensionStatus] Error:', err);
+        return result;
+    }
+}
+
+// Make globally available for Guard Scanner and Teacher Attendance modules
+window.checkSuspensionStatus = checkSuspensionStatus;
+

@@ -285,13 +285,28 @@ async function handleScan(studentId, qrCode) {
         showLoading(true);
 
         // 1. Check if today is a holiday/suspended day
-        // FIX: Use timezone-aware function to prevent "Morning UTC Trap"
+        // UPDATED: Now checks time_coverage for half-day suspensions
         const today = getLocalISOString();
         const holidayCheck = await checkIsHoliday(today);
         
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
-            showWarning(`School is suspended today: ${holidayCheck.description}`);
-            return;
+            // Check for half-day suspensions
+            const currentHour = new Date().getHours(); // 0-23
+            
+            if (holidayCheck.timeCoverage === 'Morning' && currentHour >= 12) {
+                // Afternoon only - morning scans allowed
+                console.log('[handleScan] Morning suspension - afternoon entry allowed');
+            } else if (holidayCheck.timeCoverage === 'Afternoon' && currentHour < 12) {
+                // Morning only - afternoon scans allowed
+                console.log('[handleScan] Afternoon suspension - morning entry allowed');
+            } else if (holidayCheck.timeCoverage === 'Full Day' || !holidayCheck.timeCoverage) {
+                // Full day suspension - block all
+                showWarning(`School is suspended today: ${holidayCheck.description || 'Full Day Suspension'}`);
+                return;
+            } else {
+                showWarning(`School is suspended today: ${holidayCheck.description || 'Full Day Suspension'}`);
+                return;
+            }
         }
 
         // 2. Fetch student information

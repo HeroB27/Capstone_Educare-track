@@ -56,9 +56,6 @@
             <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
-                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
-            </a>
             <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
@@ -92,21 +89,24 @@
         </header>
 
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
-            <div class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
+            <div id="main-users-view" class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
                 <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50/30">
                     <div class="flex gap-6">
                         <button onclick="switchView(event, 'staff')" id="tab-staff" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Staff & Admins</button>
                         <button onclick="switchView(event, 'parents')" id="tab-parents" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Parent - Student</button>
+                        <button onclick="switchView(event, 'password-resets')" id="tab-password-resets" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Password Resets</button>
                     </div>
-                    <div class="flex gap-2">
-                        <div class="relative w-64">
-                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                            <input type="text" id="userSearch" oninput="filterUsers()" placeholder="Search accounts..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="flex gap-2">
+                            <div class="relative w-64">
+                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                                <input type="text" id="userSearch" oninput="filterUsers()" placeholder="Search accounts..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                            </div>
+                            <button onclick="exportUsersToCSV()" class="px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors flex items-center gap-2" title="Export to CSV">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                                <span class="text-xs font-bold">Export</span>
+                            </button>
                         </div>
-                        <button onclick="exportUsersToCSV()" class="px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors flex items-center gap-2" title="Export to CSV">
-                            <i data-lucide="download" class="w-4 h-4"></i>
-                            <span class="text-xs font-bold">Export</span>
-                        </button>
                     </div>
                 </div>
                 <table class="w-full text-left">
@@ -119,6 +119,31 @@
                     </thead>
                     <tbody id="user-table-body" class="divide-y divide-gray-50"></tbody>
                 </table>
+            </div>
+
+            <!-- PASSWORD RESETS SECTION -->
+            <div id="password-resets-view" class="hidden">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center gap-4">
+                        <div>
+                            <h3 class="font-black text-gray-800">Password Reset Requests</h3>
+                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Requests from users who forgot their password.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                                <input type="text" id="password-reset-search" oninput="loadPasswordResetsUM()" placeholder="Search by username..." class="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:border-violet-400 focus:outline-none transition-all">
+                            </div>
+                            <button onclick="deleteAllResolvedUM()" class="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all">Delete All Resolved</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <tbody id="password-reset-list-um" class="divide-y divide-gray-50">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </main>

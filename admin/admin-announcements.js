@@ -1,4 +1,3 @@
-let selectedCategory = '';
 let currentAnnTab = 'active';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -10,7 +9,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Setup modal close handlers for each modal
     setupModalClose('announcementModal');
-    setupModalClose('suspensionModal');
 
     // BACKGROUND JOB SIMULATION: Auto-refresh every 60 seconds
     // This automatically "moves" scheduled items to active when their time comes
@@ -21,34 +19,107 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadAnnouncements() {
     const list = document.getElementById('announcementList');
-    const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
-    if (error) {
-        console.error("Failed to load announcements:", error);
-        showNotification("Failed to load announcements. Please try again.", "error");
-        return;
-    }
+    const filterType = document.getElementById('filterType').value;
+    list.innerHTML = '<tr><td colspan="4" class="px-10 py-8 text-center text-gray-400 italic">Loading broadcasts...</td></tr>';
 
-    list.innerHTML = data.map(ann => `
-        <tr class="hover:bg-slate-50 transition-colors">
-            <td class="px-6 py-4">
-                <p class="font-bold text-slate-800 text-sm">${ann.title}</p>
-                <p class="text-[11px] text-slate-400 truncate max-w-xs">${ann.content}</p>
-            </td>
-            <td class="px-6 py-4">
-                <div class="flex gap-1">
-                    ${ann.target_teachers ? '<span class="px-2 py-0.5 bg-violet-100 text-violet-700 text-[9px] font-black rounded">TEACHERS</span>' : ''}
-                    ${ann.target_parents ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-black rounded">PARENTS</span>' : ''}
-                </div>
-            </td>
-            <td class="px-6 py-4 text-[11px] font-bold text-slate-400">
-                ${new Date(ann.created_at).toLocaleDateString()}
-            </td>
-            <td class="px-6 py-4 text-right">
-                <button onclick="deleteAnnouncement(${ann.id})" class="text-slate-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            </td>
-        </tr>
-    `).join('');
-    lucide.createIcons();
+    try {
+        let query = supabase.from('announcements').select('*').order('created_at', { ascending: false });
+        
+        // Filter by Type if not 'all'
+        if (filterType !== 'all') {
+            query = query.eq('type', filterType);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const now = new Date().toISOString();
+        
+        // Filter by Tab (Active vs Scheduled)
+        const filteredData = data.filter(ann => {
+            const isScheduled = ann.scheduled_at && ann.scheduled_at > now;
+            if (currentAnnTab === 'active') return !isScheduled;
+            return isScheduled; // 'scheduled' tab
+        });
+
+        if (filteredData.length === 0) {
+            list.innerHTML = `<tr><td colspan="4" class="px-10 py-8 text-center text-gray-400 italic">No ${currentAnnTab} broadcasts found.</td></tr>`;
+            return;
+        }
+
+        list.innerHTML = filteredData.map(ann => {
+            const dateDisplay = ann.scheduled_at 
+                ? `<span class="text-blue-500 font-bold">Scheduled: ${new Date(ann.scheduled_at).toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</span>`
+                : `<span class="text-emerald-500 font-bold">Posted: ${new Date(ann.created_at).toLocaleDateString()}</span>`;
+            
+            const typeColor = ann.type === 'Emergency' ? 'bg-red-100 text-red-700' : ann.type === 'Event' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700';
+
+            return `
+            <tr class="hover:bg-violet-50/30 transition-colors border-b border-gray-50 last:border-0">
+                <td class="px-10 py-5">
+                    <div class="flex items-start gap-3">
+                        <span class="px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest mt-0.5 ${typeColor}">${ann.type || 'General'}</span>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm mb-1">${ann.title}</p>
+                            <p class="text-xs text-gray-500 line-clamp-1 max-w-md">${ann.content}</p>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-10 py-5">
+                    <div class="flex flex-wrap gap-1">
+                        ${ann.target_teachers ? '<span class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black tracking-widest rounded-md border border-violet-100">TEACHERS</span>' : ''}
+                        ${ann.target_parents ? '<span class="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black tracking-widest rounded-md border border-blue-100">PARENTS</span>' : ''}
+                        ${ann.target_students ? '<span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[9px] font-black tracking-widest rounded-md border border-emerald-100">STUDENTS</span>' : ''}
+                    </div>
+                </td>
+                <td class="px-10 py-5 text-xs text-gray-500">
+                    ${dateDisplay}
+                </td>
+                <td class="px-10 py-5 text-right">
+                    <div class="flex justify-end gap-2">
+                        <button onclick="editAnnouncement(${ann.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-violet-500 hover:text-violet-600 transition-all shadow-sm" title="Edit"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                        <button onclick="deleteAnnouncement(${ann.id})" class="p-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:border-red-500 hover:text-red-500 transition-all shadow-sm" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        lucide.createIcons();
+    } catch (err) {
+        console.error(err);
+        list.innerHTML = '<tr><td colspan="4" class="px-10 py-8 text-center text-red-500 font-bold">Error loading broadcasts.</td></tr>';
+    }
+}
+
+// Edit Announcement - loads existing announcement into the modal for editing
+async function editAnnouncement(id) {
+    try {
+        const { data, error } = await supabase.from('announcements').select('*').eq('id', id).single();
+        if (error) throw error;
+
+        document.getElementById('annId').value = data.id;
+        document.getElementById('annTitle').value = data.title;
+        document.getElementById('annType').value = data.type || 'General';
+        document.getElementById('annContent').value = data.content;
+        
+        document.getElementById('targetTeachers').checked = data.target_teachers;
+        document.getElementById('targetParents').checked = data.target_parents;
+        document.getElementById('targetStudents').checked = data.target_students;
+
+        if (data.scheduled_at) {
+            const dt = new Date(data.scheduled_at);
+            // Convert to local YYYY-MM-DD and HH:MM format for the HTML inputs
+            document.getElementById('annDate').value = dt.toLocaleDateString('en-CA'); 
+            document.getElementById('annTime').value = dt.toTimeString().slice(0,5);
+        } else {
+            document.getElementById('annDate').value = '';
+            document.getElementById('annTime').value = '';
+        }
+
+        document.getElementById('annModalTitle').textContent = 'Edit Broadcast';
+        openAnnouncementModal();
+    } catch (err) {
+        showNotification("Error loading announcement details.", "error");
+    }
 }
 
 async function deleteAnnouncement(id) {
@@ -64,27 +135,6 @@ async function deleteAnnouncement(id) {
             }
         }
     );
-}
-
-// NEW: Category selection for announcements - FIXED with null safety
-function setCategory(event, category) {
-    if (event) event.preventDefault();
-    selectedCategory = category;
-    // Update UI to show selected category - with null safety
-    const categoryButtons = document.querySelectorAll('.category-btn');
-    if (categoryButtons && categoryButtons.length > 0) {
-        categoryButtons.forEach(btn => {
-            if (btn) {
-                btn.classList.remove('border-violet-500', 'bg-violet-50');
-                btn.classList.add('border-gray-50');
-            }
-        });
-    }
-    const selectedBtn = document.getElementById('cat-' + category);
-    if (selectedBtn) {
-        selectedBtn.classList.remove('border-gray-50');
-        selectedBtn.classList.add('border-violet-500', 'bg-violet-50');
-    }
 }
 
 // NEW: Switch between Active and Scheduled announcements
@@ -233,98 +283,20 @@ function closeAnnouncementModal() {
     document.getElementById('annModalTitle').textContent = 'Post Broadcast';
 }
 
-// Opens the suspension modal
-function openSuspensionModal() {
-    document.getElementById('suspensionModal').classList.remove('hidden');
-}
-
-// Closes the suspension modal
-function closeSuspensionModal() {
-    document.getElementById('suspensionModal').classList.add('hidden');
-}
-
 // Make functions globally available
 window.openAnnouncementModal = openAnnouncementModal;
 window.closeAnnouncementModal = closeAnnouncementModal;
-window.openSuspensionModal = openSuspensionModal;
-window.closeSuspensionModal = closeSuspensionModal;
-window.setCategory = setCategory;
 window.switchAnnouncementTab = switchAnnouncementTab;
 window.deleteAnnouncement = deleteAnnouncement;
 window.loadAnnouncements = loadAnnouncements;
+window.editAnnouncement = editAnnouncement;
 
-// Save suspension/holiday logic
-function saveLogicSuspension() {
-    const category = selectedCategory;
-    if (!category) {
-        showNotification("Please select a suspension type", "error");
-        return;
-    }
-    
-    const eventDate = document.getElementById('eventDate').value;
-    const scheduleType = document.getElementById('scheduleType').value;
-    const eventNotes = document.getElementById('eventNotes').value;
-    const autoAnnounce = document.getElementById('autoAnnounce').checked;
-    
-    if (!eventDate) {
-        showNotification("Please select a date", "error");
-        return;
-    }
-    
-    // Show the dynamic fields
-    document.getElementById('dynamicFields').classList.remove('hidden');
-    
-    // Save to database
-    saveSuspensionToDatabase(category, eventDate, scheduleType, eventNotes, autoAnnounce);
-}
-
-async function saveSuspensionToDatabase(category, eventDate, scheduleType, eventNotes, autoAnnounce) {
-    try {
-        // FIX #1: Insert into HOLIDAYS table (not suspensions) with is_suspended: true
-        const { error } = await supabase.from('holidays').insert([{
-            holiday_date: eventDate,
-            description: eventNotes || `${category} - ${scheduleType}`,
-            is_suspended: true,
-            target_grades: 'All'
-        }]);
-        
-        if (error) {
-            // Handle unique constraint violation (date already exists)
-            if (error.code === '23505') {
-                showNotification("A suspension/holiday already exists for this date. Please choose another date.", "error");
-                return;
-            }
-            throw error;
-        }
-        
-        // Auto-announce if checked - insert into announcements table
-        if (autoAnnounce) {
-            await supabase.from('announcements').insert([{
-                title: `🚨 ${category} ALERT`,
-                content: `School will be suspended on ${eventDate}. ${eventNotes || ''}`,
-                target_parents: true,
-                target_teachers: true,
-                priority: 'high'
-            }]);
-        }
-        
-        showNotification("Suspension declared successfully!", "success");
-        closeSuspensionModal();
-        // Reload page to show new suspension
-        location.reload();
-        
-    } catch (err) {
-        console.error("Error saving suspension:", err);
-        showNotification("Error: " + err.message, "error");
-    }
-}
-
-// Save announcement
-function saveAnnouncement() {
+// Save announcement - with posted_by_admin_id support
+async function saveAnnouncement() {
     const annId = document.getElementById('annId').value;
-    const annTitle = document.getElementById('annTitle').value;
+    const annTitle = document.getElementById('annTitle').value.trim();
     const annType = document.getElementById('annType').value;
-    const annContent = document.getElementById('annContent').value;
+    const annContent = document.getElementById('annContent').value.trim();
     const annDate = document.getElementById('annDate').value;
     const annTime = document.getElementById('annTime').value;
     
@@ -332,51 +304,51 @@ function saveAnnouncement() {
     const targetParents = document.getElementById('targetParents').checked;
     const targetStudents = document.getElementById('targetStudents').checked;
     
-    if (!annTitle || !annContent) {
-        showNotification("Please fill in title and content", "error");
-        return;
-    }
-    
-    saveAnnouncementToDatabase(annId, annTitle, annType, annContent, annDate, annTime, targetTeachers, targetParents, targetStudents);
-}
+    if (!annTitle || !annContent) return showNotification("Please fill in title and content", "error");
+    if (!targetTeachers && !targetParents && !targetStudents) return showNotification("Please select at least one target audience", "error");
 
-async function saveAnnouncementToDatabase(id, title, type, content, date, time, targetTeachers, targetParents, targetStudents) {
+    const adminUser = checkSession('admins');
+    if (!adminUser) return showNotification("Authentication error. Please log in again.", "error");
+
     try {
         const payload = {
-            title: title,
-            content: content,
-            priority: type,           // CHANGED: type -> priority (DB field name)
+            title: annTitle,
+            content: annContent,
+            type: annType,
+            priority: annType === 'Emergency' ? 'High' : 'Normal',
             target_teachers: targetTeachers,
             target_parents: targetParents,
-            target_students: targetStudents,   // FIXED: was incorrectly assigned to target_guards
-            target_clinic: false      // ADDED: default value for missing field
+            target_students: targetStudents,
+            target_guards: false, 
+            target_clinic: false,
+            posted_by_admin_id: adminUser.id
         };
         
-        // Add scheduled date if provided
-        if (date) {
-            payload.scheduled_at = time ? `${date}T${time}:00` : `${date}T00:00:00`;
+        // Handle Scheduling strictly
+        if (annDate) {
+            const timeStr = annTime || '00:00';
+            payload.scheduled_at = new Date(`${annDate}T${timeStr}:00`).toISOString();
+        } else {
+            payload.scheduled_at = null;
         }
         
         let error;
-        if (id) {
-            // Update existing
-            ({ error } = await supabase.from('announcements').update(payload).eq('id', id));
+        if (annId) {
+            ({ error } = await supabase.from('announcements').update(payload).eq('id', annId));
         } else {
-            // Insert new
             ({ error } = await supabase.from('announcements').insert([payload]));
         }
         
         if (error) throw error;
         
-        showNotification(id ? "Announcement updated!" : "Announcement posted!", "success");
+        showNotification(annId ? "Broadcast updated!" : "Broadcast posted successfully!", "success");
         closeAnnouncementModal();
         loadAnnouncements();
         
     } catch (err) {
         console.error("Error saving announcement:", err);
-        showNotification("Error: " + err.message, "error");
+        showNotification("Database Error: " + err.message, "error");
     }
 }
 
-window.saveLogicSuspension = saveLogicSuspension;
 window.saveAnnouncement = saveAnnouncement;

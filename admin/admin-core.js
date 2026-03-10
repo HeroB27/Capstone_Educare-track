@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const user = checkSession('admins');
     if (!user) return;
     
+    // Load and apply theme preferences
+    loadAndApplyTheme();
+    
     // UI Branding
     const adminNameEl = document.getElementById('admin-name');
     if (adminNameEl) adminNameEl.innerText = user.full_name || 'Admin';
@@ -50,23 +53,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function loadDashboardStats() {
-    // FIX: Timezone-adjusted date calculation for accurate early-morning stats
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const today = localDate.toISOString().split('T')[0];
-    const todayStart = today + 'T00:00:00';
+    // PERMANENT FIX: Force strict Philippine Timezone (Asia/Manila)
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    const todayStart = today + 'T00:00:00+08:00'; // +08:00 ensures Supabase calculates from midnight PHT
     
     try {
         // Parallel execution for maximum speed
         const [teachers, students, present, late, absent, clinic] = await Promise.all([
             supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Enrolled'),
-            // FIX: Count Present, On Time, and Excused as present for a more accurate 'on-campus' metric.
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).in('status', ['Present', 'On Time', 'Excused']),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Late'),
             supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).eq('log_date', today).eq('status', 'Absent'),
-            // FIX: Only count today's clinic visits
-            supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).is('time_out', null).gte('time_in', todayStart)
+            // FIX: Explicitly check for 'In Clinic' status along with today's date
+            supabase.from('clinic_visits').select('*', { count: 'exact', head: true }).eq('status', 'In Clinic').gte('time_in', todayStart)
         ]);
 
         document.getElementById('stat-total-teachers').innerText = teachers.count || 0;
@@ -119,4 +119,45 @@ async function loadRecentAnnouncements() {
         })
         .subscribe();
     addSubscription(announcementsSub);
+}
+
+// ===========================================
+// THEME SYSTEM - Applied to all admin pages
+// ===========================================
+
+function loadAndApplyTheme() {
+    const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+    
+    // Apply accent color theme
+    if (theme.accentColor) {
+        document.body.classList.remove('theme-violet', 'theme-blue', 'theme-emerald', 'theme-amber', 'theme-rose');
+        document.body.classList.add(`theme-${theme.accentColor}`);
+        updateAccentColorButtons(theme.accentColor);
+    }
+    
+    // Apply sidebar style
+    if (theme.sidebarStyle) {
+        document.body.classList.remove('sidebar-dark', 'sidebar-light');
+        document.body.classList.add(`sidebar-${theme.sidebarStyle}`);
+    }
+    
+    // Apply compact mode
+    if (theme.compactMode) {
+        document.body.classList.add('compact-mode');
+    }
+}
+
+function updateAccentColorButtons(activeColor) {
+    // Update any accent color buttons if they exist on the page
+    const buttons = document.querySelectorAll('[data-color-btn]');
+    buttons.forEach(btn => {
+        const color = btn.getAttribute('data-color-btn');
+        if (color === activeColor) {
+            btn.classList.add('ring-2', 'ring-offset-2');
+            btn.classList.remove('ring-transparent');
+        } else {
+            btn.classList.remove('ring-2', 'ring-offset-2');
+            btn.classList.add('ring-transparent');
+        }
+    });
 }

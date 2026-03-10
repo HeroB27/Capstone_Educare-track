@@ -58,27 +58,43 @@ function setWelcomeMessage(elementId, user) {
 
 // 4. Check if Date is a Holiday/Suspended
 // Used by Guard Scanner and Teacher Attendance before marking absences
+// UPDATED: Now includes time_coverage for half-day suspension support
 async function checkIsHoliday(date) {
     try {
         const { data, error } = await supabase
             .from('holidays')
-            .select('id, is_suspended, description')
+            .select('id, is_suspended, description, time_coverage')
             .eq('holiday_date', date)
             .single();
         
         if (error && error.code !== 'PGRST116') {
             console.error('Error checking holiday:', error);
-            return { isHoliday: false, isSuspended: false };
+            return { isHoliday: false, isSuspended: false, timeCoverage: null };
         }
         
         if (data) {
-            return { isHoliday: true, isSuspended: data.is_suspended, description: data.description };
+            // Map time_coverage to return value
+            let timeCoverage = null;
+            if (data.time_coverage === 'Morning Only') {
+                timeCoverage = 'Morning';
+            } else if (data.time_coverage === 'Afternoon Only') {
+                timeCoverage = 'Afternoon';
+            } else if (data.time_coverage === 'Full Day') {
+                timeCoverage = 'Full Day';
+            }
+            
+            return { 
+                isHoliday: true, 
+                isSuspended: data.is_suspended, 
+                description: data.description,
+                timeCoverage: timeCoverage
+            };
         }
         
-        return { isHoliday: false, isSuspended: false };
+        return { isHoliday: false, isSuspended: false, timeCoverage: null };
     } catch (err) {
         console.error('Error in checkIsHoliday:', err);
-        return { isHoliday: false, isSuspended: false };
+        return { isHoliday: false, isSuspended: false, timeCoverage: null };
     }
 }
 
@@ -271,3 +287,27 @@ async function createEarlyExitNotification(studentName, parentId, teacherId, exi
         console.error('Error creating early exit notification:', err);
     }
 }
+
+// 10. Check if a Date is a Valid School Day
+// Used by Guard Scanner and Teacher Attendance before marking automatic absences
+// Sundays are NEVER school days. Saturdays depend on the enable_saturday_classes setting.
+window.isValidSchoolDay = async function(dateStr) {
+    const dateObj = new Date(dateStr);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Sundays are NEVER school days
+    if (dayOfWeek === 0) return false;
+
+    // If it's Saturday, check the settings table
+    if (dayOfWeek === 6) {
+        try {
+            const { data } = await supabase.from('settings').select('setting_value').eq('setting_key', 'enable_saturday_classes').single();
+            return data && data.setting_value === 'true';
+        } catch (e) {
+            return false; // Default to false if error
+        }
+    }
+
+    // Monday - Friday are valid school days
+    return true;
+};

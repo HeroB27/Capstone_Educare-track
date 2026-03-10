@@ -6,19 +6,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Initialize tabs - set default active tab
-    switchTab(null, 'password-resets');
+    switchTab(null, 'my-account');
     
     await loadAllSettings();
-    loadPasswordResetBadge();
     injectDeviceSettingsUI();
     injectPasswordChangeUI();
     injectStyles();
+    loadThemePreferences();
+    // Update color button states
+    const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+    if (theme.accentColor) {
+        updateAccentColorButtons(theme.accentColor);
+    }
 });
 
 function switchTab(event, tabId) {
     if (event && event.preventDefault) event.preventDefault();
     
-    const tabs = ['gate-logic', 'auto-alerts', 'password-resets'];
+    const tabs = ['my-account', 'theme'];
     tabs.forEach(t => {
         const section = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`btn-${t}`);
@@ -44,8 +49,8 @@ function switchTab(event, tabId) {
         }
     });
 
-    if (tabId === 'password-resets') {
-        loadPasswordResets();
+    if (tabId === 'theme') {
+        loadThemePreferences();
     }
 }
 
@@ -322,6 +327,73 @@ function injectStyles() {
     const style = document.createElement('style');
     style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
     document.head.appendChild(style);
+}
+
+// ===========================================
+// THEME PREFERENCES (UI Customization)
+// ===========================================
+
+function loadThemePreferences() {
+    const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+    
+    // Load accent color
+    if (theme.accentColor) {
+        setThemeColor(theme.accentColor, false);
+    }
+    
+    // Load sidebar style
+    if (theme.sidebarStyle) {
+        setSidebarStyle(theme.sidebarStyle, false);
+    }
+    
+    // Load compact mode
+    const compactToggle = document.getElementById('compact-mode');
+    if (compactToggle && theme.compactMode) {
+        compactToggle.checked = true;
+        document.body.classList.add('compact-mode');
+    }
+}
+
+function setThemeColor(color, save = true) {
+    // Remove all color classes
+    document.body.classList.remove('theme-violet', 'theme-blue', 'theme-emerald', 'theme-amber', 'theme-rose');
+    document.body.classList.add(`theme-${color}`);
+    
+    if (save) {
+        const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+        theme.accentColor = color;
+        localStorage.setItem('educare_theme', JSON.stringify(theme));
+    }
+}
+
+function setSidebarStyle(style, save = true) {
+    // Remove all sidebar classes
+    document.body.classList.remove('sidebar-dark', 'sidebar-light');
+    document.body.classList.add(`sidebar-${style}`);
+    
+    if (save) {
+        const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+        theme.sidebarStyle = style;
+        localStorage.setItem('educare_theme', JSON.stringify(theme));
+    }
+}
+
+function saveThemePreferences() {
+    const compactToggle = document.getElementById('compact-mode');
+    const isCompact = compactToggle?.checked || false;
+    
+    const theme = JSON.parse(localStorage.getItem('educare_theme') || '{}');
+    theme.compactMode = isCompact;
+    localStorage.setItem('educare_theme', JSON.stringify(theme));
+    
+    // Apply compact mode
+    if (isCompact) {
+        document.body.classList.add('compact-mode');
+    } else {
+        document.body.classList.remove('compact-mode');
+    }
+    
+    showNotification("Theme preferences saved!", "success");
 }
 
 function showConfirmationModal(title, message, onConfirm) {

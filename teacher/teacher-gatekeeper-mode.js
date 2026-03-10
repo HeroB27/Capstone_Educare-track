@@ -183,14 +183,29 @@ async function processScan(studentIdText) {
     
     try {
         // 1. Check if today is a holiday/suspended day
+        // UPDATED: Now checks time_coverage for half-day suspensions
         const localDate = new Date();
         localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
         const today = localDate.toISOString().split('T')[0];
         const holidayCheck = await checkIsHoliday(today);
+        const currentHour = localDate.getHours();
         
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
-            showNotification(`School is suspended today: ${holidayCheck.description}`, 'error');
-            return;
+            // Check for half-day suspensions
+            if (holidayCheck.timeCoverage === 'Morning' && currentHour >= 12) {
+                // Afternoon only - morning scans allowed
+                console.log('[processScan] Morning suspension - afternoon entry allowed');
+            } else if (holidayCheck.timeCoverage === 'Afternoon' && currentHour < 12) {
+                // Morning only - afternoon scans allowed
+                console.log('[processScan] Afternoon suspension - morning entry allowed');
+            } else if (holidayCheck.timeCoverage === 'Full Day' || !holidayCheck.timeCoverage) {
+                // Full day suspension - block all
+                showNotification(`School is suspended today: ${holidayCheck.description || 'Full Day Suspension'}`, 'error');
+                return;
+            } else {
+                showNotification(`School is suspended today: ${holidayCheck.description || 'Full Day Suspension'}`, 'error');
+                return;
+            }
         }
 
         const { data: student, error: studentError } = await supabase
@@ -503,20 +518,36 @@ function validateStudentId(studentId) {
 }
 
 // Fix #12: Missing Holiday Check Function
+// UPDATED: Now includes time_coverage for half-day suspension support
 async function checkIsHoliday(dateStr) {
     try {
         const { data, error } = await supabase
             .from('holidays')
-            .select('*')
+            .select('holiday_date, is_suspended, description, time_coverage')
             .eq('holiday_date', dateStr)
             .single();
         
         if (data && data.is_suspended) {
-            return { isHoliday: true, isSuspended: true, description: data.description };
+            // Map time_coverage to return value
+            let timeCoverage = null;
+            if (data.time_coverage === 'Morning Only') {
+                timeCoverage = 'Morning';
+            } else if (data.time_coverage === 'Afternoon Only') {
+                timeCoverage = 'Afternoon';
+            } else if (data.time_coverage === 'Full Day') {
+                timeCoverage = 'Full Day';
+            }
+            
+            return { 
+                isHoliday: true, 
+                isSuspended: true, 
+                description: data.description,
+                timeCoverage: timeCoverage
+            };
         }
-        return { isHoliday: false };
+        return { isHoliday: false, isSuspended: false, timeCoverage: null };
     } catch (e) {
-        return { isHoliday: false };
+        return { isHoliday: false, isSuspended: false, timeCoverage: null };
     }
 }
 

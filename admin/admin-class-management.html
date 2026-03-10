@@ -45,9 +45,6 @@
             <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
             </a>
-            <a href="admin-attendance-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
-                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Settings
-            </a>
             <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
@@ -64,7 +61,7 @@
 
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Class Management</h2>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Class & Subject Management</h2>
             <div class="flex items-center gap-6">
                 <div class="text-right">
                     <p id="admin-name" class="font-black text-gray-900 text-sm leading-none mb-1">Admin</p>
@@ -75,12 +72,11 @@
         </header>
 
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-                <div id="gradeTabs" class="flex gap-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm overflow-x-auto custom-scrollbar">
-                    </div>
-                <button onclick="openClassModal()" class="flex items-center gap-2 px-8 py-3 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-200 transition-all hover:scale-105 uppercase text-[10px] tracking-widest shrink-0">
-                    <i data-lucide="plus" class="w-4 h-4"></i> New Class
-                </button>
+            <div class="mb-8 flex justify-between items-end">
+                <div>
+                    <h3 class="text-lg font-black text-violet-900 uppercase tracking-widest">Master Class Overview</h3>
+                    <p class="text-gray-500 text-sm font-medium mt-1">Bird's-eye view of all K-12 classes, advisers, and subject loads.</p>
+                </div>
             </div>
 
             <div id="classGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -88,48 +84,30 @@
         </div>
     </main>
 
-    <div id="classModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+    <div id="adviserModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
-                <h3 class="font-black text-xl uppercase tracking-tight" id="classModalTitle">Register Class</h3>
-                <button onclick="closeClassModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
+                <h3 class="font-black text-xl uppercase tracking-tight">Assign Adviser</h3>
+                <button onclick="closeAdviserModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
             </div>
             <div class="p-8 space-y-5">
-                <form id="classForm" class="space-y-4">
-                    <input type="hidden" id="classId">
+                <div class="bg-violet-50 p-4 rounded-xl border border-violet-100 text-center mb-6">
+                    <p class="text-[10px] text-violet-600 font-black tracking-widest uppercase mb-1">Target Class</p>
+                    <h4 id="displayClassName" class="text-2xl font-black text-violet-900">Grade 1</h4>
+                </div>
+                <form id="adviserForm" class="space-y-4">
+                    <input type="hidden" id="targetGradeLevel">
+                    <input type="hidden" id="targetStrand">
+                    <input type="hidden" id="existingClassId">
                     <div>
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Grade Level</label>
-                        <select id="gradeLevel" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold" required></select>
-                    </div>
-                    
-                    <!-- Section Identity: Hidden for SHS (G11-G12) -->
-                    <div id="sectionField" class="block">
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Section Identity</label>
-                        <input type="text" id="sectionName" placeholder="e.g. Rizal" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
-                        <p class="text-[10px] text-gray-400 mt-1">For Kinder-G10: Class identified by grade level only</p>
-                    </div>
-                    
-                    <!-- Strand: Shown only for SHS (G11-G12) -->
-                    <div id="strandField" class="hidden">
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Strand (SHS only)</label>
-                        <select id="strandSelect" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
-                            <option value="">Select Strand</option>
-                            <option value="STEM">STEM</option>
-                            <option value="HUMSS">HUMSS</option>
-                            <option value="ABM">ABM</option>
-                            <option value="TVL-ICT">TVL-ICT</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Homeroom Adviser</label>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Select Homeroom Adviser</label>
                         <select id="adviserId" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold" required></select>
                     </div>
                 </form>
             </div>
             <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3">
-                <button onclick="closeClassModal()" class="px-6 py-2 text-gray-500 font-bold uppercase text-xs">Cancel</button>
-                <button onclick="saveClass()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Save Class</button>
+                <button onclick="closeAdviserModal()" class="px-6 py-2 text-gray-500 font-bold uppercase text-xs">Cancel</button>
+                <button onclick="saveAdviser()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Save Assignment</button>
             </div>
         </div>
     </div>
@@ -153,7 +131,6 @@
         </div>
     </div>
 
-    <!-- Add Subject Modal -->
     <div id="addSubjectModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
@@ -166,10 +143,9 @@
                     <input type="text" id="subjectName" placeholder="e.g. Mathematics, English, Science" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
                 </div>
                 <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Teacher</label>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Subject Teacher</label>
                     <select id="subjectTeacherId" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
-                        <option value="">Select Teacher</option>
-                    </select>
+                        </select>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -184,32 +160,63 @@
                 <div>
                     <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Days</label>
                     <div class="flex gap-2 mt-2">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="M">
-                            <span class="text-sm font-bold">Mon</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="T">
-                            <span class="text-sm font-bold">Tue</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="W">
-                            <span class="text-sm font-bold">Wed</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="Th">
-                            <span class="text-sm font-bold">Thu</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="F">
-                            <span class="text-sm font-bold">Fri</span>
-                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="M"><span class="text-sm font-bold">Mon</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="T"><span class="text-sm font-bold">Tue</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="W"><span class="text-sm font-bold">Wed</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="Th"><span class="text-sm font-bold">Thu</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="day-checkbox w-4 h-4 rounded text-violet-600" value="F"><span class="text-sm font-bold">Fri</span></label>
                     </div>
                 </div>
             </div>
             <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3">
                 <button onclick="closeAddSubjectModal()" class="px-6 py-2 text-gray-500 font-bold uppercase text-xs">Cancel</button>
                 <button onclick="saveSubject()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Add Subject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Subject Modal -->
+    <div id="editSubjectModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[60] p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
+                <h3 class="font-black text-xl uppercase tracking-tight">Edit Subject</h3>
+                <button onclick="closeEditSubjectModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
+            </div>
+            <div class="p-8 space-y-5">
+                <input type="hidden" id="editSubjectId">
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Subject Name</label>
+                    <input type="text" id="editSubjectName" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Subject Teacher</label>
+                    <select id="editSubjectTeacherId" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Start Time</label>
+                        <input type="time" id="editSubjectStartTime" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">End Time</label>
+                        <input type="time" id="editSubjectEndTime" class="w-full border-2 border-gray-50 rounded-2xl px-5 py-3 outline-none focus:border-violet-200 transition-all font-bold">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Days</label>
+                    <div class="flex gap-2 mt-2">
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="edit-day-checkbox w-4 h-4 rounded text-violet-600" value="M"><span class="text-sm font-bold">Mon</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="edit-day-checkbox w-4 h-4 rounded text-violet-600" value="T"><span class="text-sm font-bold">Tue</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="edit-day-checkbox w-4 h-4 rounded text-violet-600" value="W"><span class="text-sm font-bold">Wed</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="edit-day-checkbox w-4 h-4 rounded text-violet-600" value="Th"><span class="text-sm font-bold">Thu</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="edit-day-checkbox w-4 h-4 rounded text-violet-600" value="F"><span class="text-sm font-bold">Fri</span></label>
+                    </div>
+                </div>
+            </div>
+            <div class="px-8 py-6 bg-gray-50 flex justify-end gap-3">
+                <button onclick="closeEditSubjectModal()" class="px-6 py-2 text-gray-500 font-bold uppercase text-xs">Cancel</button>
+                <button onclick="saveEditSubject()" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-violet-200">Update Subject</button>
             </div>
         </div>
     </div>
