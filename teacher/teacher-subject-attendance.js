@@ -292,40 +292,36 @@ async function loadSubjectStudents(subjectLoadId) {
                 else if (displayStatus === 'Late') lateCount++;
                 
                 return `
-                    <tr class="hover:bg-gray-50 transition">
+                    <tr class="hover:bg-blue-50/50 transition-colors">
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0 shadow-sm">
-                                    <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
+                                <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
+                                    <img src="${student.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                                 </div>
                                 <div>
-                                    <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
-                                    <p class="text-xs text-gray-500">In: ${timeIn} ${gateBadge}</p>
+                                    <p class="font-bold text-gray-800">${student.full_name}</p>
+                                    <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'No ID'}</p>
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-gray-600">${student.student_id_text || 'N/A'}</td>
                         <td class="px-6 py-4">
-                            <span class="px-2 py-1 rounded-full text-xs font-medium ${statusBadge}">${gateStatus}</span>
-                            ${currentSubjectStatus ? `<span class="ml-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(currentSubjectStatus)}">(Subject: ${currentSubjectStatus})</span>` : ''}
+                            ${statusBadge}
                         </td>
                         <td class="px-6 py-4">
-                            <div class="flex gap-2">
+                            <div class="flex items-center gap-2">
                                 <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Present')" 
-                                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm ${currentSubjectStatus === 'Present' ? 'ring-2 ring-white ring-offset-2' : ''} ${presentDisabled}"
-                                    title="${isProtected ? 'Cannot change Late/Excused status' : 'Mark as Present'}">
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Present' ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
                                     Present
                                 </button>
+                                <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Late')" 
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Late' ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
+                                    Late
+                                </button>
                                 <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Absent')" 
-                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm ${currentSubjectStatus === 'Absent' ? 'ring-2 ring-white ring-offset-2' : ''}"
-                                    title="Mark as Absent">
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Absent' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
                                     Absent
                                 </button>
-                                <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Excused')" 
-                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm ${currentSubjectStatus === 'Excused' ? 'ring-2 ring-white ring-offset-2' : ''}"
-                                    title="Mark as Excused">
-                                    Excused
-                                </button>
+                                ${currentSubjectStatus === 'Excused' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
                             </div>
                         </td>
                     </tr>

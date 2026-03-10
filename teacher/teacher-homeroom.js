@@ -302,33 +302,44 @@ function renderStudents() {
         const records = todayAttendance[student.id];
         const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
         
+        const status = latestRecord?.status;
+        const isPresent = status === 'On Time';
+        const isLate = status === 'Late';
+        const isAbsent = status === 'Absent';
+        const isExcused = status === 'Excused';
+
         return `
             <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-6 py-4">
-                    <p class="text-sm text-gray-600">${student.student_id_text || 'N/A'}</p>
-                </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0 shadow-sm">
                             <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                         </div>
-                        <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
+                        <div>
+                            <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
+                            <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'N/A'}</p>
+                        </div>
                     </div>
-                </td>
-                <td class="px-6 py-4">
-                    <p class="text-sm text-gray-600 font-mono">${latestRecord?.time_in ? new Date(latestRecord.time_in).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--'}</p>
                 </td>
                 <td class="px-6 py-4">
                     ${getStatusBadge(student.id)}
                 </td>
                 <td class="px-6 py-4">
-                    <select onchange="verifyStudentAttendance('${student.id}', this.value)" class="bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 font-bold cursor-pointer transition-colors hover:bg-white">
-                        <option value="" disabled ${!latestRecord ? 'selected' : ''}>Verify...</option>
-                        <option value="On Time" ${latestRecord?.status === 'On Time' ? 'selected' : ''}>Present (On Time)</option>
-                        <option value="Late" ${latestRecord?.status === 'Late' ? 'selected' : ''}>Late</option>
-                        <option value="Absent" ${latestRecord?.status === 'Absent' ? 'selected' : ''}>Absent</option>
-                        <option value="Excused" ${latestRecord?.status === 'Excused' ? 'selected' : ''}>Excused</option>
-                    </select>
+                    <div class="flex items-center gap-2">
+                        <button onclick="verifyStudentAttendance('${student.id}', 'On Time')" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isPresent ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
+                            Present
+                        </button>
+                        <button onclick="verifyStudentAttendance('${student.id}', 'Late')" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isLate ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
+                            Late
+                        </button>
+                        <button onclick="verifyStudentAttendance('${student.id}', 'Absent')" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isAbsent ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
+                            Absent
+                        </button>
+                        ${isExcused ? `<span class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
+                    </div>
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-2">
@@ -491,7 +502,7 @@ function escapeHtml(text) {
 // =============================================================================
 // HOMEROOM MANUAL VERIFICATION (OVERRIDE GATE STATUS)
 // =============================================================================
-async function verifyStudentAttendance(studentId, newStatus) {
+async function verifyStudentAttendance(studentId, newStatus, skipReload = false) {
     if (!newStatus) return;
     
     // Get local date safely
@@ -530,14 +541,41 @@ async function verifyStudentAttendance(studentId, newStatus) {
 
         // We do not need to call loadHomeroomStudents() manually because 
         // setupRealTimeSubscription() is listening! The UI will auto-refresh.
-        if (typeof showNotification === 'function') {
+        if (!skipReload && typeof showNotification === 'function') {
             showNotification(`Student marked as ${newStatus}`, 'success');
         }
 
     } catch (err) {
         console.error('Error verifying attendance:', err);
-        if (typeof showNotification === 'function') {
+        if (!skipReload && typeof showNotification === 'function') {
             showNotification('Error updating attendance. Please try again.', 'error');
         }
+    }
+}
+
+/**
+ * Bulk Verify All Present
+ */
+async function verifyAllPresent() {
+    if (!confirm("Verify all students as Present? (Will override existing statuses)")) return;
+
+    const btn = document.querySelector('button[onclick="verifyAllPresent()"]');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline-block mr-1 animate-spin"></i> Saving...';
+    btn.disabled = true;
+
+    try {
+        const promises = homeroomStudents.map(student => verifyStudentAttendance(student.id, 'On Time', true));
+        await Promise.all(promises);
+        
+        showNotification(`${promises.length} students verified as Present`, 'success');
+        await loadHomeroomStudents(); // Reload once at the end
+    } catch (err) {
+        console.error(err);
+        showNotification('Error in bulk verification', 'error');
+    } finally {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+        if (window.lucide) lucide.createIcons();
     }
 }
