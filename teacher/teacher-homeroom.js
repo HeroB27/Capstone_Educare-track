@@ -284,17 +284,9 @@ function renderStudents() {
     if (filteredStudents.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="px-6 py-12 text-center">
-                    <div class="flex flex-col items-center">
-                        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <i data-lucide="users" class="w-8 h-8 text-gray-400"></i>
-                        </div>
-                        <p class="text-gray-500">No students found</p>
-                    </div>
-                </td>
+                <td colspan="4" class="px-6 py-12 text-center text-gray-500 font-medium">No students found.</td>
             </tr>
         `;
-        lucide.createIcons();
         return;
     }
     
@@ -307,6 +299,9 @@ function renderStudents() {
         const isLate = status === 'Late';
         const isAbsent = status === 'Absent';
         const isExcused = status === 'Excused';
+        
+        // Show raw gate tap time if it exists
+        const timeInStr = latestRecord?.time_in ? new Date(latestRecord.time_in).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--';
 
         return `
             <tr class="hover:bg-gray-50 transition-colors">
@@ -322,7 +317,7 @@ function renderStudents() {
                     </div>
                 </td>
                 <td class="px-6 py-4">
-                    ${getStatusBadge(student.id)}
+                    <span class="text-sm font-bold text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded-md border border-gray-200">${timeInStr}</span>
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-2">
@@ -345,9 +340,6 @@ function renderStudents() {
                     <div class="flex items-center gap-2">
                         <button onclick="viewStudentDetails('${student.id}')" class="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="View Details">
                             <i data-lucide="eye" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="viewAttendance('${student.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Analytics">
-                            <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </td>

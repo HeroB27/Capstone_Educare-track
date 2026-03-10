@@ -18,25 +18,16 @@ function showNotification(message, type = 'info') {
     }
 }
 
+// Global State for Subject Cards
+let currentSubjectLoadId = null;
+let currentSubjectName = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
     // UPDATED: Initialize date picker with Asia/Manila timezone - Phase 2 Task 2.1
     initializeDatePicker();
     
-    // Check for stored subject load ID (from dashboard navigation)
-    const storedSubjectId = sessionStorage.getItem('selectedSubjectLoadId');
-    if (storedSubjectId) {
-        await loadSubjectLoads();
-        setTimeout(() => {
-            const subjectSelect = document.getElementById('subject-select');
-            if (subjectSelect) {
-                subjectSelect.value = storedSubjectId;
-                loadSubjectStudents(storedSubjectId);
-                sessionStorage.removeItem('selectedSubjectLoadId');
-            }
-        }, 100);
-    } else {
-        await loadSubjectLoads();
-    }
+    // Load subject cards on page load
+    await loadSubjectLoads();
 });
 
 // UPDATED: Initialize date picker - Phase 2 Task 2.1
@@ -54,6 +45,11 @@ function initializeDatePicker() {
         const year = localTime.getFullYear();
         dateInput.min = `${year}-01-01`;
         dateInput.max = `${year}-12-31`;
+        
+        // Add onchange to reload subject cards when date changes
+        dateInput.onchange = async () => {
+            await loadSubjectLoads();
+        };
     }
 }
 
@@ -90,69 +86,80 @@ function getDayCode(dateStr) {
 }
 
 /**
- * Load Subject Loads into dropdown - UPDATED: Filter by selected date's day code - Phase 2 Task 2.2
+ * Load Subject Loads as Cards - UPDATED: Card Grid Layout
  */
 async function loadSubjectLoads() {
-    const subjectSelect = document.getElementById('subject-select');
-    if (!subjectSelect) return;
-    
+    const container = document.getElementById('subject-cards-container');
+    if (!container) return;
+
+    container.innerHTML = '<div class="col-span-full text-center py-8 text-blue-400 font-bold animate-pulse">Loading your classes...</div>';
+
     try {
-        // UPDATED: Get the selected date from the date picker - Phase 2 Task 2.2
+        const { data: subjectLoads, error } = await supabase
+            .from('subject_loads')
+            .select('*, classes(grade_level, section_name)')
+            .eq('teacher_id', currentUser.id);
+
+        if (error) throw error;
+
         const dateInput = document.getElementById('attendance-date');
         const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
         const dayCode = getDayCode(selectedDate);
-        
-        // First, fetch all subject loads for this teacher
-        const { data: allSubjectLoads, error } = await supabase
-            .from('subject_loads')
-            .select(`
-                id,
-                subject_name,
-                schedule_time_start,
-                schedule_time_end,
-                schedule_days,
-                classes (grade_level, section_name)
-            `)
-            .eq('teacher_id', currentUser.id);
-        
-        if (error) {
-            console.error('Error loading subject loads:', error);
-            showNotification('Error loading subjects', 'error');
+
+        const todaysSubjects = subjectLoads.filter(load =>
+            load.schedule_days && load.schedule_days.includes(dayCode)
+        );
+
+        if (todaysSubjects.length === 0) {
+            container.innerHTML = `<div class="col-span-full bg-white rounded-2xl p-8 text-center border border-dashed border-gray-200"><p class="text-gray-500 font-medium">No classes scheduled for this date.</p></div>`;
+            document.getElementById('subject-student-list').classList.add('hidden');
+            document.getElementById('empty-state').classList.remove('hidden');
             return;
         }
+
+        // Render Cards
+        container.innerHTML = todaysSubjects.map(load => `
+            <div onclick="selectSubjectCard('${load.id}', '${load.subject_name}')" 
+                 id="card-${load.id}"
+                 class="subject-card cursor-pointer bg-white p-5 rounded-2xl border-2 border-transparent shadow-sm hover:shadow-md hover:border-blue-200 transition-all group relative">
+                <div class="absolute top-4 right-4 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+                </div>
+                <h4 class="font-black text-gray-800 text-lg leading-tight pr-10 mb-1 truncate">${load.subject_name}</h4>
+                <p class="text-xs font-bold text-blue-600 uppercase tracking-wide truncate">
+                    ${load.classes?.grade_level || 'Grade'} - ${load.classes?.section_name || 'Section'}
+                </p>
+            </div>
+        `).join('');
         
-        // UPDATED: Filter subjects by the selected day's schedule - Phase 2 Task 2.2
-        // schedule_days is stored as array like ["M", "W", "F"]
-        const filteredSubjectLoads = allSubjectLoads.filter(load => {
-            if (!load.schedule_days || load.schedule_days.length === 0) {
-                return true; // Show subjects with no schedule days
-            }
-            return load.schedule_days.includes(dayCode);
-        });
-        
-        subjectSelect.innerHTML = '<option value="">Select a subject...</option>';
-        
-        if (filteredSubjectLoads.length === 0) {
-            const option = document.createElement('option');
-            option.value = '';
-            option.text = `No classes scheduled for ${getDayName(selectedDate)}`;
-            option.disabled = true;
-            subjectSelect.appendChild(option);
-        }
-        
-        filteredSubjectLoads.forEach(load => {
-            const option = document.createElement('option');
-            option.value = load.id;
-            const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0, 5) : '';
-            const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0, 5) : '';
-            option.text = `${load.subject_name} - ${load.classes?.grade_level} ${load.classes?.section_name} (${timeStart}-${timeEnd})`;
-            subjectSelect.appendChild(option);
-        });
-        
+        if (window.lucide) lucide.createIcons();
+
+        // Auto-select the first card to save the teacher a click!
+        selectSubjectCard(todaysSubjects[0].id, todaysSubjects[0].subject_name);
+
     } catch (err) {
-        console.error('Error in loadSubjectLoads:', err);
-        showNotification('Error loading subjects', 'error');
+        console.error('Error loading subjects:', err);
+        container.innerHTML = '<div class="col-span-full text-center text-red-500 font-bold py-4">Failed to load subjects.</div>';
     }
+}
+
+window.selectSubjectCard = function(subjectId, subjectName) {
+    currentSubjectLoadId = subjectId;
+    currentSubjectName = subjectName;
+
+    // Visual selection update
+    document.querySelectorAll('.subject-card').forEach(card => {
+        card.classList.remove('border-blue-500', 'ring-4', 'ring-blue-500/20');
+        card.classList.add('border-transparent');
+    });
+    const activeCard = document.getElementById(`card-${subjectId}`);
+    if (activeCard) {
+        activeCard.classList.remove('border-transparent');
+        activeCard.classList.add('border-blue-500', 'ring-4', 'ring-blue-500/20');
+    }
+
+    // Load the students for this subject
+    loadSubjectStudents(subjectId);
 }
 
 /**
@@ -185,10 +192,8 @@ async function loadSubjectStudents(subjectLoadId) {
         const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
         const isToday = selectedDate === new Date().toISOString().split('T')[0];
         
-        // Get subject name from dropdown
-        const subjectSelect = document.getElementById('subject-select');
-        const subjectOption = subjectSelect?.options[subjectSelect.selectedIndex];
-        const subjectName = subjectOption?.text.split(' - ')[0] || 'Subject';
+        // Use global state from Card engine
+        let subjectName = currentSubjectName || 'Subject';
         
         const { data: subjectLoad } = await supabase
             .from('subject_loads')
@@ -303,9 +308,6 @@ async function loadSubjectStudents(subjectLoadId) {
                                     <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'No ID'}</p>
                                 </div>
                             </div>
-                        </td>
-                        <td class="px-6 py-4">
-                            ${statusBadge}
                         </td>
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
@@ -480,11 +482,8 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
         showNotification(`Student marked as ${newStatus}`, 'success');
         
         // Refresh the list (unless bulk processing)
-        if (!skipReload) {
-            const subjectSelect = document.getElementById('subject-select');
-            if (subjectSelect?.value) {
-                await loadSubjectStudents(subjectSelect.value);
-            }
+        if (!skipReload && currentSubjectLoadId) {
+            await loadSubjectStudents(currentSubjectLoadId);
         }
         
     } catch (err) {
@@ -509,10 +508,8 @@ function handleSubjectChange() {
  * Finds all un-marked students and marks them present concurrently.
  */
 async function markAllPresent() {
-    const subjectSelect = document.getElementById('subject-select');
-    const subjectLoadId = subjectSelect.value;
-    const subjectOption = subjectSelect.options[subjectSelect.selectedIndex];
-    const subjectName = subjectOption?.text.split(' - ')[0];
+    const subjectLoadId = currentSubjectLoadId;
+    const subjectName = currentSubjectName;
 
     if (!subjectLoadId) return showNotification('Please select a subject first', 'error');
 
