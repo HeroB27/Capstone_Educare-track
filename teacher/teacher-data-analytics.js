@@ -442,7 +442,11 @@ function updatePieChart(stats) {
 function exportToCSV() {
     const classSelect = document.getElementById('analytics-class-select');
     const className = classSelect.options[classSelect.selectedIndex]?.text || 'Class';
-    const today = new Date().toISOString().split('T')[0];
+    
+    // Timezone safe date for export (fixes "yesterday" bug during morning export)
+    const localExportDate = new Date();
+    localExportDate.setMinutes(localExportDate.getMinutes() - localExportDate.getTimezoneOffset());
+    const today = localExportDate.toISOString().split('T')[0];
     
     let csvContent = `Educare Teacher Analytics Report\n`;
     csvContent += `Class: ${className}\n`;

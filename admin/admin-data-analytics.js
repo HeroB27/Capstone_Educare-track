@@ -124,25 +124,19 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
         };
     }
 
-    // Get unique student IDs and dates for fetching excuse letters
-    const studentIds = [...new Set(logs.map(l => l.student_id))];
-    const dates = [...new Set(logs.map(l => l.log_date))];
+    // Fetch excuse letters separately using ONLY the date range (Prevents HTTP 414 URI Too Long crash)
+    let excusedMap = new Map(); 
+    const { data: excuses } = await supabase
+        .from('excuse_letters')
+        .select('student_id, date_absent, status')
+        .gte('date_absent', dateStart)
+        .lte('date_absent', dateEnd)
+        .eq('status', 'Approved');
 
-    // Fetch excuse letters separately
-    let excusedMap = new Map(); // Key: "student_id-date", Value: true
-    if (studentIds.length > 0 && dates.length > 0) {
-        const { data: excuses } = await supabase
-            .from('excuse_letters')
-            .select('student_id, date_absent, status')
-            .in('student_id', studentIds)
-            .in('date_absent', dates)
-            .eq('status', 'Approved');
-
-        if (excuses) {
-            excuses.forEach(e => {
-                excusedMap.set(`${e.student_id}-${e.date_absent}`, true);
-            });
-        }
+    if (excuses) {
+        excuses.forEach(e => {
+            excusedMap.set(`${e.student_id}-${e.date_absent}`, true);
+        });
     }
 
     // Group by date

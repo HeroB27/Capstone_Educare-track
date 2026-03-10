@@ -207,7 +207,7 @@ async function preFetchTodayData() {
     // Fetch today's attendance
     const { data: attendance } = await supabase
         .from('attendance_logs')
-        .select('student_id, status, time_in, source')
+        .select('id, student_id, status, time_in, source') // FIXED: Added 'id'
         .eq('log_date', today)
         .in('student_id', studentIds);
     
@@ -309,28 +309,34 @@ function renderStudents() {
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center text-primary-600 font-bold">
-                            ${student.full_name?.charAt(0) || '?'}
+                        <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0 shadow-sm">
+                            <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                         </div>
                         <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
                     </div>
                 </td>
                 <td class="px-6 py-4">
-                    <p class="text-sm text-gray-600">${student.lrn || 'N/A'}</p>
-                </td>
-                <td class="px-6 py-4">
-                    <p class="text-sm text-gray-600">${latestRecord?.time_in || '--:--'}</p>
+                    <p class="text-sm text-gray-600 font-mono">${latestRecord?.time_in ? new Date(latestRecord.time_in).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--'}</p>
                 </td>
                 <td class="px-6 py-4">
                     ${getStatusBadge(student.id)}
+                </td>
+                <td class="px-6 py-4">
+                    <select onchange="verifyStudentAttendance('${student.id}', this.value)" class="bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 font-bold cursor-pointer transition-colors hover:bg-white">
+                        <option value="" disabled ${!latestRecord ? 'selected' : ''}>Verify...</option>
+                        <option value="On Time" ${latestRecord?.status === 'On Time' ? 'selected' : ''}>Present (On Time)</option>
+                        <option value="Late" ${latestRecord?.status === 'Late' ? 'selected' : ''}>Late</option>
+                        <option value="Absent" ${latestRecord?.status === 'Absent' ? 'selected' : ''}>Absent</option>
+                        <option value="Excused" ${latestRecord?.status === 'Excused' ? 'selected' : ''}>Excused</option>
+                    </select>
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-2">
                         <button onclick="viewStudentDetails('${student.id}')" class="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="View Details">
                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
-                        <button onclick="viewAttendance('${student.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Attendance">
-                            <i data-lucide="calendar" class="w-4 h-4"></i>
+                        <button onclick="viewAttendance('${student.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="View Analytics">
+                            <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </td>
@@ -480,4 +486,58 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// =============================================================================
+// HOMEROOM MANUAL VERIFICATION (OVERRIDE GATE STATUS)
+// =============================================================================
+async function verifyStudentAttendance(studentId, newStatus) {
+    if (!newStatus) return;
+    
+    // Get local date safely
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const todayStr = localDate.toISOString().split('T')[0];
+
+    try {
+        const records = todayAttendance[studentId] || [];
+        const latestRecord = records.length > 0 ? records[records.length - 1] : null;
+
+        if (latestRecord && latestRecord.id) {
+            // Student has a gate scan or previous record -> OVERRIDE IT
+            const { error } = await supabase
+                .from('attendance_logs')
+                .update({ status: newStatus })
+                .eq('id', latestRecord.id);
+            if (error) throw error;
+        } else {
+            // Student never scanned the gate -> CREATE NEW RECORD
+            // RETROACTIVE TIME-IN PROTECTION: Generate 8:00 AM for the selected date, NOT current time
+            let fallbackTimeIn = null;
+            if (newStatus === 'On Time' || newStatus === 'Late') {
+                fallbackTimeIn = new Date(`${todayStr}T08:00:00`).toISOString();
+            }
+            
+            const payload = {
+                student_id: studentId,
+                log_date: todayStr,
+                status: newStatus,
+                time_in: fallbackTimeIn
+            };
+            const { error } = await supabase.from('attendance_logs').insert([payload]);
+            if (error) throw error;
+        }
+
+        // We do not need to call loadHomeroomStudents() manually because 
+        // setupRealTimeSubscription() is listening! The UI will auto-refresh.
+        if (typeof showNotification === 'function') {
+            showNotification(`Student marked as ${newStatus}`, 'success');
+        }
+
+    } catch (err) {
+        console.error('Error verifying attendance:', err);
+        if (typeof showNotification === 'function') {
+            showNotification('Error updating attendance. Please try again.', 'error');
+        }
+    }
 }

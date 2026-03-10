@@ -108,46 +108,61 @@ function applyFilters() {
 }
 
 // Export to CSV
-function exportLogsToCSV() {
-    // Get current filtered data and export
-    const tbody = document.getElementById('audit-logs-body');
-    const rows = tbody.querySelectorAll('tr');
-    
-    if (rows.length === 0 || rows[0].querySelector('td')?.textContent.includes('No audit logs')) {
-        showNotification('No data to export', 'error');
-        return;
-    }
-    
-    // Build CSV content
-    let csv = 'Timestamp,User,Role,Action,Details,Target\n';
-    
-    rows.forEach(row => {
-        const cols = row.querySelectorAll('td');
-        if (cols.length >= 5) {
-            const timestamp = cols[0].textContent.trim();
-            const roleSpan = cols[1].querySelector('span');
-            const role = roleSpan ? roleSpan.textContent.trim() : '';
-            const username = cols[1].textContent.replace(role, '').trim();
-            const action = cols[2].textContent.trim();
-            const details = cols[3].textContent.trim().replace(/"/g, '""');
-            const target = cols[4].textContent.trim();
+async function exportLogsToCSV() {
+    const btn = document.querySelector('button[onclick="exportLogsToCSV()"]');
+    if (btn) btn.innerHTML = 'Exporting...';
+
+    try {
+        const searchQuery = document.getElementById('log-search')?.value || '';
+        const roleFilter = document.getElementById('role-filter')?.value || 'all';
+        const dateStart = document.getElementById('date-start')?.value || '';
+        const dateEnd = document.getElementById('date-end')?.value || '';
+        
+        let query = supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
+        
+        if (searchQuery) query = query.or(`action.ilike.%${searchQuery}%,details.ilike.%${searchQuery}%`);
+        if (roleFilter !== 'all') query = query.eq('user_role', roleFilter);
+        if (dateStart) query = query.gte('created_at', dateStart);
+        if (dateEnd) query = query.lte('created_at', dateEnd + 'T23:59:59');
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            showNotification('No data to export matching current filters.', 'error');
+            if (btn) btn.innerHTML = 'Export CSV';
+            return;
+        }
+
+        let csv = 'Timestamp,User,Role,Action,Details,Target\n';
+        data.forEach(log => {
+            const timestamp = formatDateTime(log.created_at).replace(/,/g, '');
+            const username = (log.username || 'Unknown').replace(/"/g, '""');
+            const role = (log.user_role || 'N/A').replace(/"/g, '""');
+            const action = (log.action || 'N/A').replace(/"/g, '""');
+            const details = (log.details || '-').replace(/"/g, '""');
+            const target = `${log.target_table || '-'} ${log.target_id ? '#' + log.target_id : ''}`.trim();
             
             csv += `"${timestamp}","${username}","${role}","${action}","${details}","${target}"\n`;
-        }
-    });
-    
-    // Download file
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showNotification('Audit logs exported successfully', 'success');
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Educare_Audit_Logs_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('Audit logs exported successfully', 'success');
+    } catch (err) {
+        console.error(err);
+        showNotification('Error exporting logs: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.innerHTML = 'Export CSV';
+    }
 }
 
 // Helper: Format datetime

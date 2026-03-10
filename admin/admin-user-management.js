@@ -608,7 +608,9 @@ async function renderBulkPrint(list, p) {
             <div class="w-[2in] h-[3in] border-2 border-gray-100 rounded-xl relative p-4 flex flex-col items-center bg-white shadow-lg font-sans">
                 <p class="text-[8px] font-black" style="color: ${config.primaryColor}">Educare Colleges Inc</p>
                 <p class="text-[5px] text-gray-500 uppercase tracking-widest">Purok 4 Irisan Baguio City</p>
-                <div class="w-24 h-24 bg-gray-50 border-2 p-1 rounded-2xl mt-4" style="border-color: ${config.secondaryColor}"><img src="https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}" class="w-full h-full object-cover"></div>
+                <div class="w-24 h-24 bg-gray-50 border-2 p-1 rounded-2xl mt-4 overflow-hidden" style="border-color: ${config.secondaryColor}">
+                    <img src="${s.profile_photo_url ? s.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(safeName)}`}" class="w-full h-full object-cover ${s.profile_photo_url ? 'object-top' : ''}">
+                </div>
                 <h2 class="text-[10px] font-black mt-4 uppercase text-center leading-tight">${safeName}</h2>
                 <div class="w-full text-left mt-auto pb-4 border-t pt-2"><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-bold leading-none">${safeAddress}</p></div>
                 <div class="h-1.5 w-full absolute bottom-0 left-0" style="background: ${config.primaryColor}"></div>

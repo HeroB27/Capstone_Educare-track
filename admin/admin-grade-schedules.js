@@ -145,7 +145,7 @@ async function loadGradeSchedules() {
     }
 }
 
-// 5. Save All Grade Schedules
+// 5. Save All Grade Schedules (With Chronological Validation)
 async function saveAllSchedules(event) {
     const btn = event.currentTarget;
     const originalText = btn.innerHTML;
@@ -154,23 +154,40 @@ async function saveAllSchedules(event) {
 
     try {
         const payloads = [];
+        let validationError = null;
 
-        // Collect all grade schedule settings
-        GRADE_LEVELS.forEach(grade => {
+        // Collect and validate all grade schedule settings
+        for (const grade of GRADE_LEVELS) {
             const startTime = document.getElementById(`grade_${grade.id}_start`)?.value;
             const endTime = document.getElementById(`grade_${grade.id}_end`)?.value;
             const lateThreshold = document.getElementById(`grade_${grade.id}_late_threshold`)?.value;
             const earlyCutoff = document.getElementById(`grade_${grade.id}_early_cutoff`)?.value;
 
+            // CHRONOLOGICAL VALIDATION
+            if (startTime && lateThreshold && startTime > lateThreshold) {
+                validationError = `${grade.name}: 'Late Cutoff' (${lateThreshold}) cannot be earlier than 'Gate Open' (${startTime}).`;
+                break;
+            }
+            if (endTime && earlyCutoff && earlyCutoff > endTime) {
+                validationError = `${grade.name}: 'Early Cutoff' (${earlyCutoff}) cannot be later than 'Dismissal' (${endTime}).`;
+                break;
+            }
+
             if (startTime) payloads.push({ setting_key: `grade_${grade.id}_start`, setting_value: startTime });
             if (endTime) payloads.push({ setting_key: `grade_${grade.id}_end`, setting_value: endTime });
             if (lateThreshold) payloads.push({ setting_key: `grade_${grade.id}_late_threshold`, setting_value: lateThreshold });
             if (earlyCutoff) payloads.push({ setting_key: `grade_${grade.id}_early_cutoff`, setting_value: earlyCutoff });
-        });
+        }
 
-        // Bulk upsert
+        if (validationError) {
+            showNotification(validationError, "error");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            return; // Stop execution, do not save to database
+        }
+
+        // Bulk upsert if validation passes
         const { error } = await supabase.from('settings').upsert(payloads, { onConflict: 'setting_key' });
-        
         if (error) throw error;
 
         showNotification("All grade schedules saved successfully!", "success");

@@ -13,7 +13,7 @@
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
-    <script src="teacher-core.js" defer></script>
+    <script src="teacher-core.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -60,18 +60,7 @@
             </a>
         </nav>
      
-       
-        <!-- Gatekeeper Toggle -->
-        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
-            <label class="flex items-center cursor-pointer">
-                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
-                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
-                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
-                </div>
-                <span class="ml-3 text-sm font-medium text-blue-200">Gatekeeper Mode</span>
-            </label>
-        </div>
-        
+
         <div class="p-4 border-t border-blue-800/50">
             <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl transition-all duration-200 hover:shadow-lg shadow-red-500/30">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -93,6 +82,17 @@
                 <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30" id="user-avatar">T</div>
             </div>
         </header>
+
+        <!-- Gatekeeper Toggle - UPDATED: Added missing element for Phase 1 -->
+        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
+                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
+                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
+                </div>
+                <span class="ml-3 font-medium text-white">Gatekeeper Mode</span>
+            </label>
+        </div>
 
         <div class="flex-1 overflow-auto p-8" id="main-content">
             <!-- Dynamic Content Loaded Here -->

@@ -19,6 +19,7 @@ let canvasContext = null;
 let animationFrameId = null;
 const scanCooldowns = new Map(); // Map<studentId, timestamp>
 const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes (Fix #4)
+let lastToastTime = 0; // Global debounce tracker for toast notifications
 
 // NEW: QR Code format validation regex
 // Matches: EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G001-A1B2)
@@ -26,9 +27,18 @@ const SCAN_REGEX = /^EDU-\d{4}-[GK]\d{1,3}-[A-Z0-9]{4}$/;
 
 // DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
+    initializeTeacherName(); // UPDATED: Initialize teacher name display for Phase 1
     initializeDateTime();
     initializeScanner();
 });
+
+// UPDATED: Initialize teacher name display - Phase 1 Task 1.3
+function initializeTeacherName() {
+    const teacherNameEl = document.getElementById('teacher-name-display');
+    if (teacherNameEl && currentUser) {
+        teacherNameEl.textContent = currentUser.full_name || 'Teacher';
+    }
+}
 
 // Initialize date and time display
 function initializeDateTime() {
@@ -152,27 +162,30 @@ function scanFrame() {
  * @param {string} decodedText - The scanned QR code data
  */
 function handleQRDetection(decodedText) {
+    const now = Date.now();
+
     // Validate QR code format first
     if (!validateStudentId(decodedText)) {
-        showNotification('Invalid QR Code format. Please scan a valid ID.', 'error');
+        if (now - lastToastTime > 3000) { // Strict 3-second debounce
+            showNotification('Invalid QR Code format. Please scan a valid ID.', 'error');
+            lastToastTime = now;
+        }
         return;
     }
     
-    // Fix #4 & #5: Robust Duplicate Scan Prevention
-    const now = Date.now();
+    // Robust Duplicate Scan Prevention
     if (scanCooldowns.has(decodedText)) {
         const lastTime = scanCooldowns.get(decodedText);
         if (now - lastTime < ANTI_DUPLICATE_THRESHOLD) {
-            // Debounce the warning too (don't spam toast every frame)
-            if (now - lastTime > 2000 && (now - lastTime) < 3000) {
+            if (now - lastToastTime > 3000) { // Strict 3-second debounce
                  showNotification('Duplicate scan detected - student already processed.', 'warning');
+                 lastToastTime = now;
             }
             return;
         }
     }
     
     scanCooldowns.set(decodedText, now);
-
     processScan(decodedText);
 }
 
@@ -184,11 +197,14 @@ async function processScan(studentIdText) {
     try {
         // 1. Check if today is a holiday/suspended day
         // UPDATED: Now checks time_coverage for half-day suspensions
+        // UPDATED: Use unmutated date for accurate hour checking (fixes timezone bug)
+        const nowHourTracker = new Date(); // Unmutated date for accurate hour checking
         const localDate = new Date();
         localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
         const today = localDate.toISOString().split('T')[0];
+        
         const holidayCheck = await checkIsHoliday(today);
-        const currentHour = localDate.getHours();
+        const currentHour = nowHourTracker.getHours(); // Safe, unmutated hour
         
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
             // Check for half-day suspensions
@@ -261,6 +277,15 @@ async function processScan(studentIdText) {
         document.getElementById('scan-student-name').innerText = studentData.full_name;
         document.getElementById('scan-grade-level').innerText = `${gradeLevel} - ${section}`;
         document.getElementById('scan-time').innerText = new Date().toLocaleTimeString();
+        document.getElementById('scan-status').innerText = scanResult.status;
+        
+        const actionBadge = document.getElementById('scan-action');
+        actionBadge.innerText = scanResult.direction;
+        actionBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${scanResult.direction === 'ENTRY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`;
+
+        // Play Audio
+        const audioEl = document.getElementById(scanResult.status === 'Late' ? 'audio-late' : 'audio-success');
+        if (audioEl) audioEl.play().catch(e => console.log('Audio play blocked:', e));
         
         // Create parent notification for all events
         await createParentNotification(studentData, scanResult.direction, scanResult.status);
@@ -276,6 +301,10 @@ async function processScan(studentIdText) {
         document.getElementById('last-scan').classList.remove('hidden');
         document.getElementById('scan-student-name').innerText = 'Error';
         document.getElementById('scan-grade-level').innerText = error.message;
+        
+        // Play error audio
+        const errAudio = document.getElementById('audio-error');
+        if (errAudio) errAudio.play().catch(e => {});
     }
 }
 
@@ -570,5 +599,41 @@ window.addEventListener('beforeunload', () => {
     }
     if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
+    }
+});
+
+// ==========================================
+// MANUAL ENTRY LOGIC
+// ==========================================
+window.showManualEntry = function() {
+    document.getElementById('manual-entry-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('manual-student-id').focus(), 100);
+};
+
+window.closeManualEntry = function() {
+    document.getElementById('manual-entry-modal').classList.add('hidden');
+    document.getElementById('manual-student-id').value = '';
+};
+
+window.submitManualEntry = function() {
+    const input = document.getElementById('manual-student-id');
+    const studentIdText = input.value.trim().toUpperCase(); // e.g. EDU-2026-G001-A1B2
+    
+    if (!studentIdText) {
+        showNotification("Please enter a Student ID", "error");
+        return;
+    }
+    
+    closeManualEntry();
+    handleQRDetection(studentIdText); // Pass it to the exact same pipeline as the camera
+};
+
+// Allow pressing Enter in the manual input field
+document.addEventListener('DOMContentLoaded', () => {
+    const manualInput = document.getElementById('manual-student-id');
+    if (manualInput) {
+        manualInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') submitManualEntry();
+        });
     }
 });

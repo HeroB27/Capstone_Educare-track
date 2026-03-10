@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Rules - Teacher Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="teacher-core.js"></script>
+    <script src="teacher-attendance-rules.js" defer></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex text-gray-800">
+
+    <!-- Floating Sidebar -->
+    <aside class="w-64 m-4 rounded-[32px] bg-blue-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-blue-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter uppercase">TEACHER</span>
+        </div>
+        
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="teacher-homeroomlist.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="users" class="w-5 h-5"></i> Homeroom Class
+            </a>
+            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
+            </a>
+            <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
+            </a>
+            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Analytics
+            </a>
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
+            </a>
+            <a href="teacher-attendance-rules.html" class="flex items-center gap-3 px-4 py-3 bg-blue-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="clock" class="w-5 h-5"></i> Attendance Rules
+            </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings
+            </a>
+        </nav>
+        
+        <!-- Gatekeeper Toggle -->
+        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
+                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
+                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
+                </div>
+                <span class="ml-3 text-sm font-medium text-blue-200">Gatekeeper Mode</span>
+            </label>
+        </div>
+        
+        <div class="p-4 border-t border-blue-800/50">
+            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl transition-all duration-200 hover:shadow-lg shadow-red-500/30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span class="font-medium">Logout</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Attendance Rules</h2>
+            <div class="flex items-center gap-4">
+                <span id="teacher-name" class="font-medium text-gray-600">Loading...</span>
+                <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30" id="user-avatar">T</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            <!-- Info Card -->
+            <div class="bg-blue-50 rounded-2xl p-6 border border-blue-100 mb-8">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center shrink-0">
+                        <i data-lucide="info" class="w-6 h-6 text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-blue-900 mb-1">Per-Grade Attendance Schedules</h3>
+                        <p class="text-sm text-blue-700">View the attendance schedules for each grade level. These schedules determine when a student is considered "Late" or "Early Dismissal" based on their enrolled grade level.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Homeroom Highlight -->
+            <div id="my-homeroom-card" class="hidden bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 border border-blue-700 mb-8 text-white">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="home" class="w-7 h-7"></i>
+                    </div>
+                    <div>
+                        <p class="text-blue-200 text-sm font-medium">Your Homeroom Class</p>
+                        <h3 id="my-homeroom-name" class="text-2xl font-black">Loading...</h3>
+                        <p id="my-homeroom-schedule" class="text-blue-200 text-sm mt-1">Loading schedule...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grade Schedules Grid (Read-Only) -->
+            <div id="grade-schedules-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Loading State -->
+                <div class="col-span-full text-center py-12">
+                    <div class="inline-flex items-center gap-3">
+                        <div class="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span class="text-gray-500 font-medium">Loading grade schedules...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                <h3 class="font-black text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="help-circle" class="w-5 h-5 text-blue-600"></i>
+                    Understanding the Schedule
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="sunrise" class="w-4 h-4 text-green-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">Morning Start</p>
+                            <p class="text-xs text-gray-500">When school opens</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="clock" class="w-4 h-4 text-yellow-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">Late Threshold</p>
+                            <p class="text-xs text-gray-500">After = Late marked</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="sunset" class="w-4 h-4 text-orange-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">Dismissal Time</p>
+                            <p class="text-xs text-gray-500">End of school day</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="calendar" class="w-4 h-4 text-purple-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">School Days</p>
+                            <p class="text-xs text-gray-500">Active school days</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

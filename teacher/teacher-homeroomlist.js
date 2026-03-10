@@ -247,8 +247,8 @@ function renderStudents() {
         <tr class="hover:bg-gray-50 transition-colors">
             <td class="px-6 py-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center text-primary-600 font-bold">
-                        ${student.full_name?.charAt(0) || '?'}
+                    <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0 shadow-sm">
+                        <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                     </div>
                     <div>
                         <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
@@ -375,8 +375,8 @@ async function viewStudentDetails(studentId) {
     modalContent.innerHTML = `
         <div class="space-y-4">
             <div class="flex items-center gap-4">
-                <div class="w-16 h-16 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl flex items-center justify-center text-primary-600 text-xl font-bold">
-                    ${student.full_name?.charAt(0) || '?'}
+                <div class="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shrink-0 shadow-md">
+                    <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                 </div>
                 <div>
                     <h4 class="text-xl font-bold text-gray-800">${escapeHtml(student.full_name)}</h4>

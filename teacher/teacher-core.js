@@ -1402,7 +1402,7 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
 }
 
 // 17. Reject Excuse Letter
-// UPDATED: Uses showConfirmationModal instead of prompt
+// UPDATED: Uses showConfirmationModal instead of prompt + Added audit logging
 async function rejectExcuseLetter(letterId) {
     showConfirmationModal(
         'Reject Excuse Letter',
@@ -1432,6 +1432,11 @@ async function rejectExcuseLetter(letterId) {
                 
                 if (error) throw error;
                 
+                // NEW: Log the rejection action - Task 4.3
+                if (typeof logTeacherAction === 'function') {
+                    logTeacherAction('EXCUSE_LETTER_REJECT', { teacher_remarks: reason }, letterId, 'excuse_letter');
+                }
+                
                 showNotification('Excuse letter rejected.', "success");
                 await loadExcuseLetters();
                 
@@ -1442,6 +1447,59 @@ async function rejectExcuseLetter(letterId) {
         },
         'Reject'
     );
+}
+
+/**
+ * Log teacher action to audit trail (notifications table)
+ * UPDATED: Task 4.3 - Teacher Audit Logs
+ * This function logs teacher actions to the notifications table for audit purposes
+ */
+async function logTeacherAction(actionType, details = {}, targetId = null, targetTable = null) {
+    try {
+        // Get teacher info
+        const teacher = checkSession('teachers');
+        if (!teacher) return;
+        
+        // Build the message based on action type
+        let actionMessage = '';
+        switch (actionType) {
+            case 'EXCUSE_LETTER_APPROVE':
+                actionMessage = `Approved excuse letter`;
+                break;
+            case 'EXCUSE_LETTER_REJECT':
+                actionMessage = `Rejected excuse letter`;
+                break;
+            case 'SUBJECT_ATTENDANCE_MARK':
+                actionMessage = `Marked attendance: ${details.new_status} for ${details.subject_name}`;
+                break;
+            default:
+                actionMessage = actionType;
+        }
+        
+        // Insert into notifications table (acts as audit log)
+        await supabase.from('notifications').insert({
+            recipient_role: 'admins',
+            title: `Teacher Action: ${actionType}`,
+            message: actionMessage,
+            type: 'audit_log',
+            is_read: false,
+            sender_id: teacher.id,
+            metadata: {
+                action_type: actionType,
+                target_id: targetId,
+                target_table: targetTable,
+                details: details,
+                teacher_name: teacher.full_name,
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+        console.log('[Audit] Logged:', actionType, details);
+        
+    } catch (err) {
+        console.error('[Audit] Error logging teacher action:', err);
+        // Don't show notification - audit failures shouldn't interrupt user flow
+    }
 }
 
 // 18. Load Analytics
@@ -2079,8 +2137,10 @@ function navigateTo(section) {
 }
 
 // 32. Initialize Teacher Settings Page
+// UPDATED: Settings now handled by teacher-settings.js with tabs for Profile, Password, Theme
 function initializeTeacherSettingsPage() {
-    injectPasswordChangeUI();
+    // No longer needed - teacher-settings.js handles initialization
+    // This function kept for backwards compatibility with the router
 }
 
 // 33. Inject Styles
@@ -2731,4 +2791,5 @@ async function getStudentMedicalInfo(studentId) {
         console.error('Error getting medical info:', err);
         return null;
     }
+}
 }

@@ -12,7 +12,7 @@
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
-    <script src="teacher-core.js" defer></script>
+    <script src="teacher-core.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -225,5 +225,14 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
+        
+        // Live Character Counter for Announcements
+        const contentArea = document.getElementById('announcement-content');
+        const counter = document.getElementById('char-counter');
+        if (contentArea && counter) {
+            contentArea.addEventListener('input', function(e) {
+                counter.textContent = e.target.value.length;
+            });
+        }
     });
 </script>

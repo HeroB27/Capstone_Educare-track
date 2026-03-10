@@ -14,7 +14,7 @@
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
-    <script src="teacher-core.js" defer></script>
+    <script src="teacher-core.js"></script>
     <script src="teacher-gatekeeper-mode.js" defer></script>
     
     <style>
@@ -53,7 +53,9 @@
                     <p class="text-xs text-slate-400">Scan Student ID at Gate</p>
                 </div>
             </div>
+            <!-- UPDATED: Added teacher name display for Phase 1 -->
             <div class="text-right">
+                <p id="teacher-name-display" class="font-medium text-blue-300">Loading...</p>
                 <p id="current-time" class="font-mono text-lg font-bold text-emerald-400">--:--:--</p>
                 <p id="current-date" class="text-xs text-slate-400">Loading...</p>
             </div>
@@ -90,6 +92,7 @@
                     <span id="scan-action" class="px-3 py-1 rounded-full text-xs font-bold uppercase">ENTRY</span>
                 </div>
                 <h2 id="scan-student-name" class="text-2xl font-bold mb-1">Student Name</h2>
+                <p id="scan-grade-level" class="text-sm text-blue-400 font-bold mb-2">Grade Level</p>
                 <p id="scan-status" class="text-lg font-medium">Status</p>
                 <p id="scan-time" class="text-sm text-slate-400 mt-2">Time: --:--</p>
             </div>

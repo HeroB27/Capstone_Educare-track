@@ -115,19 +115,33 @@ async function loadAllClasses() {
     }
 }
 
-// Delete class function
+// Delete class function (Safe Version)
 async function deleteClass(classId, className) {
     if (!confirm(`Are you sure you want to delete "${className}"? This will also remove all subject assignments.`)) return;
     
     try {
+        // 1. Check if students are enrolled to prevent FK Violation
+        const { count, error: studentErr } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('class_id', classId);
+            
+        if (count > 0) {
+            return showNotification(`Cannot delete: There are ${count} students enrolled in this class. Reassign them first.`, 'error');
+        }
+
+        // 2. Explicitly delete associated subject loads first
+        await supabase.from('subject_loads').delete().eq('class_id', classId);
+
+        // 3. Delete the class
         const { error } = await supabase.from('classes').delete().eq('id', classId);
         if (error) throw error;
         
-        showNotification('Class deleted successfully!', 'success');
+        showNotification('Class and subjects deleted successfully!', 'success');
         loadAllClasses();
     } catch (err) {
         console.error("Error deleting class:", err);
-        showNotification('Failed to delete class.', 'error');
+        showNotification('Failed to delete class: ' + err.message, 'error');
     }
 }
 
@@ -213,21 +227,21 @@ async function loadSubjectList(classId) {
         if (error) throw error;
         
         container.innerHTML = data?.map(s => {
-            const startTime = s.schedule_time_start ? s.schedule_time_start.substring(0, 5) : '';
-            const endTime = s.schedule_time_end ? s.schedule_time_end.substring(0, 5) : '';
-            const timeDisplay = startTime && endTime ? `${startTime} - ${endTime}` : 'No schedule';
             const daysDisplay = s.schedule_days || 'No days set';
             
             return `
             <div class="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-xl mb-2 hover:border-violet-200 transition-all">
                 <div>
-                    <p class="font-bold text-gray-800">${s.subject_name}</p>
-                    <p class="text-xs text-violet-600 font-bold uppercase mt-0.5">${s.teachers?.full_name || 'No Teacher'}</p>
-                    <p class="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-wider">📅 ${daysDisplay} &nbsp;|&nbsp; ⏰ ${timeDisplay}</p>
+                    <div class="flex items-center gap-2">
+                        <p class="font-black text-gray-800 text-lg leading-none">${s.subject_name}</p>
+                        <span class="px-2 py-0.5 bg-violet-50 text-violet-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-violet-100">📅 ${daysDisplay}</span>
+                    </div>
+                    <p class="text-xs text-gray-500 font-bold uppercase mt-1 flex items-center gap-1">
+                        <i data-lucide="user" class="w-3 h-3"></i> ${s.teachers?.full_name || 'No Teacher'}
+                    </p>
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="openEditSubject(${s.id}, '${s.subject_name}', ${s.teacher_id}, '${s.schedule_time_start || ''}', '${s.schedule_time_end || ''}', '${s.schedule_days || ''}')" class="p-2 text-gray-300 hover:text-violet-600 bg-gray-50 rounded-lg hover:bg-violet-50 transition-all" title="Edit Teacher"><i data-lucide="user-cog" class="w-4 h-4"></i></button>
-                    <button onclick="deleteSubject(${s.id})" class="p-2 text-gray-300 hover:text-red-500 bg-gray-50 rounded-lg hover:bg-red-50 transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <button onclick="deleteSubject(${s.id})" class="p-2.5 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl hover:bg-red-50 transition-all" title="Remove Subject"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             </div>`;
         }).join('') || '<p class="text-center text-gray-400 py-4 italic">No subjects assigned yet.</p>';
@@ -238,8 +252,8 @@ async function loadSubjectList(classId) {
     }
 }
 
-// Open edit subject modal
-function openEditSubject(subjectId, subjectName, teacherId, startTime, endTime, days) {
+// Open edit subject modal - UPDATED: Removed time parameters for asynchronous model
+function openEditSubject(subjectId, subjectName, teacherId, days) {
     // Populate teacher dropdown
     const teacherSelect = document.getElementById('editSubjectTeacherId');
     teacherSelect.innerHTML = '<option value="">Select Teacher...</option>' + 
@@ -248,13 +262,13 @@ function openEditSubject(subjectId, subjectName, teacherId, startTime, endTime, 
     document.getElementById('editSubjectId').value = subjectId;
     document.getElementById('editSubjectName').value = subjectName;
     document.getElementById('editSubjectTeacherId').value = teacherId || '';
-    document.getElementById('editSubjectStartTime').value = startTime;
-    document.getElementById('editSubjectEndTime').value = endTime;
     
     // Set days
-    document.querySelectorAll('.edit-day-checkbox').forEach(cb => {
-        cb.checked = days.split(',').includes(cb.value);
-    });
+    if (days) {
+        document.querySelectorAll('.edit-day-checkbox').forEach(cb => {
+            cb.checked = days.split(',').includes(cb.value);
+        });
+    }
     
     document.getElementById('editSubjectModal').classList.remove('hidden');
 }
@@ -267,17 +281,16 @@ async function saveEditSubject() {
     const subjectId = document.getElementById('editSubjectId').value;
     const subjectName = document.getElementById('editSubjectName').value;
     const teacherId = document.getElementById('editSubjectTeacherId').value;
-    const startTime = document.getElementById('editSubjectStartTime').value;
-    const endTime = document.getElementById('editSubjectEndTime').value;
     
     const dayCheckboxes = document.querySelectorAll('.edit-day-checkbox:checked');
     const days = Array.from(dayCheckboxes).map(cb => cb.value).join(',');
     
+    // UPDATED: Time fields nullified for asynchronous logic
     const payload = {
         subject_name: subjectName,
         teacher_id: teacherId ? parseInt(teacherId) : null,
-        schedule_time_start: startTime || null,
-        schedule_time_end: endTime || null,
+        schedule_time_start: null,
+        schedule_time_end: null,
         schedule_days: days || null
     };
     
@@ -292,10 +305,8 @@ async function saveEditSubject() {
 }
 
 async function saveSubject() {
-    const subjectName = document.getElementById('subjectName').value;
+    const subjectName = document.getElementById('subjectName').value.trim();
     const teacherId = document.getElementById('subjectTeacherId').value;
-    const startTime = document.getElementById('subjectStartTime').value;
-    const endTime = document.getElementById('subjectEndTime').value;
     
     if (!subjectName || !teacherId) {
         showNotification('Please enter a subject name and select a teacher.', 'error');
@@ -304,28 +315,30 @@ async function saveSubject() {
     
     const dayCheckboxes = document.querySelectorAll('.day-checkbox:checked');
     const days = Array.from(dayCheckboxes).map(cb => cb.value).join(',');
+    if (!days) return showNotification('Please select at least one day.', 'error');
     
     const payload = {
         class_id: currentOpenClass,
         subject_name: subjectName,
         teacher_id: teacherId,
-        schedule_time_start: startTime || null,
-        schedule_time_end: endTime || null,
-        schedule_days: days || null
+        schedule_time_start: null, // Nullified for asynchronous logic
+        schedule_time_end: null,   // Nullified for asynchronous logic
+        schedule_days: days
     };
     
-    const { error } = await supabase.from('subject_loads').insert([payload]);
-    if (!error) { 
+    try {
+        const { error } = await supabase.from('subject_loads').insert([payload]);
+        if (error) throw error;
+        
         closeAddSubjectModal(); 
         document.getElementById('subjectName').value = '';
         document.getElementById('subjectTeacherId').value = '';
-        document.getElementById('subjectStartTime').value = '';
-        document.getElementById('subjectEndTime').value = '';
         document.querySelectorAll('.day-checkbox').forEach(cb => cb.checked = false);
+        
         loadSubjectList(currentOpenClass); 
-        showNotification("Subject added successfully", "success");
-    } else {
-        showNotification(error.message, "error");
+        showNotification("Subject created successfully!", "success");
+    } catch (err) {
+        showNotification(err.message, "error");
     }
 }
 

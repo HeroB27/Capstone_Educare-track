@@ -256,7 +256,7 @@ async function loadPasswordResets() {
     let queryBuilder = supabase
         .from('password_resets')
         .select('*')
-        .eq('status', 'pending');
+        .eq('used', false); // FIXED SCHEMA
 
     if (query) {
         queryBuilder = queryBuilder.ilike('username', `%${query}%`);
@@ -282,7 +282,7 @@ async function loadPasswordResets() {
             </td>
             <td class="px-8 py-5 text-sm text-gray-500">${new Date(req.created_at).toLocaleString()}</td>
             <td class="px-8 py-5 text-right">
-                <button onclick="resolvePasswordRequest(${req.id})" class="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-200 transition-all">Mark Resolved</button>
+                <button onclick="resolvePasswordRequest('${req.id}')" class="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-200 transition-all">Mark Resolved</button>
             </td>
         </tr>
     `).join('');
@@ -290,7 +290,7 @@ async function loadPasswordResets() {
 
 async function resolvePasswordRequest(id) {
     const { error } = await supabase.from('password_resets').update({ 
-        status: 'reviewed',
+        used: true, // FIXED SCHEMA
         resolved_at: new Date().toISOString()
     }).eq('id', id);
     

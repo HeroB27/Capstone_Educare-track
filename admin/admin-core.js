@@ -161,3 +161,6 @@ function updateAccentColorButtons(activeColor) {
         }
     });
 }
+
+// Clean up real-time subscriptions to prevent memory leaks on page exit
+window.addEventListener('beforeunload', cleanupAllSubscriptions);
