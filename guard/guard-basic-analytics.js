@@ -71,10 +71,27 @@ async function loadTodayStats() {
             .eq('log_date', today)
             .eq('status', 'Late');
         
+        // Explicit Absent today (teachers can mark students as Absent)
+        const absentResult = await supabase
+            .from('attendance_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('log_date', today)
+            .eq('status', 'Absent');
+        
+        // Get count of students who have ANY record today (to calculate unrecorded)
+        const recordedResult = await supabase
+            .from('attendance_logs')
+            .select('student_id', { count: 'exact', head: true })
+            .eq('log_date', today);
+        
         const totalStudents = totalResult.count || 0;
         const presentCount = presentResult.count || 0;
         const lateCount = lateResult.count || 0;
-        const absentCount = totalStudents - (presentCount + lateCount);
+        const absentCount = absentResult.count || 0;
+        const recordedCount = recordedResult.count || 0;
+        
+        // Unrecorded = total students who haven't been logged at all today
+        const unrecordedCount = Math.max(0, totalStudents - recordedCount);
         
         // Update DOM
         const elTotal = document.getElementById('stat-total-students');
@@ -85,7 +102,15 @@ async function loadTodayStats() {
         if (elTotal) elTotal.textContent = totalStudents;
         if (elPresent) elPresent.textContent = presentCount;
         if (elLate) elLate.textContent = lateCount;
-        if (elAbsent) elAbsent.textContent = absentCount > 0 ? absentCount : 0;
+        if (elAbsent) elAbsent.textContent = absentCount;
+        
+        console.log('Today stats:', { 
+            total: totalStudents, 
+            present: presentCount, 
+            late: lateCount, 
+            absent: absentCount,
+            unrecorded: unrecordedCount 
+        });
         
     } catch (err) {
         console.error('Error loading stats:', err);
@@ -125,12 +150,19 @@ async function loadTodayBreakdown() {
             .eq('log_date', today)
             .eq('status', 'Late');
         
+        // Explicit Absent today (teachers can mark students as Absent)
+        const absentResult = await supabase
+            .from('attendance_logs')
+            .select('id', { count: 'exact', head: true })
+            .eq('log_date', today)
+            .eq('status', 'Absent');
+        
         const totalStudents = totalResult.count || 0;
         const presentCount = presentResult.count || 0;
         const lateCount = lateResult.count || 0;
-        const absentCount = Math.max(0, totalStudents - (presentCount + lateCount));
+        const absentCount = absentResult.count || 0;
         
-        console.log('Today breakdown:', { present: presentCount, late: lateCount, absent: absentCount });
+        console.log('Today breakdown:', { present: presentCount, late: lateCount, absent: absentCount, total: totalStudents });
         
         renderBreakdownChart(presentCount, lateCount, absentCount);
         
@@ -315,17 +347,17 @@ function renderTopLates(list) {
     container.innerHTML = list.map((s, i) => {
         const badge = badges[i] || badges[2];
         return `
-            <div class="flex items-center justify-between p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
+            <div class="flex items-center justify-between p-3 border-b border-gray-200 hover:bg-gray-50 transition-colors">
                 <div class="flex items-center gap-3">
                     <span class="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${badge}">${i + 1}</span>
                     <div>
-                        <p class="font-medium text-white">${s.name}</p>
-                        <p class="text-xs text-gray-400">${s.grade} - ${s.section}</p>
+                        <p class="font-medium text-gray-900">${s.name}</p>
+                        <p class="text-xs text-gray-500">${s.grade} - ${s.section}</p>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-yellow-400">${s.count}x</p>
-                    <p class="text-xs text-gray-500">late</p>
+                    <p class="font-bold text-yellow-600">${s.count}x</p>
+                    <p class="text-xs text-gray-400">late</p>
                 </div>
             </div>
         `;
@@ -437,18 +469,18 @@ function renderTopAbsentees(list) {
         const badge = badges[i] || badges[2];
         const risk = s.absentDays >= 3 ? '🔴 High Risk' : s.absentDays >= 2 ? '🟡 Moderate' : '🟢 Low';
         return `
-            <div class="flex items-center justify-between p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
+            <div class="flex items-center justify-between p-3 border-b border-gray-200 hover:bg-gray-50 transition-colors">
                 <div class="flex items-center gap-3">
                     <span class="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${badge}">${i + 1}</span>
                     <div>
-                        <p class="font-medium text-white">${s.name}</p>
-                        <p class="text-xs text-gray-400">${s.grade} - ${s.section}</p>
+                        <p class="font-medium text-gray-900">${s.name}</p>
+                        <p class="text-xs text-gray-500">${s.grade} - ${s.section}</p>
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-red-400">${s.absentDays}x</p>
-                    <p class="text-xs text-gray-500">absent</p>
-                    <p class="text-xs ${s.absentDays >= 3 ? 'text-red-400 font-bold' : 'text-gray-400'}">${risk}</p>
+                    <p class="font-bold text-red-600">${s.absentDays}x</p>
+                    <p class="text-xs text-gray-400">absent</p>
+                    <p class="text-xs ${s.absentDays >= 3 ? 'text-red-600 font-bold' : 'text-gray-500'}">${risk}</p>
                 </div>
             </div>
         `;
@@ -465,13 +497,21 @@ async function loadWeeklyTrend() {
     
     try {
         const weekData = [];
-        const today = new Date();
+        
+        // FIX: Timezone-adjusted date for accurate analytics
+        const localNow = new Date();
+        localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
+        const today = new Date(localNow);
         
         // Get last 7 days
         for (let i = 6; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(today.getDate() - i);
-            const dateStr = d.toISOString().split('T')[0];
+            // Use local date directly without ISO conversion
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
             const dayName = d.toLocaleDateString('en-PH', { weekday: 'short' });
             
             // Query for all "present" statuses: On Time, Present, Excused
@@ -506,7 +546,14 @@ async function loadWeeklyTrend() {
         
         // Render
         const maxVal = Math.max(...weekData.map(d => d.present + d.late + d.absent), 1);
-        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // FIX: Use timezone-adjusted date for today comparison
+        const todayObj = new Date();
+        todayObj.setMinutes(todayObj.getMinutes() - todayObj.getTimezoneOffset());
+        const todayYear = todayObj.getFullYear();
+        const todayMonth = String(todayObj.getMonth() + 1).padStart(2, '0');
+        const todayDay = String(todayObj.getDate()).padStart(2, '0');
+        const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
         
         container.innerHTML = weekData.map(d => {
             const total = d.present + d.late + d.absent;

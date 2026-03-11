@@ -43,8 +43,9 @@
             <a href="clinic-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Daily Logs
             </a>
-            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
+            <a href="clinic-notifications.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all relative">
                 <i data-lucide="bell" class="w-5 h-5"></i> Notifications
+                <span id="notif-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
             </a>
             <a href="clinic-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-red-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
@@ -429,7 +430,10 @@
         }
 
         async function loadStats() {
-            const today = new Date().toISOString().split('T')[0];
+            // FIX: Use local timezone-adjusted date
+            const localDate = new Date();
+            localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+            const today = localDate.toISOString().split('T')[0];
             const stats = await fetchDailyClinicStats(today);
             
             document.getElementById('stats-checkins').innerText = stats.totalCheckIns;

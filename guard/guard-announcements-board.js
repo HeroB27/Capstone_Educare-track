@@ -52,7 +52,7 @@ function setCurrentDate() {
  * Load announcements from database
  */
 async function loadAnnouncements() {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
     
     try {
         const { data: announcements, error } = await supabase
@@ -114,7 +114,7 @@ async function loadAnnouncements() {
  * Render announcements to the list
  */
 function renderAnnouncements(announcements) {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
     
     container.innerHTML = announcements.map(announcement => {
         const date = new Date(announcement.created_at);
@@ -178,7 +178,7 @@ function filterAnnouncements(category) {
  * Load announcements with category filter
  */
 async function loadAnnouncementsFiltered(category) {
-    const container = document.getElementById('announcements-list');
+    const container = document.getElementById('announcements-grid');
     
     try {
         let query = supabase

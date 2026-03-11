@@ -1111,16 +1111,33 @@ function playBuzzer() {
 }
 
 // FIX: Unlock browser audio context so the Beep/Buzzer works on the first scan!
-document.body.addEventListener('click', () => {
-    try {
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-            console.log("Audio Engine Unlocked");
+// Only add listener if document.body exists (i.e., DOM is ready)
+if (document.body) {
+    document.body.addEventListener('click', () => {
+        try {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+                console.log("Audio Engine Unlocked");
+            }
+        } catch (e) {
+            // Ignore errors if audio is already unlocked
         }
-    } catch (e) {
-        // Ignore errors if audio is already unlocked
-    }
-}, { once: true });
+    }, { once: true });
+} else {
+    // If body doesn't exist yet, wait for DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', () => {
+        document.body.addEventListener('click', () => {
+            try {
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                    console.log("Audio Engine Unlocked");
+                }
+            } catch (e) {
+                // Ignore errors if audio is already unlocked
+            }
+        }, { once: true });
+    }, { once: true });
+}
 
 // Stop scanner when page unloads
 window.addEventListener('beforeunload', () => {

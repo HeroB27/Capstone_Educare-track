@@ -1296,10 +1296,30 @@ async function getUnreadNotificationCount() {
             return 0;
         }
         
-        return data.length;
+        return data?.count || 0;
     } catch (err) {
         console.error('Error in getUnreadNotificationCount:', err);
         return 0;
+    }
+}
+
+/**
+ * Load notification badge count
+ */
+async function loadNotificationBadge() {
+    try {
+        const count = await getUnreadNotificationCount();
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    } catch (err) {
+        console.error('Error loading notification badge:', err);
     }
 }
 
@@ -1340,29 +1360,39 @@ async function fetchClinicAnnouncements() {
  */
 async function fetchDailyClinicStats(date) {
     try {
+        // DEBUG: First test - count ALL visits
+        const { data: allVisits, error: allError } = await supabase
+            .from('clinic_visits')
+            .select('id', { count: 'exact' });
+        console.log('[DEBUG] All visits count:', allVisits?.count ?? allVisits?.length);
+        
         // Total check-ins for the day
         const { data: checkIns, error: checkInsError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' })
             .gte('time_in', `${date}T00:00:00`)
             .lt('time_in', `${date}T23:59:59`);
+        console.log('[DEBUG] Check-ins for', date, ':', checkIns?.count ?? checkIns?.length);
         
-        // Still in clinic (active visits for the specific date)
+        // Still in clinic (all active visits - students currently in clinic system)
+        // Count all visits where time_out is NULL (most accurate indicator)
         const { data: active, error: activeError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' })
-            .is('time_out', null)
-            .in('status', ['In Clinic', 'Checked In'])
-            .gte('time_in', `${date}T00:00:00`)
-            .lt('time_in', `${date}T23:59:59`);
+            .is('time_out', null);
+        console.log('[DEBUG] Active (time_out null):', active?.count ?? active?.length);
         
-        // Discharged today
+        // Discharged today - query all visits with time_out set (regardless of status)
+        const dischargedStart = new Date(date);
+        dischargedStart.setDate(dischargedStart.getDate() - 1);
+        const dischargedStartStr = dischargedStart.toISOString().split('T')[0];
         const { data: discharged, error: dischargedError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' })
-            .eq('status', 'Completed')
-            .gte('time_out', `${date}T00:00:00`)
+            .not('time_out', 'is', null)
+            .gte('time_out', `${dischargedStartStr}T00:00:00`)
             .lt('time_out', `${date}T23:59:59`);
+        console.log('[DEBUG] Discharged:', discharged?.count ?? discharged?.length);
         
         if (checkInsError || activeError || dischargedError) {
             console.error('Error fetching clinic stats:', checkInsError || activeError || dischargedError);
@@ -1370,9 +1400,9 @@ async function fetchDailyClinicStats(date) {
         }
         
         return {
-            totalCheckIns: checkIns?.length || 0,
-            stillInClinic: active?.length || 0,
-            dischargedToday: discharged?.length || 0
+            totalCheckIns: (checkIns?.count ?? checkIns?.length) || 0,
+            stillInClinic: (active?.count ?? active?.length) || 0,
+            dischargedToday: (discharged?.count ?? discharged?.length) || 0
         };
     } catch (err) {
         console.error('Error in fetchDailyClinicStats:', err);
@@ -1569,6 +1599,7 @@ function exportToCSV(data, filename) {
 // WINDOW EXPORTS - Make functions globally accessible
 // ============================================================================
 window.fetchVisitsByDateRange = fetchVisitsByDateRange;
+window.fetchDailyClinicStats = fetchDailyClinicStats;
 window.formatDate = formatDate;
 window.formatTime = formatTime;
 window.calculateDuration = calculateDuration;

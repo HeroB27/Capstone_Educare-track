@@ -6,7 +6,10 @@ let searchTimeout;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (currentUser) {
-        document.getElementById('filter-date').value = new Date().toISOString().split('T')[0];
+        // FIX: Use local timezone-adjusted date
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        document.getElementById('filter-date').value = localDate.toISOString().split('T')[0];
         const activeVisitId = sessionStorage.getItem('activeVisitId');
         
         if (activeVisitId) {
@@ -24,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 /**
  * Update the stats cards on the dashboard
  * - Today's Visits: All visits for today
- * - Active in Clinic: Status = 'In Clinic'
+ * - Active in Clinic: time_out is NULL (currently in clinic, regardless of admission date)
  * - Discharged: Status = 'Completed' with action_taken = 'Returned to Class'
  * - Sent Home: Status = 'Completed' with action_taken = 'Sent Home'
  */
@@ -34,32 +37,45 @@ async function updateStatsCards() {
     localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
     const today = localDate.toISOString().split('T')[0];
     
-    // Fetch all visits for today
-    const todayVisits = await fetchVisitsByDateRange(today, today);
+    // Fetch all visits for today (with wider range for timezone)
+    const prevDay = new Date(localDate);
+    prevDay.setDate(prevDay.getDate() - 1);
+    const prevDayStr = prevDay.toISOString().split('T')[0];
     
-    // Today's Visits - all visits today
-    const todayCount = todayVisits.length;
+    const todayVisits = await fetchVisitsByDateRange(prevDayStr, today);
     
-    // Active in Clinic - currently in clinic (status = 'In Clinic')
-    const activeCount = todayVisits.filter(v => v.status === 'In Clinic').length;
+    // Today's Visits - filter by time_in date
+    const todayCount = todayVisits.filter(v => {
+        const visitDate = new Date(v.time_in).toISOString().split('T')[0];
+        return visitDate === today;
+    }).length;
     
-    // Discharged - completed and returned to class
-    const dischargedCount = todayVisits.filter(v => 
-        v.status === 'Completed' && 
-        (v.action_taken === 'Returned to Class' || 
-         v.action_taken === 'Returned to Class' ||
-         v.action_taken === 'First Aid Provided' ||
-         v.action_taken === 'Medication Given' ||
-         v.action_taken === 'Observed and Released')
-    ).length;
+    // Active in Clinic - ALL visits where time_out is NULL (regardless of date)
+    const { data: activeVisits, error } = await supabase
+        .from('clinic_visits')
+        .select('id', { count: 'exact' })
+        .is('time_out', null);
+    const activeCount = activeVisits?.count ?? activeVisits?.length ?? 0;
     
-    // Sent Home - completed and sent home
-    const sentHomeCount = todayVisits.filter(v => 
-        v.status === 'Completed' && 
-        (v.action_taken === 'Sent Home' || 
-         v.action_taken === 'Picked up by Parent' ||
-         v.action_taken === 'Sent to Hospital')
-    ).length;
+    // Discharged - query by time_out date (with wider range for timezone)
+    const { data: dischargedData, dischargedError } = await supabase
+        .from('clinic_visits')
+        .select('id', { count: 'exact' })
+        .not('time_out', 'is', null)
+        .in('action_taken', ['Returned to Class', 'First Aid Provided', 'Medication Given', 'Observed and Released'])
+        .gte('time_out', `${prevDayStr}T00:00:00`)
+        .lt('time_out', `${today}T23:59:59`);
+    const dischargedCount = dischargedData?.count ?? dischargedData?.length ?? 0;
+    
+    // Sent Home - query by time_out date (with wider range for timezone)
+    const { data: sentHomeData, sentHomeError } = await supabase
+        .from('clinic_visits')
+        .select('id', { count: 'exact' })
+        .not('time_out', 'is', null)
+        .in('action_taken', ['Sent Home', 'Picked up by Parent', 'Sent to Hospital'])
+        .gte('time_out', `${prevDayStr}T00:00:00`)
+        .lt('time_out', `${today}T23:59:59`);
+    const sentHomeCount = sentHomeData?.count ?? sentHomeData?.length ?? 0;
     
     // Update DOM
     document.getElementById('stat-today').textContent = todayCount;
@@ -134,8 +150,10 @@ async function selectStudentForHistory(studentId, studentName) {
 
 async function loadAllVisits() {
     console.log('[DEBUG] loadAllVisits called - showing today\'s visits');
-    // Set the date filter to today
-    const today = new Date().toISOString().split('T')[0];
+    // Set the date filter to today - FIX: Use local timezone-adjusted date
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
     document.getElementById('filter-date').value = today;
     
     currentVisitHistory = await fetchVisitsByDateRange(today, today);
@@ -314,7 +332,7 @@ function exportRecords() {
         Status: visit.status || 'Completed'
     }));
     
-    exportToCSV(exportData, `clinic_visit_records_${new Date().toISOString().split('T')[0]}`);
+    exportToCSV(exportData, `clinic_visit_records_${(new Date().toISOString().split('T')[0])}`);
 }
 
 function escapeHtml(text) {

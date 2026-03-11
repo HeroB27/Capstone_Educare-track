@@ -259,7 +259,13 @@
 
         // Load today's statistics
         async function loadTodayStats() {
-            const today = new Date().toISOString().split('T')[0];
+            // FIX: Timezone-adjusted date
+            const localNow = new Date();
+            localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
+            const year = localNow.getFullYear();
+            const month = String(localNow.getMonth() + 1).padStart(2, '0');
+            const day = String(localNow.getDate()).padStart(2, '0');
+            const today = `${year}-${month}-${day}`;
             
             try {
                 const { data: logs, error } = await supabase
@@ -308,7 +314,13 @@
 
         // Load recent activity with terminal styling
         async function loadRecentActivity() {
-            const today = new Date().toISOString().split('T')[0];
+            // FIX: Timezone-adjusted date
+            const localNow = new Date();
+            localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
+            const year = localNow.getFullYear();
+            const month = String(localNow.getMonth() + 1).padStart(2, '0');
+            const day = String(localNow.getDate()).padStart(2, '0');
+            const today = `${year}-${month}-${day}`;
             const activityContainer = document.getElementById('recent-activity');
             
             try {
