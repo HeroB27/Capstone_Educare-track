@@ -9,16 +9,7 @@ if (!currentUser) {
     window.location.href = '../index.html';
 }
 
-// Show notification function (if not available from core)
-function showNotification(message, type = 'info') {
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, type);
-    } else {
-        alert(message);
-    }
-}
-
-// Global State for Subject Cards
+// Global State for Subject Cards - DECLARED FIRST to prevent TDZ
 let currentSubjectLoadId = null;
 let currentSubjectName = null;
 
@@ -158,7 +149,14 @@ window.selectSubjectCard = function(subjectId, subjectName) {
         activeCard.classList.add('border-blue-500', 'ring-4', 'ring-blue-500/20');
     }
 
-    // Load the students for this subject
+    // FORCE UI TOGGLE: Hide Empty State, Show Table
+    const emptyState = document.getElementById('empty-state');
+    const studentListContainer = document.getElementById('subject-student-list');
+    
+    if (emptyState) emptyState.classList.add('hidden');
+    if (studentListContainer) studentListContainer.classList.remove('hidden');
+
+    // Load the students
     loadSubjectStudents(subjectId);
 }
 
@@ -203,8 +201,8 @@ async function loadSubjectStudents(subjectLoadId) {
         
         if (!subjectLoad) return;
         
-        // Use the subject name from the database
-        const currentSubjectName = subjectLoad.subject_name || subjectName;
+        // Use the subject name from the database - use different variable name to avoid TDZ
+        const dbSubjectName = subjectLoad.subject_name || subjectName;
         
         // UPDATED: Use selected date for status lookup - Phase 2 Task 2.2
         const lookupDate = selectedDate;
@@ -304,7 +302,10 @@ async function loadSubjectStudents(subjectLoadId) {
                                     <img src="${student.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                                 </div>
                                 <div>
+                                <div class="flex items-center gap-2">
                                     <p class="font-bold text-gray-800">${student.full_name}</p>
+                                    <button onclick="viewSubjectStudentDetails('${student.id}', '${escapeHtml(student.full_name)}', '${student.profile_photo_url || ''}', '${student.student_id_text || ''}')" class="text-blue-400 hover:text-blue-600 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg p-1.5" title="View Subject Stats"><i data-lucide="eye" class="w-3 h-3"></i></button>
+                                </div>
                                     <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'No ID'}</p>
                                 </div>
                             </div>
@@ -393,6 +394,38 @@ function getStatusBadge(status) {
 }
 
 /**
+ * View Subject Student Details - Privacy Restricted Modal
+ */
+window.viewSubjectStudentDetails = async function(studentId, name, photo, idText) {
+    document.getElementById('subject-student-modal').classList.remove('hidden');
+    document.getElementById('sub-modal-name').innerText = name;
+    document.getElementById('sub-modal-id').innerText = idText || 'N/A';
+    document.getElementById('sub-modal-img').innerHTML = `<img src="${photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover">`;
+    document.getElementById('sub-modal-rate').innerText = '...';
+    
+    if (window.lucide) lucide.createIcons();
+
+    try {
+        // Look up only this subject's records within the JSONB remarks column
+        const { data } = await supabase.from('attendance_logs').select('remarks').eq('student_id', studentId).not('remarks', 'is', null);
+        let present = 0, total = 0;
+        if (data) {
+            data.forEach(log => {
+                if (log.remarks && log.remarks[currentSubjectName]) {
+                    total++;
+                    if (['Present', 'Late'].includes(log.remarks[currentSubjectName])) present++;
+                }
+            });
+        }
+        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+        document.getElementById('sub-modal-rate').innerText = total > 0 ? `${rate}%` : 'N/A';
+    } catch (e) {
+        document.getElementById('sub-modal-rate').innerText = 'Err';
+    }
+}
+window.closeSubjectModal = () => document.getElementById('subject-student-modal').classList.add('hidden');
+
+/**
  * Mark Subject Attendance with Status Protection
  * PROTECTS: Late and Excused statuses from being overwritten
  * PRESERVES: Gate time_in data when updating
@@ -479,6 +512,33 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
                 studentId, 'student');
         }
 
+        // INSTANT UI UPDATE: Immediately update button styles before reload
+        const statusConfig = {
+            'Present': { bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-300' },
+            'Late': { bg: 'bg-amber-500', text: 'text-white', ring: 'ring-amber-300' },
+            'Absent': { bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-300' },
+            'Excused': { bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-300' }
+        };
+        
+        const config = statusConfig[newStatus] || statusConfig['Present'];
+        buttons.forEach(btn => {
+            // Reset all buttons to inactive state
+            btn.className = `px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-gray-100 text-gray-500`;
+            // Add hover effect
+            btn.classList.add(newStatus === 'Present' ? 'hover:bg-emerald-100 hover:text-emerald-700' : 
+                             newStatus === 'Late' ? 'hover:bg-amber-100 hover:text-amber-700' :
+                             newStatus === 'Absent' ? 'hover:bg-red-100 hover:text-red-700' :
+                             'hover:bg-blue-100 hover:text-blue-700');
+            // Make the selected button active
+            if (btn.textContent.trim() === newStatus || 
+                (newStatus === 'Present' && btn.textContent.trim() === 'PRESENT') ||
+                (newStatus === 'Late' && btn.textContent.trim() === 'LATE') ||
+                (newStatus === 'Absent' && btn.textContent.trim() === 'ABSENT') ||
+                (newStatus === 'Excused' && btn.textContent.trim() === 'EXCUSED')) {
+                btn.className = `px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${config.bg} ${config.text} shadow-md ring-2 ${config.ring} ring-offset-1`;
+            }
+        });
+        
         showNotification(`Student marked as ${newStatus}`, 'success');
         
         // Refresh the list (unless bulk processing)

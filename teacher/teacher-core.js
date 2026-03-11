@@ -169,17 +169,19 @@ function renderScheduleOnDashboard() {
     }
 
     container.innerHTML = mySubjectLoads.map(load => `
-        <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group mb-4 flex justify-between items-center">
+        <div onclick="navigateToAttendance('${load.id}')" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-blue-400 hover:shadow-md hover:shadow-blue-100 transition-all group mb-4 flex justify-between items-center cursor-pointer">
             <div>
-                <h4 class="font-bold text-gray-800 text-lg leading-tight">${load.subject_name || 'Unknown Subject'}</h4>
-                <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">${load.classes?.grade_level || 'Unknown Grade'} - ${load.classes?.section_name || 'No Section'}</p>
-                <div class="flex items-center gap-2 mt-3 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    <i data-lucide="clock" class="w-3 h-3"></i>
-                    ${load.schedule_time_start?.substring(0, 5) || ''} - ${load.schedule_time_end?.substring(0, 5) || ''}
+                <h4 class="font-black text-gray-800 text-lg leading-tight group-hover:text-blue-600 transition-colors">${load.subject_name || 'Unknown Subject'}</h4>
+                <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">
+                    ${load.classes?.grade_level || 'Unknown Grade'} - ${load.classes?.section_name || 'No Section'}
+                </p>
+                <div class="flex items-center gap-2 mt-3 text-emerald-500 text-[10px] font-black uppercase tracking-widest">
+                    <i data-lucide="check-circle-2" class="w-3 h-3"></i>
+                    ASYNCHRONOUS CLASS (OPEN ALL DAY)
                 </div>
             </div>
-            <button onclick="navigateToAttendance('${load.id}')" class="px-5 py-2.5 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm hover:shadow-blue-200">
-                Take Attendance
+            <button class="px-5 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                Open Checker
             </button>
         </div>
     `).join('');
@@ -188,11 +190,14 @@ function renderScheduleOnDashboard() {
 }
 
 // 3g. Navigate to Subject Attendance page with selected subject
-function navigateToAttendance(subjectLoadId) {
-    // Store selected subject for attendance page
+// Global navigation function for dashboard cards
+window.navigateToAttendance = function(subjectLoadId) {
+    if (!subjectLoadId) return;
+    // Save the ID to session storage so the next page knows what to auto-load
     sessionStorage.setItem('selectedSubjectLoadId', subjectLoadId);
+    // Jump to the checklist
     window.location.href = 'teacher-subject-attendance.html';
-}
+};
 
 // 4. Page Initialization Router
 async function initTeacherPage() {
@@ -368,6 +373,7 @@ window.loadHomeroomStudents = async function() {
 
             const row = document.createElement('tr');
             row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
+            row.setAttribute('data-student-id', student.id);
             row.innerHTML = `
                 <td class="px-6 py-4 text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${student.student_id_text}</td>
                 <td class="px-6 py-4 font-bold text-gray-800 text-sm">${student.full_name}</td>
@@ -444,6 +450,29 @@ async function markAttendance(studentId, status) {
             return;
         }
 
+        // INSTANT UI UPDATE: Immediately update status display before reload
+        const statusBadgeMap = {
+            'On Time': { bg: 'bg-green-100', text: 'text-green-700' },
+            'Late': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+            'Absent': { bg: 'bg-red-100', text: 'text-red-700' },
+            'Excused': { bg: 'bg-blue-100', text: 'text-blue-700' }
+        };
+        const badgeConfig = statusBadgeMap[displayStatus] || statusBadgeMap['On Time'];
+        
+        // Find and update the status cell for this student
+        const studentRow = document.querySelector(`tr[data-student-id="${studentId}"]`);
+        if (studentRow) {
+            const statusCell = studentRow.querySelector('td:nth-child(5)');
+            if (statusCell) {
+                statusCell.innerHTML = `<span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${badgeConfig.bg} ${badgeConfig.text}">${displayStatus}</span>`;
+            }
+            // Reset the select dropdown
+            const selectCell = studentRow.querySelector('td:nth-child(6) select');
+            if (selectCell) {
+                selectCell.value = '';
+            }
+        }
+        
         // If this was an update, notify the parent of the correction
         if (existingLog) {
             const { data: student } = await supabase.from('students').select('parent_id, full_name').eq('id', studentId).single();
@@ -801,16 +830,24 @@ async function loadClinicStats() {
 }
 
 // 12. Issue Clinic Pass
-// UPDATED: Now validates teacher has authority over student before issuing pass
+// ENTERPRISE VERSION: With Adviser Loop and Parent Notifications
 async function issueClinicPass() {
-    const studentId = document.getElementById('clinic-student-select').value;
-    const reason = document.getElementById('clinic-reason').value.trim();
-    
+    const studentSelect = document.getElementById('clinic-student-select');
+    const reasonInput = document.getElementById('clinic-reason');
+    const notifyParent = document.getElementById('send-notification')?.checked;
+
+    const studentId = studentSelect?.value;
+    const reason = reasonInput?.value?.trim();
+    const studentName = studentSelect?.options[studentSelect.selectedIndex]?.text;
+
     if (!studentId || !reason) {
-        showNotification('Please select a student and enter a reason.', "error");
-        return;
+        return showNotification('Please select a student and enter a reason.', "error");
     }
-    
+
+    const btn = document.querySelector('button[onclick="issueClinicPass()"]');
+    const origText = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Issuing...'; btn.disabled = true; }
+
     try {
         // ===========================================================
         // SECURITY FIX: Validate teacher has authority over this student
@@ -827,7 +864,7 @@ async function issueClinicPass() {
             .from('clinic_visits')
             .select('id, status')
             .eq('student_id', studentId)
-            .in('status', ['Pending', 'Approved', 'Checked In'])
+            .in('status', ['Pending', 'Approved', 'Checked In', 'In Clinic'])
             .is('time_out', null)
             .single();
         
@@ -836,10 +873,10 @@ async function issueClinicPass() {
             return;
         }
         
-        // Get student name for notification
+        // Get student data (including parent_id and class info for adviser lookup)
         const { data: student } = await supabase
             .from('students')
-            .select('full_name')
+            .select('full_name, parent_id, class_id, classes(adviser_id)')
             .eq('id', studentId)
             .single();
         
@@ -850,7 +887,8 @@ async function issueClinicPass() {
                 student_id: studentId,
                 referred_by_teacher_id: currentUser.id,
                 reason: reason,
-                status: 'Pending'
+                status: 'In Clinic',
+                time_in: new Date().toISOString()
             })
             .select()
             .single();
@@ -859,33 +897,83 @@ async function issueClinicPass() {
             showNotification('Error issuing clinic pass: ' + visitError.message, "error");
             return;
         }
-        
-        // Fetch ALL clinic staff and notify each individually
+
+        const notifications = [];
+
+        // ==========================================
+        // 1. Notify Clinic Staff
+        // ==========================================
         const { data: clinicStaff } = await supabase
             .from('clinic_staff')
             .select('id, full_name');
         
         if (clinicStaff && clinicStaff.length > 0) {
-            const notifications = clinicStaff.map(staff => ({
-                recipient_id: staff.id,
-                recipient_role: 'clinic_staff',
-                title: 'New Clinic Referral',
-                message: `${student?.full_name || 'A student'} has been referred to the clinic. Reason: ${reason}`,
-                type: 'clinic_referral',
-                is_read: false
-            }));
-            
-            await supabase.from('notifications').insert(notifications);
+            clinicStaff.forEach(staff => {
+                notifications.push({
+                    recipient_id: staff.id,
+                    recipient_role: 'clinic_staff',
+                    title: 'New Clinic Referral',
+                    message: `${student?.full_name || 'A student'} has been referred to the clinic. Reason: ${reason}`,
+                    type: 'clinic_referral',
+                    is_read: false
+                });
+            });
         }
         
-        showNotification('Clinic pass issued successfully! Nurse has been notified.', "success");
-        document.getElementById('clinic-reason').value = '';
+        // ==========================================
+        // 2. Notify Parent (If checked)
+        // ==========================================
+        if (notifyParent && student?.parent_id) {
+            notifications.push({
+                recipient_role: 'parents',
+                recipient_id: student.parent_id,
+                title: 'Clinic Pass Issued',
+                message: `${student?.full_name || 'Your child'} was sent to the clinic. Reason: ${reason}`,
+                type: 'clinic_alert',
+                is_read: false
+            });
+        }
+
+        // ==========================================
+        // 3. Notify Homeroom Adviser (If Issuer is NOT the Adviser)
+        // ==========================================
+        if (student?.classes?.adviser_id && student.classes.adviser_id !== currentUser.id) {
+            notifications.push({
+                recipient_role: 'teachers',
+                recipient_id: student.classes.adviser_id,
+                title: 'Advisory Student in Clinic',
+                message: `${student?.full_name || 'A student'} was sent to the clinic by ${currentUser.full_name || 'a teacher'}. Reason: ${reason}`,
+                type: 'clinic_alert',
+                is_read: false
+            });
+        }
+
+        // Fire all notifications simultaneously
+        if (notifications.length > 0) {
+            await supabase.from('notifications').insert(notifications);
+        }
+
+        // Show Success
+        showNotification('Clinic pass issued successfully! Relevant parties have been notified.', "success");
+        
+        // Reset Form
+        if (studentSelect) studentSelect.value = '';
+        if (reasonInput) reasonInput.value = '';
+        const searchInput = document.getElementById('clinic-student-search');
+        if (searchInput) searchInput.value = '';
+        const clearBtn = document.getElementById('clear-search-btn');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        
+        // Reload lists
         await loadRecentClinicPasses();
         await loadClinicStats();
         
     } catch (err) {
         console.error('Error issuing clinic pass:', err);
         showNotification('Error issuing clinic pass. Please try again.', "error");
+    } finally {
+        if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+        if (window.lucide) lucide.createIcons();
     }
 }
 
@@ -1352,7 +1440,7 @@ document.addEventListener('keydown', function(e) {
 
 // 16. Approve Excuse Letter
 async function approveExcuseLetter(letterId, studentId, dateAbsent) {
-    // UPDATED: Use confirmation modal to allow for optional remarks
+    // UPDATED: Use confirmation modal to allow for optional remarks + Enterprise notifications
     showConfirmationModal(
         'Approve Excuse Letter',
         `<div class="text-left space-y-4 p-2">
@@ -1365,11 +1453,15 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
         async () => {
             const remarks = document.getElementById('approve-remarks')?.value.trim();
             try {
+                // Get student name first
+                const { data: student } = await supabase.from('students').select('full_name, parent_id').eq('id', studentId).single();
+                const studentName = student?.full_name || 'Student';
+
                 await supabase
                     .from('excuse_letters')
                     .update({ 
                         status: 'Approved',
-                        teacher_remarks: remarks || null // Add remarks if provided
+                        teacher_remarks: remarks || null
                     })
                     .eq('id', letterId);
                 
@@ -1389,7 +1481,28 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
                     logTeacherAction('EXCUSE_LETTER_APPROVE', { teacher_remarks: remarks }, letterId, 'excuse_letter');
                 }
 
-                showNotification('Excuse letter approved and attendance marked as Excused.', "success");
+                // ==========================================
+                // ENTERPRISE: Notify Subject Teachers (Phase 2)
+                // ==========================================
+                if (typeof notifySubjectTeachersOfExcuse === 'function') {
+                    await notifySubjectTeachersOfExcuse(studentId, dateAbsent, studentName);
+                }
+
+                // ==========================================
+                // ENTERPRISE: Notify Parent
+                // ==========================================
+                if (student?.parent_id) {
+                    await supabase.from('notifications').insert({
+                        recipient_role: 'parents',
+                        recipient_id: student.parent_id,
+                        title: 'Excuse Letter Approved',
+                        message: `Your excuse letter for ${studentName} on ${dateAbsent} has been approved by the adviser.`,
+                        type: 'attendance_alert',
+                        is_read: false
+                    });
+                }
+
+                showNotification('Excuse letter approved and Subject Teachers notified!', "success");
                 await loadExcuseLetters();
                 
             } catch (err) {
@@ -1671,7 +1784,22 @@ async function loadAttendancePieChart() {
             else if (log.status === 'Excused') excused++;
         });
         
-        window.pieChart = new Chart(ctx, {
+        // FIX: Destroy existing chart before creating new one using Chart.js built-in method
+        const pieCanvas = document.getElementById('attendancePieChart');
+        if (pieCanvas) {
+            // Use Chart.js built-in method to get existing chart
+            const existingPieChart = Chart.getChart(pieCanvas);
+            if (existingPieChart) {
+                existingPieChart.destroy();
+            }
+        }
+        if (window.pieChart) {
+            window.pieChart.destroy();
+            window.pieChart = null;
+        }
+        
+        const pieCtx = pieCanvas.getContext('2d');
+        window.pieChart = new Chart(pieCtx, {
             type: 'pie',
             data: {
                 labels: ['Present', 'Absent', 'Late', 'Excused'],
@@ -1740,7 +1868,22 @@ async function loadMonthlyBarChart() {
             absentData.push(absent);
         }
         
-        window.barChart = new Chart(ctx, {
+        // FIX: Destroy existing chart before creating new one using Chart.js built-in method
+        const barCanvas = document.getElementById('monthlyBarChart');
+        if (barCanvas) {
+            // Use Chart.js built-in method to get existing chart
+            const existingBarChart = Chart.getChart(barCanvas);
+            if (existingBarChart) {
+                existingBarChart.destroy();
+            }
+        }
+        if (window.barChart) {
+            window.barChart.destroy();
+            window.barChart = null;
+        }
+        
+        const barCtx = barCanvas.getContext('2d');
+        window.barChart = new Chart(barCtx, {
             type: 'bar',
             data: {
                 labels: dates,
@@ -2792,4 +2935,37 @@ async function getStudentMedicalInfo(studentId) {
         return null;
     }
 }
+
+// ==========================================
+// ENTERPRISE COMMUNICATION LOOP
+// ==========================================
+window.notifySubjectTeachersOfExcuse = async function(studentId, dateAbsent, studentName) {
+    try {
+        // 1. Get student's class
+        const { data: student } = await supabase.from('students').select('class_id').eq('id', studentId).single();
+        if (!student) return;
+        
+        // 2. Find all subject teachers for this specific class
+        const { data: subjects } = await supabase.from('subject_loads').select('teacher_id').eq('class_id', student.class_id);
+        if (!subjects || subjects.length === 0) return;
+        
+        // Remove duplicates if a teacher teaches multiple subjects to the same class
+        const uniqueTeacherIds = [...new Set(subjects.map(s => s.teacher_id))];
+        
+        // 3. Blast Notifications
+        const notifications = uniqueTeacherIds.map(tid => ({
+            recipient_role: 'teachers',
+            recipient_id: tid,
+            title: 'Excused Absence Verified',
+            message: `Homeroom Adviser verified an excused absence for ${studentName} on ${dateAbsent}.`,
+            type: 'attendance_alert',
+            is_read: false
+        }));
+        
+        await supabase.from('notifications').insert(notifications);
+        console.log("Subject teachers successfully notified.");
+    } catch (e) {
+        console.error("Failed to notify subject teachers:", e);
+    }
+};
 }

@@ -35,43 +35,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadHomeroomStudents();
 });
 
-// Set up real-time subscription for attendance changes
+// ==========================================
+// REAL-TIME HOMEROOM ENGINE
+// ==========================================
 function setupRealTimeSubscription() {
-    if (!supabase) return;
+    if (attendanceSubscription) {
+        supabase.removeChannel(attendanceSubscription);
+    }
     
-    // FIX: Listen to the correct local date
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const today = localDate.toISOString().split('T')[0];
-
-    attendanceSubscription = supabase
-        .channel('attendance-changes')
-        .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'attendance_logs',
-            filter: `log_date=eq.${today}`
-        }, (payload) => {
-            // THE PARANOIA SHIELD: Debounced Refresh
-            // Check if the affected student is in our homeroom class
+    attendanceSubscription = supabase.channel('homeroom-realtime-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, (payload) => {
+            // Only trigger if the changed record belongs to a student currently in our homeroom list
             if (payload.new && myHomeroomStudentIds.includes(payload.new.student_id)) {
-                // Clear the old timer
+                
+                // THE PARANOIA SHIELD: Debounce the reload to prevent screen flickering
                 clearTimeout(refreshTimeout);
-                // Set a new timer. It only fires after 1.5 seconds of silence!
                 refreshTimeout = setTimeout(() => {
-                    loadHomeroomStudents();
-                }, 1500);
+                    // Show a tiny non-intrusive toast so the teacher knows the data is fresh
+                    if (typeof showNotification === 'function') {
+                        showNotification('Live gate scan received. Updating list...', 'info');
+                    }
+                    loadHomeroomStudents(); // Silently redraws the table
+                }, 1000); // Wait 1 second after the last scan before redrawing
             }
         })
         .subscribe();
-    addSubscription(attendanceSubscription); // Register for cleanup
-    
-    // Cleanup on page unload to prevent memory leaks
-    window.addEventListener('beforeunload', () => {
-        // The cleanupAllSubscriptions function is more robust for SPA-like navigation.
-        cleanupAllSubscriptions();
-        clearTimeout(refreshTimeout);
-    });
 }
 
 // Debounce timer for search
@@ -204,10 +192,10 @@ async function preFetchTodayData() {
     
     if (studentIds.length === 0) return;
     
-    // Fetch today's attendance
+    // Fetch today's attendance (FIXED: Removed invalid 'source' column)
     const { data: attendance } = await supabase
         .from('attendance_logs')
-        .select('id, student_id, status, time_in, source') // FIXED: Added 'id'
+        .select('id, student_id, status, time_in')
         .eq('log_date', today)
         .in('student_id', studentIds);
     
@@ -311,7 +299,10 @@ function renderStudents() {
                             <img src="${student.profile_photo_url ? student.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" alt="Photo" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
                         </div>
                         <div>
-                            <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
+                                ${student.total_absences >= 10 ? `<span title="DepEd Warning: 10+ Absences" class="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-600 animate-pulse"><i data-lucide="alert-triangle" class="w-3 h-3"></i></span>` : ''}
+                            </div>
                             <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'N/A'}</p>
                         </div>
                     </div>
@@ -426,13 +417,131 @@ async function viewStudentDetails(studentId) {
     const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
     
     const status = latestRecord?.status || 'No Record';
-    const timeIn = latestRecord?.time_in || '--:--';
+    const timeIn = latestRecord?.time_in ? new Date(latestRecord.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--:--';
     
-    // Update modal content
-    document.getElementById('modal-student-name').textContent = student.full_name;
-    document.getElementById('modal-student-id').textContent = 'ID: ' + (student.student_id_text || student.id);
-    document.getElementById('modal-student-status').textContent = status;
-    document.getElementById('modal-student-timein').textContent = timeIn;
+    // Calculate attendance rate (last 30 days)
+    let attendanceRate = '--';
+    let rateLabel = '--';
+    let rateColor = 'bg-gray-200 text-gray-600';
+    
+    try {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        
+        const { data: attendanceLogs, error } = await supabase
+            .from('attendance_logs')
+            .select('status, log_date')
+            .eq('student_id', studentId)
+            .gte('log_date', startDate)
+            .order('log_date', { ascending: false });
+        
+        if (!error && attendanceLogs && attendanceLogs.length > 0) {
+            const totalDays = attendanceLogs.length;
+            const presentDays = attendanceLogs.filter(log => 
+                log.status === 'On Time' || 
+                log.status === 'Present' || 
+                log.status === 'Late'
+            ).length;
+            
+            const rate = Math.round((presentDays / totalDays) * 100);
+            attendanceRate = rate + '%';
+            
+            // Set badge based on rate
+            if (rate >= 90) {
+                rateLabel = 'Excellent';
+                rateColor = 'bg-green-100 text-green-700';
+            } else if (rate >= 75) {
+                rateLabel = 'Good';
+                rateColor = 'bg-blue-100 text-blue-700';
+            } else if (rate >= 60) {
+                rateLabel = 'Needs Improvement';
+                rateColor = 'bg-yellow-100 text-yellow-700';
+            } else {
+                rateLabel = 'Critical';
+                rateColor = 'bg-red-100 text-red-700';
+            }
+        } else {
+            attendanceRate = 'No Data';
+        }
+    } catch (err) {
+        console.error('Error calculating attendance rate:', err);
+        attendanceRate = 'Error';
+    }
+    
+    // Update modal content - Enterprise CRM Modal
+    document.getElementById('modal-full-name').textContent = student.full_name;
+    document.getElementById('modal-student-id').textContent = student.student_id_text || 'EDU-' + student.id.slice(0, 4);
+    
+    // Update profile image
+    const profileImg = document.getElementById('modal-profile-img');
+    const imgUrl = student.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`;
+    profileImg.innerHTML = `<img src="${imgUrl}" alt="Photo" class="w-full h-full object-cover rounded-xl">`;
+    
+    // Contact info (using placeholder data - would need parent_contact field in DB)
+    document.getElementById('modal-parent-contact').textContent = student.parent_contact || '09XX-XXX-XXXX';
+    document.getElementById('modal-address').textContent = student.address || 'N/A';
+    
+    // Update attendance metrics
+    document.getElementById('modal-attendance-rate').textContent = attendanceRate;
+    
+    // Update rate badge styling
+    const rateBadgeEl = document.getElementById('modal-rate-badge');
+    if (rateBadgeEl) {
+        rateBadgeEl.className = `inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${rateColor}`;
+    }
+    
+    // Calculate total absences and lates from actual DB data
+    let totalAbsences = 0;
+    let totalLates = 0;
+    
+    try {
+        // Fetch all attendance logs for this student (last 30 days)
+        const { data: allLogs } = await supabase
+            .from('attendance_logs')
+            .select('status, log_date')
+            .eq('student_id', studentId)
+            .gte('log_date', startDate)
+            .order('log_date', { ascending: false });
+        
+        if (allLogs && allLogs.length > 0) {
+            totalAbsences = allLogs.filter(log => log.status === 'Absent').length;
+            totalLates = allLogs.filter(log => log.status === 'Late').length;
+        }
+    } catch (err) {
+        console.error('Error fetching attendance history:', err);
+        totalAbsences = 0;
+        totalLates = 0;
+    }
+    
+    document.getElementById('modal-total-absences').textContent = totalAbsences;
+    document.getElementById('modal-total-lates').textContent = totalLates;
+    
+    // Show/hide DepEd warning
+    const depedWarning = document.getElementById('modal-deped-warning');
+    if (totalAbsences >= 10) {
+        depedWarning.classList.remove('hidden');
+    } else {
+        depedWarning.classList.add('hidden');
+    }
+    
+    // Show gate history (from today's records)
+    const gateHistory = document.getElementById('modal-gate-history');
+    if (records && records.length > 0) {
+        gateHistory.innerHTML = records.slice(0, 5).map(record => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg ${record.status === 'On Time' ? 'bg-emerald-100' : record.status === 'Late' ? 'bg-amber-100' : 'bg-gray-100'}">
+                        <i data-lucide="${record.status === 'On Time' ? 'check-circle' : record.status === 'Late' ? 'clock' : 'x-circle'}" class="w-4 h-4 ${record.status === 'On Time' ? 'text-emerald-600' : record.status === 'Late' ? 'text-amber-600' : 'text-gray-600'} mx-auto mt-2"></i>
+                    </div>
+                    <span class="font-medium text-gray-700">${record.status}</span>
+                </div>
+                <span class="text-sm text-gray-500">${record.time_in ? new Date(record.time_in).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : 'N/A'}</span>
+            </div>
+        `).join('');
+    } else {
+        gateHistory.innerHTML = '<p class="text-gray-500 text-sm">No gate scans recorded today</p>';
+    }
     
     // Show modal
     const modal = document.getElementById('student-details-modal');
@@ -494,10 +603,17 @@ function escapeHtml(text) {
 // =============================================================================
 // HOMEROOM MANUAL VERIFICATION (OVERRIDE GATE STATUS)
 // =============================================================================
-async function verifyStudentAttendance(studentId, newStatus, skipReload = false) {
+// FIXED: Using UPSERT to completely prevent 409 Duplicate Conflicts
+// UPDATED: Added event parameter and forced table reload for UI sync
+async function verifyStudentAttendance(studentId, newStatus, skipReload = false, event = null) {
     if (!newStatus) return;
     
-    // Get local date safely
+    // Add loading spinner to the clicked button to show it's working
+    if (event && event.currentTarget) {
+        const originalText = event.currentTarget.innerHTML;
+        event.currentTarget.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin mx-auto"></i>';
+    }
+
     const localDate = new Date();
     localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
     const todayStr = localDate.toISOString().split('T')[0];
@@ -506,42 +622,26 @@ async function verifyStudentAttendance(studentId, newStatus, skipReload = false)
         const records = todayAttendance[studentId] || [];
         const latestRecord = records.length > 0 ? records[records.length - 1] : null;
 
-        if (latestRecord && latestRecord.id) {
-            // Student has a gate scan or previous record -> OVERRIDE IT
-            const { error } = await supabase
-                .from('attendance_logs')
-                .update({ status: newStatus })
-                .eq('id', latestRecord.id);
-            if (error) throw error;
-        } else {
-            // Student never scanned the gate -> CREATE NEW RECORD
-            // RETROACTIVE TIME-IN PROTECTION: Generate 8:00 AM for the selected date, NOT current time
-            let fallbackTimeIn = null;
-            if (newStatus === 'On Time' || newStatus === 'Late') {
-                fallbackTimeIn = new Date(`${todayStr}T08:00:00`).toISOString();
-            }
-            
-            const payload = {
-                student_id: studentId,
-                log_date: todayStr,
-                status: newStatus,
-                time_in: fallbackTimeIn
-            };
-            const { error } = await supabase.from('attendance_logs').insert([payload]);
-            if (error) throw error;
+        let fallbackTimeIn = null;
+        if (newStatus !== 'Absent' && newStatus !== 'Excused') {
+            fallbackTimeIn = new Date(`${todayStr}T08:00:00`).toISOString();
         }
 
-        // We do not need to call loadHomeroomStudents() manually because 
-        // setupRealTimeSubscription() is listening! The UI will auto-refresh.
-        if (!skipReload && typeof showNotification === 'function') {
-            showNotification(`Student marked as ${newStatus}`, 'success');
+        const { error } = await supabase.from('attendance_logs').upsert({
+            student_id: studentId, log_date: todayStr, status: newStatus, time_in: latestRecord?.time_in || fallbackTimeIn
+        }, { onConflict: 'student_id, log_date' });
+
+        if (error) throw error;
+
+        // FORCE A COMPLETE TABLE REDRAW TO ENSURE UI MATCHES DB
+        if (!skipReload) {
+            await loadHomeroomStudents(); 
+            if (typeof showNotification === 'function') showNotification(`Marked as ${newStatus}`, 'success');
         }
 
     } catch (err) {
-        console.error('Error verifying attendance:', err);
-        if (!skipReload && typeof showNotification === 'function') {
-            showNotification('Error updating attendance. Please try again.', 'error');
-        }
+        console.error('Error:', err);
+        if (!skipReload && typeof showNotification === 'function') showNotification('Error updating attendance.', 'error');
     }
 }
 
@@ -569,5 +669,40 @@ async function verifyAllPresent() {
         btn.innerHTML = originalHTML;
         btn.disabled = false;
         if (window.lucide) lucide.createIcons();
+    }
+}
+
+/**
+ * Verify Gate Data - Lock in current gate scans as official attendance
+ */
+async function verifyGateData() {
+    if (!confirm("Verify and lock in all current gate scans as official attendance?")) return;
+    
+    const btn = document.querySelector('button[onclick="verifyGateData()"]');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline-block mr-1 animate-spin"></i> Syncing...';
+    
+    try {
+        const promises = [];
+        // Only verify students who have a gate scan (status exists) but aren't locked yet
+        filteredStudents.forEach(student => {
+            const records = todayAttendance[student.id] || [];
+            const latest = records.length > 0 ? records[records.length - 1] : null;
+            if (latest && (latest.status === 'On Time' || latest.status === 'Late')) {
+                promises.push(verifyStudentAttendance(student.id, latest.status, true));
+            } else if (!latest) {
+                // If no scan, explicitly mark absent as verification
+                promises.push(verifyStudentAttendance(student.id, 'Absent', true));
+            }
+        });
+        
+        await Promise.all(promises);
+        showNotification("Gate data verified and locked.", "success");
+        await loadHomeroomStudents();
+    } catch (e) {
+        showNotification("Error syncing data.", "error");
+    } finally {
+        btn.innerHTML = origHTML;
+        if(window.lucide) lucide.createIcons();
     }
 }

@@ -36,13 +36,16 @@
             <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="users" class="w-5 h-5"></i> Homeroom Class
             </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
             <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
             </a>
             <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
             </a>
-            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 bg-blue-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
                 <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
             </a>
             <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
@@ -156,7 +159,7 @@
 
     <!-- Detail Modal -->
     <div id="detail-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
             <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
                 <h3 class="font-black text-xl uppercase tracking-tight">Excuse Letter Details</h3>
                 <button onclick="closeDetailModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
@@ -172,8 +175,32 @@
         </div>
     </div>
 
-    <script src="teacher-core.js"></script>
     <!-- teacher-excuse-letter-approval.js removed - using core functions -->
+    <script>
+    window.approveExcuseLetter = async function(id, studentId, dateAbsent) {
+        if(!confirm('Approve this excuse letter?')) return;
+        try {
+            await supabase.from('excuse_letters').update({status: 'Approved'}).eq('id', id);
+            await supabase.from('attendance_logs').upsert({
+                student_id: studentId, log_date: dateAbsent, status: 'Excused', time_in: null
+            }, { onConflict: 'student_id, log_date' });
+
+            showNotification('Approved successfully', 'success');
+            if(typeof closeDetailModal === 'function') closeDetailModal();
+            if(typeof loadExcuseLetters === 'function') loadExcuseLetters();
+        } catch(err) { showNotification('Error approving', 'error'); }
+    };
+
+    window.rejectExcuseLetter = async function(id) {
+        if(!confirm('Reject this excuse letter?')) return;
+        try {
+            await supabase.from('excuse_letters').update({status: 'Rejected'}).eq('id', id);
+            showNotification('Rejected successfully', 'success');
+            if(typeof closeDetailModal === 'function') closeDetailModal();
+            if(typeof loadExcuseLetters === 'function') loadExcuseLetters();
+        } catch(err) { showNotification('Error rejecting', 'error'); }
+    };
+</script>
 </body>
 </html>
 

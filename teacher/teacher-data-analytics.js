@@ -52,60 +52,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadTeacherClasses() {
-    const classSelect = document.getElementById('analytics-class-select');
-    
+    const select = document.getElementById('analytics-class-select');
+    if (!select) return;
+
     try {
-        // Get homeroom class
-        const { data: homeroomClass } = await supabase
-            .from('classes')
-            .select('id, grade_level, section_name')
-            .eq('adviser_id', currentTeacher.id)
-            .single();
-        
-        // Get subject loads
-        const { data: subjectLoads } = await supabase
-            .from('subject_loads')
-            .select('id, subject_name, class_id, classes(grade_level, section_name)')
-            .eq('teacher_id', currentTeacher.id);
-        
-        // Build options - include homeroom class first, then subjects
-        let options = '<option value="">Select Class</option>';
-        
-        // Add homeroom class option
-        if (homeroomClass) {
-            const homeroomLabel = `${homeroomClass.grade_level}${homeroomClass.section_name ? ' - ' + homeroomClass.section_name : ''} (Homeroom)`;
-            options += `<option value="homeroom:${homeroomClass.id}">${homeroomLabel}</option>`;
-            currentClassId = homeroomClass.id;
+        select.innerHTML = '';
+        // 1. Force fetch Homeroom first
+        const { data: homeroom } = await supabase.from('classes').select('id, grade_level, section_name').eq('adviser_id', currentTeacher.id).single();
+        if (homeroom) {
+            select.innerHTML += `<option value="${homeroom.id}">Homeroom: ${homeroom.grade_level} - ${homeroom.section_name}</option>`;
         }
-        
-        // Add subject classes (unique)
-        const uniqueClasses = [];
-        subjectLoads?.forEach(sl => {
-            if (sl.class_id !== homeroomClass?.id && !uniqueClasses.find(c => c.id === sl.class_id)) {
-                uniqueClasses.push({
-                    id: sl.class_id,
-                    grade_level: sl.classes?.grade_level,
-                    section_name: sl.classes?.section_name,
-                    subject: sl.subject_name
-                });
-            }
-        });
-        
-        uniqueClasses.forEach(c => {
-            const label = `${c.grade_level}${c.section_name ? ' - ' + c.section_name : ''} (${c.subject})`;
-            options += `<option value="subject:${c.id}:${c.subject}">${label}</option>`;
-        });
-        
-        classSelect.innerHTML = options;
-        
-        // Auto-select homeroom if available
-        if (homeroomClass) {
-            classSelect.value = `homeroom:${homeroomClass.id}`;
-            await updateAnalytics();
+
+        // 2. Fetch Subject Classes
+        const { data: subjects } = await supabase.from('subject_loads').select('class_id, classes(grade_level, section_name)').eq('teacher_id', currentTeacher.id);
+        if (subjects) {
+            const seen = new Set();
+            if (homeroom) seen.add(homeroom.id); // Don't duplicate homeroom
+
+            subjects.forEach(s => {
+                if (s.classes && !seen.has(s.class_id)) {
+                    seen.add(s.class_id);
+                    select.innerHTML += `<option value="${s.class_id}">${s.classes.grade_level} - ${s.classes.section_name}</option>`;
+                }
+            });
         }
-        
-    } catch (error) {
-        console.error("Error loading classes:", error);
+
+        if (select.options.length > 0) {
+            currentClassId = select.value;
+            loadAnalyticsData(); // Kickstart the charts
+        } else {
+            select.innerHTML = '<option value="">No classes found</option>';
+        }
+    } catch (err) {
+        console.error("Error loading classes:", err);
     }
 }
 
@@ -115,7 +94,8 @@ async function updateAnalytics() {
     
     if (!value) return;
     
-    const [type, classId] = value.split(':');
+    // FIXED: Use value directly as classId (format changed from 'homeroom:123' to '123')
+    const classId = value;
     
     // Show loading state
     document.getElementById('present-rate').textContent = '--%';
@@ -465,3 +445,28 @@ function exportToCSV() {
     link.download = `Teacher_Analytics_${className}_${today}.csv`;
     link.click();
 }
+
+// ==========================================
+// REAL-TIME ANALYTICS ENGINE
+// ==========================================
+let analyticsChannel;
+
+function initAnalyticsRealtime() {
+    if (analyticsChannel) supabase.removeChannel(analyticsChannel);
+    
+    analyticsChannel = supabase.channel('analytics-live-wire')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
+            // Debounce the chart update to prevent animation glitching
+            if (window.chartUpdateTimer) clearTimeout(window.chartUpdateTimer);
+            window.chartUpdateTimer = setTimeout(() => {
+                console.log('Live update: Re-rendering analytics charts');
+                loadAnalyticsData(); // Fetches new data and updates Chart.js instances
+            }, 1500);
+        })
+        .subscribe();
+}
+
+// Hook it into the existing DOMContentLoaded listener
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initAnalyticsRealtime, 2000); 
+});
