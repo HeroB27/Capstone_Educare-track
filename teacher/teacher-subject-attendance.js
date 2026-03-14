@@ -76,6 +76,68 @@ function getDayCode(dateStr) {
     return dayCodes[day];
 }
 
+// ==========================================
+// CUP THEORY IMPLEMENTATION
+// ==========================================
+
+/**
+ * Determine if current subject is the first one of the day for a class
+ * Used for Rule 1: 1st Subject Spillover
+ * @param {string} classId - The class ID
+ * @param {string} subjectLoadId - Current subject load ID
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {Promise<boolean>} - True if this is the first subject
+ */
+async function isFirstSubjectOfDay(classId, subjectLoadId, dateStr) {
+    try {
+        const dayCode = getDayCode(dateStr);
+        
+        // Fetch all subject loads for this class on this day
+        const { data: subjects } = await supabase
+            .from('subject_loads')
+            .select('id, subject_name, schedule_time_start')
+            .eq('class_id', classId)
+            .like('schedule_days', `%${dayCode}%`);
+        
+        if (!subjects || subjects.length === 0) return false;
+        
+        // Sort by schedule_time_start to find the first subject
+        subjects.sort((a, b) => {
+            if (!a.schedule_time_start) return 1;
+            if (!b.schedule_time_start) return -1;
+            return a.schedule_time_start.localeCompare(b.schedule_time_start);
+        });
+        
+        // Return true if current subject is the first one
+        return subjects[0]?.id === subjectLoadId;
+    } catch (err) {
+        console.error('Error determining first subject:', err);
+        return false;
+    }
+}
+
+/**
+ * Get Homeroom status for a student from attendance_logs
+ * Used for Rule 1: 1st Subject Spillover
+ * @param {string} studentId - Student ID
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @returns {Promise<string>} - Homeroom status
+ */
+async function getHomeroomStatus(studentId, dateStr) {
+    try {
+        const { data: log } = await supabase
+            .from('attendance_logs')
+            .select('status')
+            .eq('student_id', studentId)
+            .eq('log_date', dateStr)
+            .single();
+        
+        return log?.status || 'Absent';
+    } catch (err) {
+        return 'Absent';
+    }
+}
+
 /**
  * Load Subject Loads as Cards - UPDATED: Card Grid Layout
  */
@@ -261,6 +323,13 @@ async function loadSubjectStudents(subjectLoadId) {
         // Calculate stats
         let presentCount = 0, absentCount = 0, lateCount = 0;
         
+        // CUP THEORY: Check if this is the first subject of the day BEFORE rendering
+        const classId = currentClassId || (allStudents[0]?.class_id);
+        let isFirstSubject = false;
+        if (classId && currentSubjectLoadId) {
+            isFirstSubject = await isFirstSubjectOfDay(classId, currentSubjectLoadId, lookupDate);
+        }
+        
         // Render students
         if (studentTableBody) {
             studentTableBody.innerHTML = allStudents.map(student => {
@@ -268,28 +337,32 @@ async function loadSubjectStudents(subjectLoadId) {
                 const gateStatus = log?.status || 'No Scan';
                 const isInClinic = isToday && !!todayClinicVisits[student.id];
                 
-                // UPDATED: Show Gate badge - Phase 2 Task 2.3
-                const gateBadge = log?.time_in 
-                    ? `<span class="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">[Gate: Inside]</span>`
-                    : `<span class="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">[Gate: No Scan]</span>`;
-                
-                const timeIn = log?.time_in ? new Date(log.time_in).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '--:--';
                 const remarks = log?.remarks || '';
                 
-                // Determine subject-specific status from remarks
+                // Determine subject-specific status from remarks (Rule 2: Already Checked)
                 const currentSubjectStatus = getSubjectStatusFromRemarks(remarks, currentSubjectName);
+                const isAlreadyChecked = !!currentSubjectStatus;
                 
-                // Determine if status is protected (teacher cannot override Late/Excused from gate)
-                const isProtected = gateStatus === 'Late' || gateStatus === 'Excused';
+                // CUP THEORY: Rule 1 - First subject inherits Homeroom status
+                let displayStatus;
+                let isInherited = false;
+                
+                if (currentSubjectStatus) {
+                    // Already has subject-specific status
+                    displayStatus = currentSubjectStatus;
+                } else if (isFirstSubject) {
+                    // Rule 1: First subject inherits Homeroom status
+                    displayStatus = gateStatus === 'No Scan' ? 'Absent' : gateStatus;
+                    isInherited = true;
+                } else {
+                    // Not first subject and no status yet - leave blank (awaiting teacher input)
+                    displayStatus = isInClinic ? 'In Clinic' : '';
+                }
                 
                 // Status badge for gate status
                 const statusBadge = getStatusBadge(gateStatus);
                 
-                // Button disabled state
-                const presentDisabled = isProtected ? 'opacity-50 cursor-not-allowed' : '';
-                
-                // Track stats (use subject status if marked, otherwise gate status)
-                const displayStatus = isInClinic ? 'In Clinic' : (currentSubjectStatus || gateStatus);
+                // Track stats (use displayStatus)
                 if (displayStatus === 'On Time' || displayStatus === 'Present') presentCount++;
                 else if (displayStatus === 'Absent') absentCount++;
                 else if (displayStatus === 'Late') lateCount++;
@@ -298,14 +371,17 @@ async function loadSubjectStudents(subjectLoadId) {
                     <tr class="hover:bg-blue-50/50 transition-colors">
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
+                                <div class="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
                                     <img src="${student.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
+                                    ${isAlreadyChecked ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border border-white rounded-full" title="Attendance already recorded for this subject today"></div>' : ''}
                                 </div>
                                 <div>
-                                <div class="flex items-center gap-2">
-                                    <p class="font-bold text-gray-800">${student.full_name}</p>
-                                    <button onclick="viewSubjectStudentDetails('${student.id}', '${escapeHtml(student.full_name)}', '${student.profile_photo_url || ''}', '${student.student_id_text || ''}')" class="text-blue-400 hover:text-blue-600 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg p-1.5" title="View Subject Stats"><i data-lucide="eye" class="w-3 h-3"></i></button>
-                                </div>
+                                    <div class="flex items-center gap-2">
+                                        <p class="font-bold text-gray-800">${student.full_name}</p>
+                                        ${isAlreadyChecked ? '<span class="bg-emerald-50 text-emerald-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-emerald-200">Checked</span>' : ''}
+                                        ${isInherited ? '<span class="bg-blue-50 text-blue-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-blue-200">Inherited</span>' : ''}
+                                        <button onclick="viewSubjectStudentDetails('${student.id}', '${escapeHtml(student.full_name)}', '${student.profile_photo_url || ''}', '${student.student_id_text || ''}')" class="text-blue-400 hover:text-blue-600 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg p-1.5" title="View Subject Stats"><i data-lucide="eye" class="w-3 h-3"></i></button>
+                                    </div>
                                     <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'No ID'}</p>
                                 </div>
                             </div>
@@ -313,18 +389,19 @@ async function loadSubjectStudents(subjectLoadId) {
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
                                 <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Present')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Present' ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Present' || displayStatus === 'On Time' ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
                                     Present
                                 </button>
                                 <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Late')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Late' ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Late' ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
                                     Late
                                 </button>
                                 <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Absent')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${currentSubjectStatus === 'Absent' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
+                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Absent' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
                                     Absent
                                 </button>
-                                ${currentSubjectStatus === 'Excused' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
+                                ${displayStatus === 'Excused' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
+                                ${displayStatus === 'In Clinic' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1">In Clinic</span>` : ''}
                             </div>
                         </td>
                     </tr>
@@ -621,3 +698,6 @@ async function markAllPresent() {
         if (window.lucide) lucide.createIcons();
     }
 }
+
+// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.markAllPresent = markAllPresent;

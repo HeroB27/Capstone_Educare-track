@@ -31,9 +31,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load and apply theme preferences
     loadAndApplyTheme();
     
-    // UI Branding
+    // UI Branding with time-based greeting and weekend support
     const adminNameEl = document.getElementById('admin-name');
-    if (adminNameEl) adminNameEl.innerText = user.full_name || 'Admin';
+    if (adminNameEl) {
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const hour = now.getHours();
+        
+        let greeting;
+        
+        // Check if it's weekend
+        if (day === 0) {
+            greeting = 'Happy Sunday';
+        } else if (day === 6) {
+            greeting = 'Happy Saturday';
+        } else if (hour < 12) {
+            greeting = 'Good Morning';
+        } else if (hour < 18) {
+            greeting = 'Good Afternoon';
+        } else {
+            greeting = 'Good Evening';
+        }
+        
+        adminNameEl.innerText = `${greeting}, ${(user.full_name || 'Admin').split(' ')[0]}`;
+    }
     
     // Auto-run if elements exist
     if (document.getElementById('stat-present')) {

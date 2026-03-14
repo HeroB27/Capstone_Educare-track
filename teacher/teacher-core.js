@@ -20,10 +20,29 @@ if (currentUser && currentUser.is_gatekeeper === true) {
 document.addEventListener('DOMContentLoaded', async () => {
     if (!currentUser) return;
     
-    // Set welcome message
+    // Set welcome message with time-based greeting and weekend support
     const nameEl = document.getElementById('teacher-name');
     if (nameEl) {
-        nameEl.innerText = `Hello, ${currentUser.full_name}`;
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const hour = now.getHours();
+        
+        let greeting;
+        
+        // Check if it's weekend
+        if (day === 0) {
+            greeting = 'Happy Sunday';
+        } else if (day === 6) {
+            greeting = 'Happy Saturday';
+        } else if (hour < 12) {
+            greeting = 'Good Morning';
+        } else if (hour < 18) {
+            greeting = 'Good Afternoon';
+        } else {
+            greeting = 'Good Evening';
+        }
+        
+        nameEl.innerText = `${greeting}, ${currentUser.full_name.split(' ')[0]}`;
     }
     
     // Show gatekeeper toggle if applicable
@@ -88,9 +107,9 @@ async function initializeTeacherPortal() {
         const badgeEl = document.getElementById('advisory-badge');
         if (badgeEl) {
             if (isAdviserMode) {
-                badgeEl.innerText = `Adviser: ${teacher.classes.grade_level}-${teacher.classes.section_name}`;
+                badgeEl.innerText = `Adviser: ${teacher.classes?.grade_level || 'Unassigned'}-${teacher.classes?.section_name || 'N/A'}`;
                 // Load homeroom stats for dashboard cards
-                loadHomeroomStats(teacher.classes.id);
+                loadHomeroomStats(teacher.classes?.id);
             } else {
                 badgeEl.innerText = "Subject Teacher";
                 // Hide advisory-only features
@@ -314,7 +333,7 @@ window.loadHomeroomStudents = async function() {
         // Update header with class info
         const classInfoEl = document.getElementById('homeroom-class-info');
         if (classInfoEl) {
-            classInfoEl.innerText = `${teacherClass.grade_level} - ${teacherClass.section_name}`;
+            classInfoEl.innerText = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.section_name || 'N/A'}`;
         }
 
         // Fetch Students + Today's Gate Logs
@@ -757,7 +776,7 @@ async function loadClinicPassInterface() {
         homeroomStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
-            option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass.grade_level}-${teacherClass.section_name})`;
+            option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass?.grade_level || 'Unassigned'}-${teacherClass?.section_name || 'N/A'})`;
             studentSelect.appendChild(option);
         });
         
@@ -765,7 +784,7 @@ async function loadClinicPassInterface() {
         subjectStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
-            const classInfo = student.classes ? `${student.classes.grade_level}-${student.classes.section_name}` : '';
+            const classInfo = student.classes ? `${student.classes?.grade_level || 'Unassigned'}-${student.classes?.section_name || 'N/A'}` : 'No Class';
             option.text = `${student.student_id_text} - ${student.full_name} (${classInfo})`;
             studentSelect.appendChild(option);
         });
@@ -1483,13 +1502,20 @@ async function approveExcuseLetter(letterId, studentId, dateAbsent) {
 
                 // ==========================================
                 // ENTERPRISE: Notify Subject Teachers (Phase 2)
+                // UPDATED: Now uses dispatchAbsenceNotifications for time-bound routing
                 // ==========================================
-                if (typeof notifySubjectTeachersOfExcuse === 'function') {
+                if (typeof dispatchAbsenceNotifications === 'function') {
+                    // For excuse letters, default to WHOLE_DAY scope
+                    // The engine will notify only affected teachers (based on time) and skip parent notifications
+                    await dispatchAbsenceNotifications(studentId, dateAbsent, 'WHOLE_DAY', true);
+                } else if (typeof notifySubjectTeachersOfExcuse === 'function') {
+                    // Fallback to legacy function if engine not loaded
                     await notifySubjectTeachersOfExcuse(studentId, dateAbsent, studentName);
                 }
 
                 // ==========================================
-                // ENTERPRISE: Notify Parent
+                // ENTERPRISE: Notify Parent - Excuse Letter Approval
+                // (This is separate from absence notification - tells parent their letter was approved)
                 // ==========================================
                 if (student?.parent_id) {
                     await supabase.from('notifications').insert({
@@ -2293,75 +2319,11 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
-// 34. Show Notification
-function showNotification(msg, type='info', callback=null) {
-    const existing = document.getElementById('notification-modal');
-    if(existing) existing.remove();
-    const modal = document.createElement('div');
-    modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
-    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-blue-600';
-    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-blue-50';
-    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
+// 34. Show Notification (REMOVED - now using general-core.js)
+// UPDATED: Using window.showNotification from general-core.js
 
-    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
-    if (!dndEnabled) {
-        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = type === 'error' ? 220 : 550;
-            gain.gain.setValueAtTime(0.05, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-            osc.start(); osc.stop(ctx.currentTime + 0.2);
-        } catch(e){}
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
-    document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
-    if(window.lucide) lucide.createIcons();
-}
-
-// 35. Show Confirmation Modal
-function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm & Send') {
-function showConfirmationModal(title, message, onConfirm, confirmText = 'Confirm & Send', type = 'info') {
-    const existing = document.getElementById('confirmation-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in p-4';
-
-    let btnClass = 'bg-blue-600 hover:bg-blue-700';
-    if (type === 'danger') btnClass = 'bg-red-600 hover:bg-red-700';
-    if (type === 'warning') btnClass = 'bg-amber-500 hover:bg-amber-600';
-
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-            <div class="p-6 border-b">
-                <h3 class="text-xl font-bold text-gray-800">${title}</h3>
-            </div>
-            <div class="p-6 max-h-[60vh] overflow-y-auto">${message}</div>
-            <div class="p-4 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
-                <button id="confirm-cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-300 transition-all">Cancel</button>
-                <button id="confirm-action-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-all">${confirmText}</button>
-                <button id="confirm-action-btn" class="px-4 py-2 ${btnClass} text-white rounded-lg font-semibold text-sm transition-all">${confirmText}</button>
-            </div>
-        </div>`;
-
-    document.body.appendChild(modal);
-
-    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
-    document.getElementById('confirm-action-btn').onclick = () => {
-        onConfirm();
-        modal.remove();
-    };
-    if(window.lucide) lucide.createIcons();
-}
+// 35. Show Confirmation Modal (REMOVED - now using general-core.js)
+// UPDATED: Using window.showConfirm from general-core.js
 
 // 36. Print Homeroom List
 function printHomeroomList() {
@@ -2969,3 +2931,23 @@ window.notifySubjectTeachersOfExcuse = async function(studentId, dateAbsent, stu
     }
 };
 }
+
+// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.postAnnouncement = postAnnouncement;
+window.issueClinicPass = issueClinicPass;
+window.filterLetters = filterLetters;
+window.closeDetailModal = function() {
+    document.getElementById('detail-modal')?.classList.add('hidden');
+};
+window.closeModal = function() {
+    // Generic modal closer - tries common modal IDs
+    const modalIds = ['modal', 'detail-modal', 'student-modal', 'proof-modal', 'edit-excuse-modal'];
+    modalIds.forEach(id => {
+        const modal = document.getElementById(id);
+        if (modal) modal.classList.add('hidden');
+    });
+};
+window.approveExcuseLetter = approveExcuseLetter;
+window.rejectExcuseLetter = rejectExcuseLetter;
+window.viewProof = viewProof;
+window.closeProofModal = closeProofModal;

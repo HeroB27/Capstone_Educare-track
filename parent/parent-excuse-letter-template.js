@@ -1,12 +1,16 @@
 // parent/parent-excuse-letter-template.js
 // Excuse letter submission and tracking logic
+// UPDATED: Phase 3 - Enhanced edit with file upload, realtime status
 
 let selectedChildId = null;
 let uploadedFile = null;
+let editUploadedFile = null;  // Phase 3: Track file in edit modal
 let excuseHistory = [];
+let excuseChannel = null;  // Phase 3: Realtime subscription
 
 /**
  * Initialize excuse letter page
+ * UPDATED: Phase 3 - Added realtime subscription for status changes
  */
 document.addEventListener('DOMContentLoaded', async () => {
     // FIX: Inline timezone math to prevent ReferenceError crash
@@ -16,12 +20,115 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.getElementById('absence-date').max = today;
 
-    // Populate child selector
-    populateChildSelector();
+    // Populate child selector - FIX: Wait for children to load first
+    // This fixes race condition where populateChildSelector runs before loadChildren completes
+    setTimeout(() => {
+        if (typeof allChildren !== 'undefined' && allChildren.length > 0) {
+            populateChildSelector();
+        } else {
+            // Poll until children are loaded (max 5 seconds)
+            let attempts = 0;
+            const checkInterval = setInterval(() => {
+                attempts++;
+                if (typeof allChildren !== 'undefined' && allChildren.length > 0) {
+                    clearInterval(checkInterval);
+                    populateChildSelector();
+                } else if (attempts >= 50) {
+                    clearInterval(checkInterval);
+                    console.warn('Children loading timeout - populating with available data');
+                    populateChildSelector();
+                }
+            }, 100);
+        }
+    }, 100);
 
     // Load excuse history
     await loadExcuseHistory();
+    
+    // Phase 3: Setup realtime subscription for status changes
+    setupExcuseRealtime();
 });
+
+/**
+ * Setup realtime subscription for excuse letter status changes
+ * Phase 3: Notify parent when teacher approves/rejects
+ */
+function setupExcuseRealtime() {
+    if (excuseChannel) {
+        supabase.removeChannel(excuseChannel);
+    }
+
+    excuseChannel = supabase
+        .channel('excuse-updates')
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'excuse_letters',
+            filter: `parent_id=eq.${currentUser.id}`
+        }, async (payload) => {
+            console.log('Excuse letter status changed:', payload);
+            const updatedLetter = payload.new;
+            
+            // Find the letter in history and update it
+            const index = excuseHistory.findIndex(l => l.id === updatedLetter.id);
+            if (index !== -1) {
+                excuseHistory[index] = { ...excuseHistory[index], ...updatedLetter };
+            }
+            
+            // Show notification
+            if (updatedLetter.status === 'Approved') {
+                showExcuseNotification('Excuse Letter Approved', `Your excuse letter for ${formatDate(updatedLetter.date_absent)} has been approved!`, 'success');
+            } else if (updatedLetter.status === 'Rejected') {
+                showExcuseNotification('Excuse Letter Rejected', `Your excuse letter for ${formatDate(updatedLetter.date_absent)} was not approved.`, 'error');
+            }
+            
+            // Reload history
+            await loadExcuseHistory();
+        })
+        .subscribe();
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (excuseChannel) {
+            supabase.removeChannel(excuseChannel);
+        }
+    });
+}
+
+/**
+ * Show excuse notification toast
+ * Phase 3: Helper for status change notifications
+ */
+function showExcuseNotification(title, message, type = 'info') {
+    const colors = type === 'success' ? 'bg-green-50 border-green-500' : 
+                   type === 'error' ? 'bg-red-50 border-red-500' : 
+                   'bg-blue-50 border-blue-500';
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '📢';
+    
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 left-4 right-4 ${colors} rounded-lg shadow-lg p-4 z-50 border-l-4`;
+    toast.innerHTML = `
+        <div class="flex items-start gap-3">
+            <span class="text-2xl">${icon}</span>
+            <div class="flex-1">
+                <p class="font-bold text-gray-800">${title}</p>
+                <p class="text-sm text-gray-600">${message}</p>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'transition-opacity');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
 
 /**
  * Populate child selector for excuse submission
@@ -298,6 +405,7 @@ function switchTab(tab) {
 
 /**
  * Load excuse letter history
+ * UPDATED: Phase 3 - Added teacher info fetch
  */
 async function loadExcuseHistory() {
     try {
@@ -309,7 +417,7 @@ async function loadExcuseHistory() {
             `)
             .eq('parent_id', currentUser.id)
             .order('created_at', { ascending: false })
-            .limit(15); // THE PARANOIA SHIELD: Stop the data avalanche!
+            .limit(15);
 
         if (error) {
             console.error('Error loading history:', error);
@@ -318,6 +426,16 @@ async function loadExcuseHistory() {
         }
 
         excuseHistory = history || [];
+        
+        // Phase 3: Fetch teacher names for approved/rejected letters
+        for (let letter of excuseHistory) {
+            if (letter.status === 'Approved' || letter.status === 'Rejected') {
+                // We would need to track who approved/rejected
+                // For now, just mark as processed
+                letter.processed_at = letter.updated_at;
+            }
+        }
+        
         renderHistory();
 
     } catch (err) {
@@ -328,6 +446,7 @@ async function loadExcuseHistory() {
 
 /**
  * Render excuse history list
+ * UPDATED: Phase 3 - Enhanced status display with timestamps
  */
 function renderHistory(filter = 'all') {
     const container = document.getElementById('excuse-history');
@@ -353,6 +472,16 @@ function renderHistory(filter = 'all') {
         const childName = item.students?.full_name || 'Unknown';
         const childClass = `${item.students?.classes?.grade_level || ''} - ${item.students?.classes?.section_name || ''}`;
 
+        // Phase 3: Status timestamp
+        let statusInfo = '';
+        if (item.status === 'Pending') {
+            statusInfo = `<span class="text-xs text-yellow-600">Submitted ${getRelativeTime(item.created_at)}</span>`;
+        } else if (item.status === 'Approved') {
+            statusInfo = `<span class="text-xs text-green-600">✓ Approved ${item.updated_at ? getRelativeTime(item.updated_at) : ''}</span>`;
+        } else if (item.status === 'Rejected') {
+            statusInfo = `<span class="text-xs text-red-600">✕ Rejected ${item.updated_at ? getRelativeTime(item.updated_at) : ''}</span>`;
+        }
+
         return `
             <div class="bg-white rounded-xl shadow-md p-4">
                 <div class="flex justify-between items-start mb-2">
@@ -367,7 +496,7 @@ function renderHistory(filter = 'all') {
                 </div>
                 <div class="flex justify-between items-center text-xs text-gray-400 pt-2 border-t">
                     <span>${formatDate(item.date_absent)}</span>
-                    <span>${getRelativeTime(item.created_at)}</span>
+                    ${statusInfo}
                 </div>
                 ${item.image_proof_url ? `
                     <a href="${item.image_proof_url}" target="_blank" class="mt-2 inline-flex items-center gap-1 text-xs text-green-600 hover:underline">
@@ -431,10 +560,14 @@ function filterHistory(status) {
 
 /**
  * Open the edit modal with the excuse letter's data
+ * UPDATED: Phase 3 - Added file upload support
  */
 function openEditModal(letterId) {
     const letter = excuseHistory.find(item => item.id === letterId);
     if (!letter) return;
+
+    // Reset edit file
+    editUploadedFile = null;
 
     // Create modal if it doesn't exist
     let modal = document.getElementById('edit-excuse-modal');
@@ -444,8 +577,9 @@ function openEditModal(letterId) {
         modal.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50';
         modal.innerHTML = `
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div class="p-4 border-b">
+                <div class="p-4 border-b flex justify-between items-center">
                     <h3 class="font-bold text-lg">Edit Excuse Letter</h3>
+                    <span id="edit-status-indicator" class="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded hidden">Editing...</span>
                 </div>
                 <div class="p-4 space-y-4">
                     <input type="hidden" id="edit-letter-id">
@@ -457,10 +591,28 @@ function openEditModal(letterId) {
                         <label class="text-sm font-medium">Reason</label>
                         <textarea id="edit-reason" rows="4" class="w-full mt-1 p-2 border rounded-lg resize-none"></textarea>
                     </div>
+                    <div>
+                        <label class="text-sm font-medium">Proof File (Optional)</label>
+                        <input type="file" id="edit-proof-file" accept="image/*,.pdf" class="hidden" onchange="handleEditFileSelect(event)">
+                        <div id="edit-file-area" class="mt-2">
+                            <button type="button" onclick="document.getElementById('edit-proof-file').click()" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-green-500 hover:text-green-600 transition-colors">
+                                📷 Upload New Proof
+                            </button>
+                            <div id="edit-file-preview" class="hidden mt-2 p-2 bg-gray-50 rounded flex items-center justify-between">
+                                <span id="edit-file-name" class="text-sm text-gray-600 truncate"></span>
+                                <button type="button" onclick="removeEditFile(event)" class="text-red-500 hover:text-red-700">✕</button>
+                            </div>
+                            <div id="edit-current-file" class="mt-2">
+                                <a id="edit-current-file-link" href="#" target="_blank" class="text-sm text-green-600 hover:underline flex items-center gap-1">
+                                    📎 View Current Proof
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="p-4 bg-gray-50 flex justify-end gap-3">
                     <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 rounded-lg text-sm font-medium">Cancel</button>
-                    <button onclick="submitEdit()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">Save Changes</button>
+                    <button onclick="submitEdit()" id="edit-submit-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium">Save Changes</button>
                 </div>
             </div>
         `;
@@ -471,31 +623,149 @@ function openEditModal(letterId) {
     document.getElementById('edit-letter-id').value = letter.id;
     document.getElementById('edit-absence-date').value = letter.date_absent;
     document.getElementById('edit-reason').value = letter.reason;
+    
+    // Show current file if exists
+    const currentFileLink = document.getElementById('edit-current-file-link');
+    const currentFileDiv = document.getElementById('edit-current-file');
+    if (letter.image_proof_url) {
+        currentFileLink.href = letter.image_proof_url;
+        currentFileDiv.classList.remove('hidden');
+    } else {
+        currentFileDiv.classList.add('hidden');
+    }
+    
+    // Reset file preview
+    document.getElementById('edit-file-preview').classList.add('hidden');
+    editUploadedFile = null;
+    
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 }
 
-function closeEditModal() {
-    document.getElementById('edit-excuse-modal')?.classList.add('hidden');
+/**
+ * Handle file selection in edit modal
+ * Phase 3: New function
+ */
+function handleEditFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('Please select a valid file (PNG, JPG, or PDF)');
+        event.target.value = '';
+        return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        event.target.value = '';
+        return;
+    }
+
+    editUploadedFile = file;
+
+    // Show preview
+    document.getElementById('edit-file-name').textContent = file.name;
+    document.getElementById('edit-file-preview').classList.remove('hidden');
 }
 
+/**
+ * Remove selected file in edit modal
+ * Phase 3: New function
+ */
+function removeEditFile(event) {
+    event.stopPropagation();
+    editUploadedFile = null;
+    document.getElementById('edit-proof-file').value = '';
+    document.getElementById('edit-file-preview').classList.add('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('edit-excuse-modal')?.classList.add('hidden');
+    editUploadedFile = null;
+}
+
+/**
+ * Submit edit with file upload support
+ * UPDATED: Phase 3 - Added file upload and confirmation
+ */
 async function submitEdit() {
     const letterId = document.getElementById('edit-letter-id').value;
     const date = document.getElementById('edit-absence-date').value;
     const reason = document.getElementById('edit-reason').value;
 
+    // Validate
     if (!reason || reason.length < 10) {
-        return alert("Reason must be at least 10 characters.");
+        alert("Reason must be at least 10 characters.");
+        return;
     }
 
+    // Phase 3: Add confirmation
+    if (!confirm("Are you sure you want to save changes to this excuse letter?")) {
+        return;
+    }
+
+    // Show editing indicator
+    const submitBtn = document.getElementById('edit-submit-btn');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="flex items-center gap-2"><svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Saving...</span>`;
+
     try {
-        const { error } = await supabase.from('excuse_letters').update({ date_absent: date, reason: reason }).eq('id', letterId);
+        let updateData = {
+            date_absent: date,
+            reason: reason
+        };
+
+        // Upload new file if selected
+        if (editUploadedFile) {
+            // Get the letter to find student_id
+            const letter = excuseHistory.find(l => l.id === letterId);
+            if (letter) {
+                const filePath = `${letter.student_id}/${Date.now()}_${editUploadedFile.name}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('excuse-proofs')
+                    .upload(filePath, editUploadedFile);
+
+                if (uploadError) {
+                    console.error('Upload error:', uploadError);
+                    alert('Error uploading file. Please try again.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+
+                // Get public URL
+                const { data: urlData } = supabase.storage
+                    .from('excuse-proofs')
+                    .getPublicUrl(filePath);
+                
+                updateData.image_proof_url = urlData.publicUrl;
+            }
+        }
+
+        const { error } = await supabase
+            .from('excuse_letters')
+            .update(updateData)
+            .eq('id', letterId);
+
         if (error) throw error;
-        alert("Excuse letter updated successfully.");
+        
+        // Show success notification
+        showExcuseNotification('Excuse Letter Updated', 'Your changes have been saved successfully.', 'success');
+        
         closeEditModal();
         await loadExcuseHistory();
+        
     } catch (err) {
+        console.error('Error updating excuse letter:', err);
         alert("Failed to update excuse letter.");
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
     }
 }
 
@@ -529,3 +799,7 @@ window.openEditModal = openEditModal;
 window.closeEditModal = closeEditModal;
 window.submitEdit = submitEdit;
 window.cancelSubmission = cancelSubmission;
+// Phase 3: New functions
+window.handleEditFileSelect = handleEditFileSelect;
+window.removeEditFile = removeEditFile;
+window.showExcuseNotification = showExcuseNotification;

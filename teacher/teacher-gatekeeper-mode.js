@@ -267,8 +267,8 @@ async function processScan(studentIdText) {
         const scanResult = await handleAttendanceScan(studentData);
         
         // Show success
-        const gradeLevel = studentData.classes ? studentData.classes.grade_level : 'N/A';
-        const section = studentData.classes ? studentData.classes.section_name : '';
+        const gradeLevel = studentData.classes?.grade_level || 'N/A';
+        const section = studentData.classes?.section_name || '';
         
         statusIndicator.innerHTML = `<p class="text-green-300">Success! ${studentData.full_name}</p>`;
         
@@ -317,7 +317,7 @@ async function handleAttendanceScan(student) {
     const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     
     // Get grade level for threshold calculation
-    const gradeLevel = student.classes ? student.classes.grade_level : null;
+    const gradeLevel = student.classes?.grade_level || null;
     
     // Check existing log for today
     const { data: existingLog } = await supabase
@@ -446,8 +446,8 @@ async function notifyTeacherFromTeacherModule(student, direction, status) {
             hour12: true 
         });
         
-        const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
-        const section = student.classes ? student.classes.section_name : '';
+        const gradeLevel = student.classes?.grade_level || 'Unknown';
+        const section = student.classes?.section_name || '';
         
         let title = '';
         let message = '';

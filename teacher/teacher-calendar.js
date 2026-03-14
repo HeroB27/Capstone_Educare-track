@@ -266,3 +266,6 @@ function renderVisualCalendar() {
         `;
     }
 }
+
+// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.changeMonth = changeMonth;

@@ -54,7 +54,26 @@ async function fetchClinicStaff() {
 function updateUserDisplay() {
     const nameEl = document.getElementById('clinic-name');
     if (nameEl && currentClinicUser) {
-        nameEl.innerText = `Nurse on Duty: ${currentClinicUser.full_name}`;
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const hour = now.getHours();
+        
+        let greeting;
+        
+        // Check if it's weekend
+        if (day === 0) {
+            greeting = 'Happy Sunday';
+        } else if (day === 6) {
+            greeting = 'Happy Saturday';
+        } else if (hour < 12) {
+            greeting = 'Good Morning';
+        } else if (hour < 18) {
+            greeting = 'Good Afternoon';
+        } else {
+            greeting = 'Good Evening';
+        }
+        
+        nameEl.innerText = `${greeting}, ${currentClinicUser.full_name.split(' ')[0]}`;
     }
 }
 

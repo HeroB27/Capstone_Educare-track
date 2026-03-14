@@ -326,9 +326,21 @@ async function loadHolidayForEdit(date) {
 }
 
 // 7. Save Holiday (Add or Update) - With Multi-Day Support
+// UPDATED: Added button locking pattern
 let pendingAnnouncement = null;
 
-async function saveHoliday() {
+async function saveHoliday(event) {
+    if (event) event.preventDefault();
+    
+    const btn = document.getElementById('save-holiday-btn');
+    const origText = btn ? btn.innerHTML : '';
+    
+    // 1. Lock UI
+    if (btn) {
+        btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Processing...';
+        btn.disabled = true;
+    }
+    
     const editDate = document.getElementById('edit-holiday-date').value;
     const startDate = document.getElementById('holiday-start-date').value;
     const endDate = document.getElementById('holiday-end-date').value;
@@ -337,9 +349,21 @@ async function saveHoliday() {
     const targetGrades = document.getElementById('holiday-target-grades').value;
     const timeCoverage = document.getElementById('holiday-coverage').value;
 
-    if (!startDate || !endDate) return showNotification("Please select start and end dates", "error");
-    if (new Date(startDate) > new Date(endDate)) return showNotification("Start date cannot be after end date", "error");
-    if (!description.trim()) return showNotification("Please enter a description", "error");
+    if (!startDate || !endDate) {
+        showNotification("Please select start and end dates", "error");
+        if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+        return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+        showNotification("Start date cannot be after end date", "error");
+        if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+        return;
+    }
+    if (!description.trim()) {
+        showNotification("Please enter a description", "error");
+        if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+        return;
+    }
 
     const payloadArray = [];
     let currentDate = new Date(startDate);
@@ -373,7 +397,15 @@ async function saveHoliday() {
         }
     } catch (err) {
         console.error(err);
-        showNotification("Error saving holiday: " + err.message, "error");
+        // 3. Catch & Notify Error
+        showNotification(err.message || "Error saving holiday. Please try again.", "error");
+    } finally {
+        // 4. Unlock UI
+        if (btn) {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+            if (window.lucide) lucide.createIcons();
+        }
     }
 }
 
@@ -452,15 +484,9 @@ async function confirmDelete() {
     }
 }
 
-// Helper Functions
-function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
-    });
-}
+// Helper Functions (UPDATED: using general-core.js formatDate)
+// formatDate removed - now using window.formatDate from general-core.js
+// formatTime removed - now using window.formatTime from general-core.js
 
 function getDayName(dateStr) {
     const date = new Date(dateStr);
@@ -484,89 +510,10 @@ function debounce(func, wait) {
     };
 }
 
-function showConfirmationModal(title, message, onConfirm, type = 'danger') {
-    const existing = document.getElementById('confirmation-modal');
-    if (existing) existing.remove();
+// showConfirmationModal REMOVED - now using general-core.js showConfirm
 
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
-
-    let iconColor = 'text-red-500';
-    let iconBg = 'bg-red-50';
-    let btnBg = 'bg-red-600 hover:bg-red-700 shadow-red-200';
-    let iconName = 'alert-triangle';
-
-    if (type === 'warning') {
-        iconColor = 'text-amber-500';
-        iconBg = 'bg-amber-50';
-        btnBg = 'bg-amber-500 hover:bg-amber-600 shadow-amber-200';
-        iconName = 'alert-circle';
-    } else if (type === 'info') {
-        iconColor = 'text-blue-500';
-        iconBg = 'bg-blue-50';
-        btnBg = 'bg-blue-600 hover:bg-blue-700 shadow-blue-200';
-        iconName = 'info';
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 ${iconBg} ${iconColor} rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 ${btnBg} text-white rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-lg">Confirm</button></div></div></div>`;
-
-    document.body.appendChild(modal);
-
-    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
-    document.getElementById('confirm-action-btn').onclick = () => {
-        modal.remove();
-        if (onConfirm) onConfirm();
-    };
-    
-    if (window.lucide) lucide.createIcons();
-}
-
-// Notification helper (reuse from admin-settings.js)
-function showNotification(msg, type = 'info') {
-    const existing = document.getElementById('notification-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
-
-    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
-    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
-    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
-
-    // Play sound
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = type === 'error' ? 220 : 550;
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
-    } catch (e) { }
-
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up">
-            <div class="flex flex-col items-center text-center">
-                <div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4">
-                    <i data-lucide="${iconName}" class="w-8 h-8"></i>
-                </div>
-                <h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3>
-                <p class="text-sm text-gray-500 font-medium mb-6">${msg}</p>
-                <button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => modal.remove();
-    if (window.lucide) lucide.createIcons();
-}
+// Notification helper (REMOVED - now using general-core.js showNotification)
+// UPDATED: Using window.showNotification from general-core.js
 
 // Delete confirmation handler - triggered from delete modal
 let pendingDeleteDate = null;

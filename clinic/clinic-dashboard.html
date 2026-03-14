@@ -86,10 +86,65 @@
         <div class="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8">
             
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
+                <!-- Pending Passes (NEW - Real-Time) -->
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-yellow-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Pending Passes</p>
+                        <div class="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="clock" class="w-6 h-6 text-yellow-600"></i>
+                        </div>
+                    </div>
+                    <h3 id="stats-pending" class="text-4xl font-black text-gray-900">0</h3>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">
+                            <span id="pending-live-indicator" class="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></span>
+                            Awaiting approval
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Currently in Clinic -->
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-red-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Currently in Clinic</p>
+                        <div class="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="heart-pulse" class="w-6 h-6 text-red-600"></i>
+                        </div>
+                    </div>
+                    <h3 id="stats-active" class="text-4xl font-black text-gray-900">0</h3>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                            <span id="active-live-indicator" class="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                            Active patients
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Sent Home Today (NEW) -->
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-orange-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
+                    <div class="flex justify-between items-start mb-4">
+                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Sent Home Today</p>
+                        <div class="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="home" class="w-6 h-6 text-orange-600"></i>
+                        </div>
+                    </div>
+                    <h3 id="stats-sent-home" class="text-4xl font-black text-gray-900">0</h3>
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <span class="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                            <i data-lucide="log-out" class="w-4 h-4 text-orange-500"></i>
+                            Early dismissals
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Today's Check-ins -->
-                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
                     <div class="flex justify-between items-start mb-4">
                         <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Today's Check-ins</p>
                         <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
@@ -101,39 +156,6 @@
                         <span class="flex items-center gap-2 text-sm text-gray-500 font-medium">
                             <i data-lucide="trending-up" class="w-4 h-4 text-green-500"></i>
                             All checked in patients
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Currently in Clinic -->
-                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-                    <div class="flex justify-between items-start mb-4">
-                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Currently in Clinic</p>
-                        <div class="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
-                            <i data-lucide="heart-pulse" class="w-6 h-6 text-red-600"></i>
-                        </div>
-                    </div>
-                    <h3 id="stats-active" class="text-4xl font-black text-gray-900">0</h3>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                            Active patients
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Discharged Today -->
-                <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
-                    <div class="flex justify-between items-start mb-4">
-                        <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Discharged Today</p>
-                        <div class="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
-                            <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
-                        </div>
-                    </div>
-                    <h3 id="stats-discharged" class="text-4xl font-black text-gray-900">0</h3>
-                    <div class="mt-4 pt-4 border-t border-gray-100">
-                        <span class="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                            <i data-lucide="shield-check" class="w-4 h-4 text-green-500"></i>
-                            Successfully treated
                         </span>
                     </div>
                 </div>
@@ -265,12 +287,206 @@
         </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- PHASE 3: MEDICAL ASSESSMENT MODAL -->
+    <!-- ========================================== -->
+    <div id="assessment-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
+                <div>
+                    <h3 class="font-black text-xl uppercase tracking-tight">Medical Assessment</h3>
+                    <p id="assessment-student-name" class="text-red-100 text-sm font-medium mt-1">Student Name</p>
+                </div>
+                <button onclick="closeAssessmentModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <form id="assessment-form" onsubmit="handleAssessmentSubmit(event)" class="p-8 overflow-y-auto custom-scrollbar flex-1">
+                <input type="hidden" id="assessment-visit-id">
+                
+                <!-- Student Info Card -->
+                <div class="bg-gray-50 rounded-2xl p-4 mb-6">
+                    <div class="flex items-center gap-4">
+                        <div id="assessment-student-avatar" class="h-14 w-14 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 font-black text-xl">
+                            S
+                        </div>
+                        <div>
+                            <p id="assessment-class-info" class="font-bold text-gray-800">Grade - Section</p>
+                            <p id="assessment-time-in" class="text-sm text-gray-500">Time In: --:--</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Reason for Visit -->
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-3">Reason for Visit <span class="text-red-500">*</span></label>
+                    <select id="assessment-reason" class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200" required>
+                        <option value="">Select reason...</option>
+                        <option value="Headache">Headache</option>
+                        <option value="Fever">Fever</option>
+                        <option value="Stomach Ache">Stomach Ache</option>
+                        <option value="Nausea/Vomiting">Nausea/Vomiting</option>
+                        <option value="Injury">Injury (Cut, Bruise, Sprain)</option>
+                        <option value="Dizziness">Dizziness</option>
+                        <option value="Cough/Cold">Cough/Cold</option>
+                        <option value="Allergy">Allergy</option>
+                        <option value="Toothache">Toothache</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                
+                <!-- Clinical Notes -->
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-3">Clinical Notes <span class="text-red-500">*</span></label>
+                    <textarea id="assessment-notes" rows="4" class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 resize-none" placeholder="Document observations, symptoms, and findings..." required></textarea>
+                </div>
+                
+                <!-- Vital Signs -->
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-3">Vital Signs (Optional)</label>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Temperature (°C)</label>
+                            <input type="text" id="assessment-temp" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" placeholder="36.5">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Blood Pressure</label>
+                            <input type="text" id="assessment-bp" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" placeholder="120/80">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Pulse (bpm)</label>
+                            <input type="text" id="assessment-pulse" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" placeholder="72">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Decision -->
+                <div class="mb-8">
+                    <label class="block text-sm font-bold text-gray-700 mb-3">Decision <span class="text-red-500">*</span></label>
+                    <div class="space-y-3">
+                        <label class="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:bg-red-50 transition-colors">
+                            <input type="radio" name="assessment-decision" value="Rest at Clinic" class="w-5 h-5 text-red-600" required>
+                            <div>
+                                <span class="font-bold text-gray-800">Rest at Clinic</span>
+                                <p class="text-xs text-gray-500">Student remains in clinic for monitoring</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:bg-green-50 transition-colors">
+                            <input type="radio" name="assessment-decision" value="Return to Class" class="w-5 h-5 text-green-600">
+                            <div>
+                                <span class="font-bold text-gray-800">Return to Class</span>
+                                <p class="text-xs text-gray-500">Student is cleared to go back to class</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:bg-orange-50 transition-colors">
+                            <input type="radio" name="assessment-decision" value="Send Home" class="w-5 h-5 text-orange-600">
+                            <div>
+                                <span class="font-bold text-gray-800">Send Home</span>
+                                <p class="text-xs text-gray-500">Student needs to go home (requires teacher approval)</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Parent Notification -->
+                <div class="mb-8 p-4 bg-blue-50 rounded-xl">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="assessment-parent-notify" class="h-5 w-5 text-blue-600 rounded" checked>
+                        <span class="text-sm font-medium text-gray-700">Send notification to parent</span>
+                    </label>
+                </div>
+                
+                <!-- Submit Button -->
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeAssessmentModal()" class="px-6 py-3 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-colors font-bold">Cancel</button>
+                    <button type="submit" id="assessment-submit-btn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors font-bold flex items-center gap-2">
+                        <i data-lucide="save" class="w-5 h-5"></i>
+                        Save Assessment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Dashboard specific functionality (Enhanced Workflow)
         let activeVisits = [];
         let pendingApprovals = [];
         let approvedPasses = [];
         let currentPatientData = null;
+        let clinicRealtimeChannel = null;
+
+        // ==========================================
+        // PHASE 1: REAL-TIME SUPABASE SUBSCRIPTION
+        // ==========================================
+        // Initialize real-time subscription for live clinic updates
+        function initializeClinicRealtime() {
+            // Prevent duplicate subscriptions
+            if (clinicRealtimeChannel) {
+                console.log('[ClinicDashboard] Realtime already initialized, skipping...');
+                return;
+            }
+            
+            console.log('[ClinicDashboard] Initializing real-time subscription...');
+            
+            // Get today's date range for filtering
+            const today = getLocalISOString();
+            const todayStart = `${today}T00:00:00`;
+            
+            clinicRealtimeChannel = supabase
+                .channel('clinic-dashboard-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'clinic_visits',
+                        filter: `time_in=gte.${todayStart}`
+                    },
+                    (payload) => {
+                        console.log('[ClinicDashboard] Real-time update received:', payload);
+                        // Refresh all data on any change
+                        loadDashboardData();
+                        
+                        // Show visual feedback for real-time update
+                        showRealtimeUpdateIndicator();
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('[ClinicDashboard] Real-time subscription ACTIVE');
+                    } else if (status === 'CHANNEL_ERROR') {
+                        console.error('[ClinicDashboard] Realtime subscription error');
+                    } else if (status === 'CLOSED') {
+                        console.log('[ClinicDashboard] Realtime subscription closed');
+                    }
+                });
+        }
+        
+        // Show visual indicator when real-time update is received
+        function showRealtimeUpdateIndicator() {
+            // Flash the stats cards briefly
+            const statsContainer = document.querySelector('.grid-cols-1');
+            if (statsContainer) {
+                statsContainer.classList.add('animate-pulse');
+                setTimeout(() => {
+                    statsContainer.classList.remove('animate-pulse');
+                }, 500);
+            }
+            
+            // Also show a toast for important changes
+            console.log('[ClinicDashboard] Dashboard refreshed from real-time update');
+        }
+        
+        // Cleanup function for when leaving the page
+        function cleanupClinicRealtime() {
+            if (clinicRealtimeChannel) {
+                supabase.removeChannel(clinicRealtimeChannel);
+                clinicRealtimeChannel = null;
+                console.log('[ClinicDashboard] Real-time subscription cleaned up');
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
@@ -284,10 +500,16 @@
                     }, 500);
                 }
                 
+                // Initialize real-time subscription
+                initializeClinicRealtime();
+                
                 await loadDashboardData();
                 await loadNotificationBadge();
             }
         });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', cleanupClinicRealtime);
 
         async function loadDashboardData() {
             await loadStats();
@@ -436,9 +658,195 @@
             const today = localDate.toISOString().split('T')[0];
             const stats = await fetchDailyClinicStats(today);
             
-            document.getElementById('stats-checkins').innerText = stats.totalCheckIns;
+            // Get pending passes count directly
+            const { data: pendingPasses } = await supabase
+                .from('clinic_visits')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'Pending');
+            
+            // Get sent home today count
+            const { data: sentHomeToday } = await supabase
+                .from('clinic_visits')
+                .select('id', { count: 'exact', head: true })
+                .eq('action_taken', 'Sent Home')
+                .gte('time_out', `${today}T00:00:00`);
+            
+            // Update the stat elements
+            document.getElementById('stats-pending').innerText = pendingPasses?.length || 0;
             document.getElementById('stats-active').innerText = stats.stillInClinic;
-            document.getElementById('stats-discharged').innerText = stats.dischargedToday;
+            document.getElementById('stats-sent-home').innerText = sentHomeToday?.length || 0;
+            document.getElementById('stats-checkins').innerText = stats.totalCheckIns;
+        }
+
+        // ==========================================
+        // PHASE 3: MEDICAL ASSESSMENT MODAL FUNCTIONS
+        // ==========================================
+        
+        function openAssessmentModal(visitId) {
+            const visit = activeVisits.find(v => v.id === visitId);
+            if (!visit) {
+                showToast('Patient not found', 'error');
+                return;
+            }
+            
+            const student = visit.students;
+            const timeIn = new Date(visit.time_in);
+            
+            // Populate modal with patient info
+            document.getElementById('assessment-visit-id').value = visitId;
+            document.getElementById('assessment-student-name').textContent = student?.full_name || 'Unknown';
+            document.getElementById('assessment-student-avatar').textContent = student?.full_name?.charAt(0) || '?';
+            document.getElementById('assessment-class-info').textContent = 
+                `${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || 'Unknown Class'}`;
+            document.getElementById('assessment-time-in').textContent = 
+                `Time In: ${timeIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            
+            // Reset form
+            document.getElementById('assessment-form').reset();
+            
+            // Show modal
+            const modal = document.getElementById('assessment-modal');
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+        }
+        
+        function closeAssessmentModal() {
+            const modal = document.getElementById('assessment-modal');
+            modal.classList.add('hidden');
+        }
+        
+        async function handleAssessmentSubmit(event) {
+            event.preventDefault();
+            
+            const visitId = parseInt(document.getElementById('assessment-visit-id').value);
+            const reason = document.getElementById('assessment-reason').value;
+            const notes = document.getElementById('assessment-notes').value;
+            const decision = document.querySelector('input[name="assessment-decision"]:checked')?.value;
+            const notifyParent = document.getElementById('assessment-parent-notify').checked;
+            
+            // Get vital signs
+            const vitalSigns = {
+                temp: document.getElementById('assessment-temp').value,
+                bp: document.getElementById('assessment-bp').value,
+                pulse: document.getElementById('assessment-pulse').value
+            };
+            
+            if (!visitId || !reason || !notes || !decision) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('assessment-submit-btn');
+            
+            // ==========================================
+            // BUTTON LOCKING (Anti-Redundancy)
+            // ==========================================
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="animate-spin mr-2">⏳</i> Saving...';
+            
+            try {
+                // Get visit details for notifications
+                const { data: visit } = await supabase
+                    .from('clinic_visits')
+                    .select(`*, students(full_name, parent_id, classes(grade_level, section_name, adviser_id))`)
+                    .eq('id', visitId)
+                    .single();
+                
+                if (!visit) throw new Error('Visit not found');
+                
+                let newStatus = 'In Clinic';
+                let notifications = [];
+                const studentName = visit.students?.full_name || 'Student';
+                const classInfo = `${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.section_name || ''}`;
+                
+                // ==========================================
+                // PHASE 4: NOTIFICATION LOOP
+                // ==========================================
+                if (decision === 'Send Home') {
+                    // Set status to pending teacher approval
+                    newStatus = 'Awaiting Teacher Approval';
+                    
+                    // Notify homeroom teacher for approval (URGENT)
+                    if (visit.students?.classes?.adviser_id) {
+                        notifications.push({
+                            recipient_id: visit.students.classes.adviser_id,
+                            recipient_role: 'teachers',
+                            title: 'Clinic: Send Home Approval Required',
+                            message: `${studentName} needs to be sent home. Reason: ${reason}. Notes: ${notes}. Please approve.`,
+                            type: 'clinic_approval',
+                            is_urgent: true
+                        });
+                    }
+                } else {
+                    // Rest at Clinic or Return to Class - notify immediately
+                    newStatus = decision === 'Rest at Clinic' ? 'In Clinic' : 'Completed';
+                    
+                    // Notify homeroom teacher
+                    if (visit.students?.classes?.adviser_id) {
+                        notifications.push({
+                            recipient_id: visit.students.classes.adviser_id,
+                            recipient_role: 'teachers',
+                            title: `Clinic Update - ${classInfo}`,
+                            message: `${studentName} has been assessed. Decision: ${decision}. Reason: ${reason}.`,
+                            type: 'clinic_update'
+                        });
+                    }
+                    
+                    // Notify parent if checked
+                    if (notifyParent && visit.students?.parent_id) {
+                        notifications.push({
+                            recipient_id: visit.students.parent_id,
+                            recipient_role: 'parents',
+                            title: 'Clinic Visit Update',
+                            message: `${studentName} visited the clinic. Decision: ${decision}. ${notes}`,
+                            type: 'clinic_visit'
+                        });
+                    }
+                }
+                
+                // Update visit record with assessment
+                const { error: updateError } = await supabase
+                    .from('clinic_visits')
+                    .update({
+                        reason: reason,
+                        nurse_notes: notes + (vitalSigns.temp ? `\n\nVital Signs: Temp: ${vitalSigns.temp}°C, BP: ${vitalSigns.bp}, Pulse: ${vitalSigns.pulse}` : ''),
+                        action_taken: decision,
+                        status: newStatus,
+                        parent_notified: notifyParent
+                    })
+                    .eq('id', visitId);
+                
+                if (updateError) throw updateError;
+                
+                // Send notifications
+                if (notifications.length > 0) {
+                    await supabase.from('notifications').insert(notifications);
+                }
+                
+                // If returned to class, update attendance
+                if (decision === 'Return to Class') {
+                    // Mark as completed - attendance already has time_in
+                }
+                
+                closeAssessmentModal();
+                
+                if (decision === 'Send Home') {
+                    showToast('Assessment saved. Waiting for teacher approval.', 'info');
+                } else {
+                    showToast(`Assessment saved. Student: ${decision}`, 'success');
+                }
+                
+                await loadDashboardData();
+                
+            } catch (error) {
+                console.error('Assessment error:', error);
+                showToast('Error saving assessment: ' + error.message, 'error');
+            } finally {
+                // Unlock button
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i data-lucide="save" class="w-5 h-5"></i> Save Assessment';
+                lucide.createIcons();
+            }
         }
 
         async function loadActivePatients() {
@@ -484,6 +892,9 @@
                         <td class="px-6 py-4 font-bold text-gray-800">${durationStr}</td>
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
+                                <button onclick="openAssessmentModal(${visit.id})" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors" title="Medical Assessment">
+                                    <i data-lucide="stethoscope" class="w-4 h-4"></i> Assess
+                                </button>
                                 <button onclick="viewPatient(${visit.id})" class="p-2 hover:bg-gray-100 rounded-xl transition-colors" title="View Details">
                                     <i data-lucide="eye" class="w-4 h-4 text-gray-600"></i>
                                 </button>
@@ -610,6 +1021,10 @@
             const teacherId = document.getElementById('discharge-teacher-id').value;
             const studentName = document.getElementById('discharge-student-name').value;
             
+            // ==========================================
+            // PHASE 5: DISCHARGE & ATTENDANCE SYNC
+            // ==========================================
+            
             console.log('[DEBUG] Discharge initiated for visit ID:', visitId);
             console.log('[DEBUG] Action:', action);
             console.log('[DEBUG] Parent notified:', parentNotified);
@@ -640,12 +1055,76 @@
             try {
                 await dischargePatient(visitId, dischargeData);
                 console.log('[DEBUG] Discharge successful');
+                
+                // ==========================================
+                // ATTENDANCE SYNC: Log Early Dismissal
+                // ==========================================
+                if (action === 'Sent Home') {
+                    // Get visit details for attendance logging
+                    const { data: visit } = await supabase
+                        .from('clinic_visits')
+                        .select('student_id, time_in')
+                        .eq('id', visitId)
+                        .single();
+                    
+                    if (visit) {
+                        await logEarlyDismissal(visit.student_id, visit.time_in);
+                        console.log('[DEBUG] Early dismissal logged in attendance');
+                    }
+                }
+                
                 showToast('Patient discharged successfully!', 'success');
                 closeDischargeModal();
                 await loadDashboardData();
             } catch (error) {
                 console.error('[DEBUG] Discharge error:', error);
                 showToast('Error discharging patient: ' + error.message, 'error');
+            }
+        }
+        
+        // ==========================================
+        // PHASE 5: ATTENDANCE LOGGING FOR EARLY DISMISSAL
+        // ==========================================
+        async function logEarlyDismissal(studentId, timeIn) {
+            const today = getLocalISOString();
+            const now = new Date().toISOString();
+            
+            try {
+                // Check if attendance record exists for today
+                const { data: existing } = await supabase
+                    .from('attendance_logs')
+                    .select('id')
+                    .eq('student_id', studentId)
+                    .eq('log_date', today)
+                    .single();
+                
+                if (existing) {
+                    // Update existing record: log early exit
+                    await supabase
+                        .from('attendance_logs')
+                        .update({ 
+                            time_out: now,
+                            status: 'Early Dismissal',
+                            remarks: 'Clinic discharge - Sent Home'
+                        })
+                        .eq('id', existing.id);
+                    console.log('[Attendance] Updated existing record with early dismissal');
+                } else {
+                    // Create new attendance record
+                    await supabase
+                        .from('attendance_logs')
+                        .insert({
+                            student_id: studentId,
+                            log_date: today,
+                            time_in: timeIn,
+                            time_out: now,
+                            status: 'Early Dismissal',
+                            remarks: 'Clinic discharge - Sent Home'
+                        });
+                    console.log('[Attendance] Created new record with early dismissal');
+                }
+            } catch (err) {
+                console.error('[Attendance] Error logging early dismissal:', err);
             }
         }
 
@@ -656,6 +1135,10 @@
 
         document.getElementById('discharge-modal').addEventListener('click', function(e) {
             if (e.target === this) closeDischargeModal();
+        });
+        
+        document.getElementById('assessment-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeAssessmentModal();
         });
 
     </script>

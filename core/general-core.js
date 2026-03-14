@@ -48,11 +48,34 @@ function logout() {
     }
 }
 
+// EXPORT logout to window for global access (FIX: buttons in HTML couldn't call logout)
+window.logout = logout;
+
 // 3. Dynamic Greeting (Optional Helper)
+// UPDATED: Now includes time-based greetings and weekend greetings
 function setWelcomeMessage(elementId, user) {
     const el = document.getElementById(elementId);
     if(el && user) {
-        el.innerText = `Welcome, ${user.full_name}`;
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const hour = now.getHours();
+        
+        let greeting;
+        
+        // Check if it's weekend
+        if (day === 0) {
+            greeting = 'Happy Sunday';
+        } else if (day === 6) {
+            greeting = 'Happy Saturday';
+        } else if (hour < 12) {
+            greeting = 'Good Morning';
+        } else if (hour < 18) {
+            greeting = 'Good Afternoon';
+        } else {
+            greeting = 'Good Evening';
+        }
+        
+        el.innerText = `${greeting}, ${user.full_name.split(' ')[0]}`;
     }
 }
 
@@ -311,3 +334,176 @@ window.isValidSchoolDay = async function(dateStr) {
     // Monday - Friday are valid school days
     return true;
 };
+
+// ==========================================
+// PHASE 1: ANTI-REDUNDANCY UTILITIES
+// Added to eliminate duplicate code across modules
+// ==========================================
+
+// 11. Unified Date Formatting
+// Replaces duplicate formatDate() functions in admin, clinic, parent modules
+function formatDate(dateStr, format = 'short') {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    
+    if (format === 'short') {
+        return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (format === 'long') {
+        return date.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    if (format === 'datetime') {
+        return date.toLocaleString('en-PH', { 
+            year: 'numeric', month: 'short', day: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        });
+    }
+    
+    return dateStr;
+}
+
+// 12. Unified Time Formatting
+// Converts 24-hour time to 12-hour format with AM/PM
+function formatTime(timeStr) {
+    if (!timeStr) return '';
+    
+    // Handle if it's a full datetime string
+    if (timeStr.includes('T')) {
+        const date = new Date(timeStr);
+        return date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    // Handle just time string (HH:MM:SS or HH:MM)
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    
+    const hours = parseInt(parts[0]);
+    const minutes = parts[1];
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    
+    return `${displayHours}:${minutes} ${ampm}`;
+}
+
+// 13. Settings Cache - Eliminates repeated database queries
+// Used by admin and teacher modules to avoid fetching settings repeatedly
+let settingsCache = null;
+let settingsCacheTime = 0;
+
+window.getSettings = async function(refresh = false) {
+    const now = Date.now();
+    
+    // Return cached data if less than 5 minutes old
+    if (!refresh && settingsCache && (now - settingsCacheTime) < 300000) {
+        return settingsCache;
+    }
+    
+    try {
+        const { data, error } = await supabase.from('settings').select('*');
+        if (error) {
+            console.error('[getSettings] Error:', error);
+            return null;
+        }
+        
+        // Convert array to object for easy access
+        settingsCache = data.reduce((acc, s) => {
+            acc[s.setting_key] = s.setting_value;
+            return acc;
+        }, {});
+        settingsCacheTime = now;
+        
+        return settingsCache;
+    } catch (err) {
+        console.error('[getSettings] Exception:', err);
+        return null;
+    }
+};
+
+// 14. Unified Confirmation Dialog
+// Replaces duplicate modal code in admin, teacher, guard modules
+window.showConfirm = function(title, message, onConfirm, onCancel) {
+    const existing = document.getElementById('confirmation-modal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'confirmation-modal';
+    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up">
+            <h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3>
+            <p class="text-sm text-gray-500 font-medium mb-6">${message}</p>
+            <div class="flex gap-3">
+                <button id="confirm-cancel" class="flex-1 py-3 bg-gray-200 text-gray-800 rounded-xl font-bold text-sm hover:bg-gray-300 transition-all">Cancel</button>
+                <button id="confirm-ok" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-all">Confirm</button>
+            </div>
+        </div>`;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('confirm-cancel').onclick = () => {
+        modal.remove();
+        if (onCancel) onCancel();
+    };
+    
+    document.getElementById('confirm-ok').onclick = () => {
+        modal.remove();
+        if (onConfirm) onConfirm();
+    };
+};
+
+// 15. Generic Modal for Custom Content
+// Used when you need a modal with custom HTML content
+window.showModal = function(id, title, contentHtml, buttons = [], onClose) {
+    const existing = document.getElementById(id);
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = id;
+    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
+    
+    // Generate buttons HTML
+    let buttonsHtml;
+    if (buttons.length > 0) {
+        buttonsHtml = buttons.map((btn, i) => 
+            `<button id="${id}-btn-${i}" class="px-4 py-2 rounded-lg font-bold text-sm ${btn.primary ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-800'} ${btn.danger ? 'bg-red-600 text-white' : ''}">${btn.text}</button>`
+        ).join('');
+    } else {
+        buttonsHtml = `<button id="${id}-btn-close" class="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold text-sm">Close</button>`;
+    }
+    
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-auto p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-black text-gray-800 mb-4">${title}</h3>
+            <div class="mb-6">${contentHtml}</div>
+            <div class="flex gap-3 justify-end">${buttonsHtml}</div>
+        </div>`;
+    
+    document.body.appendChild(modal);
+    
+    // Attach button handlers
+    if (buttons.length > 0) {
+        buttons.forEach((btn, i) => {
+            const btnEl = document.getElementById(`${id}-btn-${i}`);
+            if (btnEl) {
+                btnEl.onclick = () => {
+                    modal.remove();
+                    if (btn.onClick) btn.onClick();
+                };
+            }
+        });
+    } else {
+        const closeBtn = document.getElementById(`${id}-btn-close`);
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                modal.remove();
+                if (onClose) onClose();
+            };
+        }
+    }
+};
+
+// Export functions to window for global access
+window.formatDate = formatDate;
+window.formatTime = formatTime;
+
+console.log('[GeneralCore] Phase 1 utilities loaded: formatDate, formatTime, getSettings, showConfirm, showModal');

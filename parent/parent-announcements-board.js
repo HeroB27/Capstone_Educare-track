@@ -11,39 +11,45 @@ let announcementsChannel = null;
  * Initialize announcements page
  */
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize currentAdviserId to null (will be updated if child is selected)
+    currentAdviserId = null;
+    
     await loadAnnouncements();
     setupRealtimeAnnouncements();
+    
+    // Listen for child changes to reload with new adviser filtering
+    window.addEventListener('childChanged', () => {
+        loadAnnouncements();
+    });
 });
 
 /**
  * Load announcements targeted to parents
- * PARANOIA SHIELD: Data Isolation - Only fetch Admin posts OR posts from the current child's adviser
+ * UPDATED: No longer requires currentChild - shows all parent-targeted announcements
+ * PARANOIA SHIELD: Data Isolation - Only fetch Admin posts OR posts from the current child's adviser (if child selected)
  */
 async function loadAnnouncements() {
-    // UPDATED: Use currentChild from parent-core.js instead of localStorage
-    if (!window.currentChild) {
-        showEmptyState();
-        return;
-    }
-
-    const childId = window.currentChild.id;
+    // REMOVED: No longer require currentChild - announcements should be visible to all parents
+    // This allows parents to see announcements even without selecting a child
 
     try {
-        // 1. Get the child's class and teacher info
-        const { data: childData, error: childError } = await supabase
-            .from('students')
-            .select('class_id, classes(adviser_id)')
-            .eq('id', childId)
-            .single();
+        // Get current child if available (for adviser-specific filtering)
+        let adviserId = null;
+        if (window.currentChild && window.currentChild.id) {
+            // 1. Get the child's class and teacher info (optional - for privacy filtering)
+            const { data: childData, error: childError } = await supabase
+                .from('students')
+                .select('class_id, classes(adviser_id)')
+                .eq('id', window.currentChild.id)
+                .single();
 
-        if (childError) throw childError;
-
-        // FIX: Prevent 400 Bad Request if student is not assigned to a class yet
-        const adviserId = childData?.classes?.adviser_id || 0;
-        currentAdviserId = adviserId; // Store for real-time filtering
+            if (!childError && childData?.classes?.adviser_id) {
+                adviserId = childData.classes.adviser_id;
+            }
+        }
 
         // 2. PARANOIA SHIELD: Build privacy-focused query
-        // Only fetch Admin posts (posted_by_teacher_id is null) OR posts from the current child's adviser
+        // Fetch all announcements where target_parents = true
         const now = new Date().toISOString();
         let query = supabase
             .from('announcements')
@@ -51,11 +57,14 @@ async function loadAnnouncements() {
             .eq('target_parents', true)
             .or(`scheduled_at.is.null,scheduled_at.lte.${now}`);
 
-        // Data Isolation: Only show Admin posts OR adviser posts
+        // If we have an adviser ID, filter to show admin posts OR adviser posts only
         if (adviserId) {
             query = query.or(`posted_by_teacher_id.is.null,posted_by_teacher_id.eq.${adviserId}`);
+            currentAdviserId = adviserId; // Store for real-time filtering
         } else {
+            // No child selected - show only admin announcements (no teacher-specific ones)
             query = query.is('posted_by_teacher_id', null);
+            currentAdviserId = null; // No adviser filtering
         }
 
         // UI FILTERS: Apply user-selected filters
@@ -96,7 +105,7 @@ async function loadAnnouncements() {
 
 /**
  * Setup real-time announcements subscription
- * UPDATED: Filter by adviser for privacy isolation
+ * UPDATED: Filter by adviser for privacy isolation (handles no child selected case)
  */
 function setupRealtimeAnnouncements() {
     // Remove existing channel if any
@@ -117,6 +126,7 @@ function setupRealtimeAnnouncements() {
             const newAnnouncement = payload.new;
             
             // PARANOIA SHIELD: Only add if from admin (null) or current adviser
+            // If no child selected (currentAdviserId is null), only show admin announcements
             if (newAnnouncement.posted_by_teacher_id === null || 
                 newAnnouncement.posted_by_teacher_id === currentAdviserId) {
                 allAnnouncements.unshift(newAnnouncement);

@@ -60,7 +60,7 @@ async function loadMyHomeroom() {
         
         // Show homeroom card
         homeroomCard.classList.remove('hidden');
-        homeroomName.textContent = `${teacherClass.grade_level} - ${teacherClass.section_name}`;
+        homeroomName.textContent = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.section_name || 'N/A'}`;
         
         // Find the grade level info safely
         const gradeInfo = GRADE_LEVELS.find(g => {
@@ -73,10 +73,8 @@ async function loadMyHomeroom() {
                    (g.id === 'shs' && gl.includes('senior'));
         });
         
-        // Try to get the schedule from settings
-        const { data: settingsData } = await supabase.from('settings').select('*');
-        const settings = {};
-        settingsData?.forEach(s => settings[s.setting_key] = s.setting_value);
+        // Try to get the schedule from settings (UPDATED: use getSettings cache)
+        const settings = await getSettings();
         
         const defaults = gradeInfo ? DEFAULT_SCHEDULES[gradeInfo.id] : DEFAULT_SCHEDULES.shs;
         const startTime = settings[`grade_${gradeInfo?.id || 'shs'}_start`] || defaults.start;
@@ -96,13 +94,8 @@ async function loadGradeSchedules() {
     container.innerHTML = '';
 
     try {
-        // Load all settings
-        const { data: settingsData, error } = await supabase.from('settings').select('*');
-        if (error) throw error;
-
-        // Create settings lookup
-        const settings = {};
-        settingsData?.forEach(s => settings[s.setting_key] = s.setting_value);
+        // Load all settings (UPDATED: use getSettings cache)
+        const settings = await getSettings();
 
         // Build the grid (read-only - no edit buttons)
         container.innerHTML = GRADE_LEVELS.map(grade => {

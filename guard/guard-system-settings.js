@@ -17,45 +17,9 @@ const DEVICE_SETTINGS_KEY = 'educare_guard_device_settings';
 const DEBUG_MODE = false;
 
 // ============================================================================
-// NOTIFICATION SYSTEM (Replaces native alert)
+// NOTIFICATION SYSTEM (REMOVED - now using general-core.js)
+// UPDATED: Using window.showNotification from general-core.js
 // ============================================================================
-function showNotification(msg, type = 'success', duration = 3000) {
-    const existing = document.getElementById('notification-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[999] flex items-center justify-center animate-fade-in p-4';
-
-    const colors = {
-        success: { bg: 'bg-emerald-50', icon: 'text-emerald-500', iconName: 'check-circle' },
-        error: { bg: 'bg-red-50', icon: 'text-red-500', iconName: 'alert-circle' },
-        info: { bg: 'bg-violet-50', icon: 'text-violet-600', iconName: 'info' }
-    };
-    const color = colors[type] || colors.success;
-
-    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
-    if (!dndEnabled && navigator.vibrate) {
-        navigator.vibrate(type === 'error' ? [100, 50, 100] : 100);
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up">
-        <div class="flex flex-col items-center text-center">
-            <div class="w-16 h-16 ${color.bg} ${color.icon} rounded-full flex items-center justify-center mb-4">
-                <i data-lucide="${color.iconName}" class="w-8 h-8"></i>
-            </div>
-            <h3 class="text-xl font-black text-gray-800 mb-2">${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information'}</h3>
-            <p class="text-sm text-gray-500 font-medium mb-6">${msg}</p>
-            <button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button>
-        </div>
-    </div>`;
-
-    document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => modal.remove();
-    if (window.lucide) window.lucide.createIcons();
-
-    setTimeout(() => modal.remove(), duration);
-}
 
 // ============================================================================
 // INITIALIZATION

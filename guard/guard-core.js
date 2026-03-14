@@ -826,8 +826,8 @@ async function notifyTeacher(student, direction, status) {
             hour12: true 
         });
         
-        const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
-        const section = student.classes ? student.classes.section_name : '';
+        const gradeLevel = student.classes?.grade_level || 'Unknown';
+        const section = student.classes?.section_name || '';
         
         let title = '';
         let message = '';
@@ -883,8 +883,8 @@ function displayScanResult(student, direction, statusInfo, scanTime) {
     resultCard.classList.remove('hidden');
     
     // Update student info
-    const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
-    const section = student.classes ? student.classes.section_name : '';
+    const gradeLevel = student.classes?.grade_level || 'Unknown';
+    const section = student.classes?.section_name || '';
     const fullInfo = gradeLevel && section 
         ? `${gradeLevel} - ${section} • ${student.student_id_text}`
         : student.student_id_text;
@@ -915,7 +915,7 @@ function addToRecentScans(student, direction, statusInfo, scanTime) {
     const recentList = document.getElementById('recent-scans-list');
     if (!recentList) return;
     
-    const gradeLevel = student.classes ? student.classes.grade_level : 'Unknown';
+    const gradeLevel = student.classes?.grade_level || 'Unknown';
     const action = direction === 'ENTRY' ? 'Entered' : 'Exited';
     
     const entry = document.createElement('div');

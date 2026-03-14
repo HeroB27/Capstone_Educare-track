@@ -72,7 +72,7 @@ async function loadTeacherProfile() {
         }
         
         const homeroomInfo = teacher.classes 
-            ? `${teacher.classes.grade_level} - ${teacher.classes.section_name}`
+            ? `${teacher.classes?.grade_level || 'Unassigned'} - ${teacher.classes?.section_name || 'N/A'}`
             : 'No Homeroom Assigned';
         
         container.innerHTML = `
@@ -276,3 +276,10 @@ async function submitPasswordChange() {
         });
     }
 }
+
+// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.switchTeacherSettingsTab = switchTeacherSettingsTab;
+window.submitPasswordChange = submitPasswordChange;
+window.setTeacherThemeColor = setTeacherThemeColor;
+window.setTeacherSidebarStyle = setTeacherSidebarStyle;
+window.saveTeacherThemePreferences = saveTeacherThemePreferences;

@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 /**
  * Setup real-time subscription for notifications
+ * UPDATED: Phase 2 - Added UPDATE event subscription for is_read changes
+ * UPDATED: Added announcement real-time subscription
  */
 function setupNotificationsRealtime() {
     // Remove existing channel if any
@@ -39,11 +41,80 @@ function setupNotificationsRealtime() {
             // Add to local notifications
             allNotifications.unshift(newNotification);
             
-            // Show toast notification
-            showNotificationToast(newNotification);
+            // Show toast notification (use core helper)
+            if (typeof showNotificationToast === 'function') {
+                showNotificationToast(newNotification);
+            } else {
+                // Fallback to local function
+                showNotificationToastLocal(newNotification);
+            }
             
             // Re-render
             renderNotifications();
+            
+            // Update badge
+            updateNotificationBadgeCount();
+            
+            // Dispatch event for dashboard badge update
+            window.dispatchEvent(new CustomEvent('notificationsUpdated'));
+        })
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `recipient_id=eq.${currentUser.id}`
+        }, async (payload) => {
+            console.log('Notification updated:', payload);
+            const updatedNotification = payload.new;
+            
+            // Update local state
+            const index = allNotifications.findIndex(n => n.id === updatedNotification.id);
+            if (index !== -1) {
+                allNotifications[index] = updatedNotification;
+            }
+            
+            // Re-render
+            renderNotifications();
+            
+            // Update badge
+            updateNotificationBadgeCount();
+        })
+        // NEW: Listen for new announcements targeted to parents
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'announcements',
+            filter: 'target_parents=eq.true'
+        }, async (payload) => {
+            console.log('New announcement received:', payload);
+            const newAnnouncement = payload.new;
+            
+            // Convert to notification format
+            const announcementNotification = {
+                id: `ann_${newAnnouncement.id}`,
+                title: newAnnouncement.title,
+                message: newAnnouncement.content,
+                type: 'announcement',
+                is_read: false,
+                created_at: newAnnouncement.created_at,
+                is_announcement: true,
+                announcement_id: newAnnouncement.id
+            };
+            
+            // Add to local notifications
+            allNotifications.unshift(announcementNotification);
+            
+            // Sort by date
+            allNotifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            // Show toast notification
+            showNotificationToastLocal(announcementNotification);
+            
+            // Re-render
+            renderNotifications();
+            
+            // Update badge
+            updateNotificationBadgeCount();
             
             // Dispatch event for dashboard badge update
             window.dispatchEvent(new CustomEvent('notificationsUpdated'));
@@ -59,8 +130,26 @@ function setupNotificationsRealtime() {
 }
 
 /**
+ * Update notification badge count locally
+ * Phase 2: Helper for badge updates
+ */
+function updateNotificationBadgeCount() {
+    const unreadCount = allNotifications.filter(n => !n.is_read).length;
+    const badge = document.getElementById('notif-badge-quick-action');
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+}
+
+/**
  * Load all notifications for parent
  * UPDATED: Fixed recipient_role to 'parents' (plural), extract parentId from localStorage
+ * FIXED: Also fetch announcements from announcements table where target_parents = true
  */
 async function loadNotifications() {
     try {
@@ -95,8 +184,37 @@ async function loadNotifications() {
             return;
         }
 
-        allNotifications = notifications || [];
-        console.log('Notifications loaded:', allNotifications.length);
+        // NEW: Also fetch announcements where target_parents = true
+        const { data: announcements, error: annError } = await supabase
+            .from('announcements')
+            .select('*')
+            .eq('target_parents', true)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        if (annError) {
+            console.error('Error loading announcements:', annError);
+        }
+
+        // Convert announcements to notification format and merge
+        const announcementNotifications = (announcements || []).map(ann => ({
+            id: `ann_${ann.id}`,  // Prefix to distinguish from regular notifications
+            title: ann.title,
+            message: ann.content,
+            type: 'announcement',
+            is_read: false,
+            created_at: ann.created_at,
+            is_announcement: true,  // Flag to identify announcement-derived notifications
+            announcement_id: ann.id
+        }));
+
+        // Merge notifications and announcements, then sort by date
+        allNotifications = [...(notifications || []), ...announcementNotifications]
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 100);  // Limit total to 100
+
+        console.log('Notifications loaded:', allNotifications.length, '(includes', announcementNotifications.length, 'announcements)');
         renderNotifications();
 
         document.getElementById('loading-indicator').classList.add('hidden');
@@ -115,14 +233,32 @@ async function loadNotifications() {
 
 /**
  * Show notification toast for new notifications
+ * UPDATED: Phase 2 - Uses core helper if available
  */
 function showNotificationToast(notification) {
+    // Use core helper if available
+    if (typeof window.showNotificationToast === 'function' && window.showNotificationToast !== showNotificationToast) {
+        window.showNotificationToast(notification);
+        return;
+    }
+    
+    // Fallback: Local toast implementation
+    showNotificationToastLocal(notification);
+}
+
+/**
+ * Fallback toast function (local implementation)
+ */
+function showNotificationToastLocal(notification) {
+    const icon = getNotificationIcon(notification.type);
+    const colors = getNotificationColor(notification.type);
+    
     // Create toast element
     const toast = document.createElement('div');
-    toast.className = 'fixed top-4 left-4 right-4 bg-white rounded-lg shadow-lg p-4 z-50 animate-slide-in';
+    toast.className = `fixed top-4 left-4 right-4 ${colors.bg} rounded-lg shadow-lg p-4 z-50 animate-slide-in border-l-4 ${colors.border}`;
     toast.innerHTML = `
         <div class="flex items-start gap-3">
-            <span class="text-2xl">${getNotificationIcon(notification.type)}</span>
+            <span class="text-2xl">${icon}</span>
             <div class="flex-1">
                 <p class="font-bold text-gray-800">${notification.title}</p>
                 <p class="text-sm text-gray-600 truncate">${notification.message}</p>
@@ -150,17 +286,37 @@ function showNotificationToast(notification) {
 function renderNotifications() {
     const container = document.getElementById('notifications-list');
     
-    // Filter notifications
-    const filtered = currentFilter === 'all' 
-        ? allNotifications 
-        : allNotifications.filter(n => n.type === currentFilter);
+    // Filter notifications by category or exact type
+    let filtered;
+    if (currentFilter === 'all') {
+        filtered = allNotifications;
+    } else if (currentFilter === 'gate') {
+        // Gate category: gate_entry, gate_exit
+        filtered = allNotifications.filter(n => n.type === 'gate_entry' || n.type === 'gate_exit');
+    } else if (currentFilter === 'excuse') {
+        // Excuse category: excuse_approved, excuse_rejected, excuse_pending
+        filtered = allNotifications.filter(n => 
+            n.type === 'excuse_approved' || 
+            n.type === 'excuse_rejected' || 
+            n.type === 'excuse_pending' ||
+            n.type === 'excuse'
+        );
+    } else if (currentFilter === 'announcement') {
+        filtered = allNotifications.filter(n => n.type === 'announcement');
+    } else if (currentFilter === 'clinic') {
+        filtered = allNotifications.filter(n => n.type === 'clinic' || n.type === 'clinic_visit');
+    } else {
+        filtered = allNotifications.filter(n => n.type === currentFilter);
+    }
 
     if (filtered.length === 0) {
         // Show message for empty filtered results
         const filterLabels = {
             'all': 'No notifications',
-            'attendance': 'No attendance notifications',
+            'gate': 'No gate activity notifications',
             'clinic': 'No clinic notifications',
+            'excuse': 'No excuse letter notifications',
+            'announcement': 'No announcements',
             'early_exit': 'No alert notifications'
         };
         container.innerHTML = `
@@ -174,6 +330,8 @@ function renderNotifications() {
 
     container.innerHTML = filtered.map(notification => {
         const icon = getNotificationIcon(notification.type);
+        const colors = getNotificationColor(notification.type);
+        const label = getNotificationLabel(notification.type);
         const isUnread = !notification.is_read;
         const unreadBadge = isUnread ? '<span class="w-2 h-2 bg-blue-500 rounded-full ml-2"></span>' : '';
         
@@ -181,7 +339,7 @@ function renderNotifications() {
         return `
             <div 
                 onclick="showNotificationDetail('${notification.id}')"
-                class="bg-white rounded-xl shadow-md p-4 cursor-pointer transition hover:bg-gray-50 ${isUnread ? 'border-l-4 border-green-500' : ''}"
+                class="bg-white rounded-xl shadow-md p-4 cursor-pointer transition hover:bg-gray-50 ${colors.border} border-l-4"
             >
                 <div class="flex items-start gap-3">
                     <span class="text-2xl">${icon}</span>
@@ -191,7 +349,10 @@ function renderNotifications() {
                             ${unreadBadge}
                         </div>
                         <p class="text-sm text-gray-600 line-clamp-2">${notification.message}</p>
-                        <p class="text-xs text-gray-400 mt-1">${getRelativeTime(notification.created_at)}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs ${colors.icon} font-medium">${label}</span>
+                            <span class="text-xs text-gray-400">• ${getRelativeTime(notification.created_at)}</span>
+                        </div>
                     </div>
                     <button onclick="event.stopPropagation(); deleteNotification('${notification.id}')" class="text-gray-300 hover:text-red-500 p-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,22 +367,76 @@ function renderNotifications() {
 
 /**
  * Get notification icon based on type
+ * UPDATED: Added gate_entry, gate_exit, late_notification, critical_absence
  */
 function getNotificationIcon(type) {
     switch (type) {
+        case 'gate_entry': return '🚪';
+        case 'gate_exit': return '🚪';
         case 'early_exit': return '⚠️';
         case 'clinic': return '🏥';
+        case 'clinic_visit': return '🏥';
         case 'attendance': return '📋';
+        case 'late_notification': return '⏰';
+        case 'critical_absence': return '⚠️';
         case 'announcement': return '📢';
         case 'excuse_approved': return '✅';
         case 'excuse_rejected': return '❌';
         case 'excuse_pending': return '⏳';
+        case 'excuse': return '📝';
         default: return '🔔';
     }
 }
 
 /**
+ * Get notification color classes based on type
+ * UPDATED: Phase 2 - Color coding per notification type
+ */
+function getNotificationColor(type) {
+    switch (type) {
+        case 'gate_entry': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
+        case 'gate_exit': return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
+        case 'early_exit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'clinic':
+        case 'clinic_visit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'attendance': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
+        case 'late_notification': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
+        case 'critical_absence': return { bg: 'bg-red-50', border: 'border-l-red-600', icon: 'text-red-700' };
+        case 'announcement': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
+        case 'excuse_approved': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
+        case 'excuse_rejected': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'excuse_pending': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
+        case 'excuse': return { bg: 'bg-purple-50', border: 'border-l-purple-500', icon: 'text-purple-600' };
+        default: return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
+    }
+}
+
+/**
+ * Get notification label for display
+ * UPDATED: Phase 2 - Category labels
+ */
+function getNotificationLabel(type) {
+    switch (type) {
+        case 'gate_entry': return 'Gate Entry';
+        case 'gate_exit': return 'Gate Exit';
+        case 'early_exit': return 'Early Exit Alert';
+        case 'clinic':
+        case 'clinic_visit': return 'Clinic Visit';
+        case 'attendance': return 'Attendance';
+        case 'late_notification': return 'Late Arrival';
+        case 'critical_absence': return 'Critical Absence';
+        case 'announcement': return 'Announcement';
+        case 'excuse_approved': return 'Excuse Approved';
+        case 'excuse_rejected': return 'Excuse Rejected';
+        case 'excuse_pending': return 'Excuse Pending';
+        case 'excuse': return 'Excuse Letter';
+        default: return 'Notification';
+    }
+}
+
+/**
  * Filter notifications by type
+ * UPDATED: Added gate, excuse, announcement filter categories
  */
 function filterNotifications(type) {
     currentFilter = type;
@@ -230,9 +445,9 @@ function filterNotifications(type) {
     document.querySelectorAll('.filter-btn').forEach(btn => {
         if (btn.dataset.filter === type || 
             (type === 'all' && btn.dataset.filter === 'all')) {
-            btn.className = 'filter-btn px-4 py-2 rounded-full text-sm bg-green-700 text-white whitespace-nowrap';
+            btn.className = 'filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-green-600 text-white whitespace-nowrap transition-all duration-200';
         } else {
-            btn.className = 'filter-btn px-4 py-2 rounded-full text-sm bg-white text-gray-600 border whitespace-nowrap';
+            btn.className = 'filter-btn px-4 py-2 rounded-xl text-sm font-medium bg-white text-gray-600 border border-gray-200 whitespace-nowrap transition-all duration-200';
         }
     });
 
@@ -285,9 +500,16 @@ async function showNotificationDetail(notificationId) {
 
 /**
  * Mark notification as read
+ * UPDATED: Handle announcement-derived notifications (prefixed with 'ann_')
  */
 async function markAsRead(notificationId) {
     try {
+        // Skip marking announcements as read in notifications table (they're not stored there)
+        if (notificationId.toString().startsWith('ann_')) {
+            console.log('Announcement notifications are read-only (not stored in notifications table)');
+            return;
+        }
+        
         await supabase
             .from('notifications')
             .update({ is_read: true })
@@ -330,8 +552,20 @@ async function markAllRead() {
 
 /**
  * Delete a notification
+ * UPDATED: Handle announcement-derived notifications
  */
 async function deleteNotification(notificationId) {
+    // Handle announcement-derived notifications (prefixed with 'ann_')
+    if (notificationId.toString().startsWith('ann_')) {
+        // For announcements, just remove from local display
+        if (!confirm('Remove this announcement from your notifications list?')) return;
+        
+        // Update local state only
+        allNotifications = allNotifications.filter(n => n.id != notificationId);
+        renderNotifications();
+        return;
+    }
+    
     if (!confirm('Delete this notification?')) return;
 
     try {

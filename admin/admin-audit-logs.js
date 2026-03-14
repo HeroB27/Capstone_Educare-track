@@ -77,7 +77,7 @@ async function loadAuditLogs() {
         
         tbody.innerHTML = data.map(log => `
             <tr class="hover:bg-gray50 transition-colors">
-                <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(log.created_at)}</td>
+                <td class="px-6 py-4 text-sm text-gray-600">${formatDate(log.created_at, 'datetime')}</td>
                 <td class="px-6 py-4">
                     <span class="px-2 py-1 bg-violet-100 text-violet-700 rounded text-xs font-bold uppercase">${log.user_role || 'N/A'}</span>
                     <span class="text-sm text-gray-700 ml-2">${log.username || 'Unknown'}</span>
@@ -136,7 +136,7 @@ async function exportLogsToCSV() {
 
         let csv = 'Timestamp,User,Role,Action,Details,Target\n';
         data.forEach(log => {
-            const timestamp = formatDateTime(log.created_at).replace(/,/g, '');
+            const timestamp = formatDate(log.created_at, 'datetime').replace(/,/g, '');
             const username = (log.username || 'Unknown').replace(/"/g, '""');
             const role = (log.user_role || 'N/A').replace(/"/g, '""');
             const action = (log.action || 'N/A').replace(/"/g, '""');
@@ -165,18 +165,8 @@ async function exportLogsToCSV() {
     }
 }
 
-// Helper: Format datetime
-function formatDateTime(dateStr) {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-PH', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
+// Helper: Format datetime (REMOVED - now using general-core.js formatDate)
+// UPDATED: Using window.formatDate from general-core.js
 
 // Inject CSS
 function injectStyles() {
@@ -185,36 +175,8 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
-// Show notification
-function showNotification(msg, type='info') {
-    const existing = document.getElementById('notification-modal');
-    if(existing) existing.remove();
-    
-    const modal = document.createElement('div');
-    modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
-    
-    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
-    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
-    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
-    
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up">
-            <div class="flex flex-col items-center text-center">
-                <div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4">
-                    <i data-lucide="${iconName}" class="w-8 h-8"></i>
-                </div>
-                <h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3>
-                <p class="text-sm text-gray-500 font-medium mb-6">${msg}</p>
-                <button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button>
-            </div>
-        </div>`;
-    
-    document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => modal.remove();
-    if(window.lucide) lucide.createIcons();
-}
+// Show notification (REMOVED - now using general-core.js showNotification)
+// UPDATED: Using window.showNotification from general-core.js
 
 // ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
 window.loadAuditLogs = loadAuditLogs;

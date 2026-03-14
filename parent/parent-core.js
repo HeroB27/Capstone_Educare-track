@@ -10,10 +10,29 @@ var currentUser = checkSession('parents');
 // Initialize user info
 document.addEventListener('DOMContentLoaded', async () => {
     if (currentUser) {
-        // Update welcome message
+        // Update welcome message with time-based greeting and weekend support
         const welcomeEl = document.getElementById('parent-name');
         if (welcomeEl) {
-            welcomeEl.innerText = `Welcome, ${currentUser.full_name.split(' ')[0]}`;
+            const now = new Date();
+            const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+            const hour = now.getHours();
+            
+            let greeting;
+            
+            // Check if it's weekend
+            if (day === 0) {
+                greeting = 'Happy Sunday';
+            } else if (day === 6) {
+                greeting = 'Happy Saturday';
+            } else if (hour < 12) {
+                greeting = 'Good Morning';
+            } else if (hour < 18) {
+                greeting = 'Good Afternoon';
+            } else {
+                greeting = 'Good Evening';
+            }
+            
+            welcomeEl.innerText = `${greeting}, ${currentUser.full_name.split(' ')[0]}`;
         }
 
         // Add listener for child changes to update header
@@ -57,10 +76,11 @@ async function loadChildren() {
         
         console.log('Loading children for parentId:', parentId);
         
-        // Use simple direct query - no complex joins that could fail
+        // FIX: Added classes join to get grade_level and section_name
+        // UPDATED: Also fetch class info for display
         const { data: children, error } = await supabase
             .from('students')
-            .select('*')
+            .select('*, classes(grade_level, section_name)')
             .eq('parent_id', parentId);
 
         if (error) {
@@ -358,17 +378,9 @@ function formatTime(dateString) {
 }
 
 /**
- * Format date for display
+ * Format date for display (REMOVED - now using general-core.js)
+ * UPDATED: Using window.formatDate from general-core.js
  */
-function formatDate(dateString) {
-    if (!dateString) return '--';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
-    });
-}
 
 /**
  * Format relative time (e.g., "5 minutes ago")
@@ -400,7 +412,8 @@ function navigateTo(page) {
         'excuse': 'parent-excuse-letter-template.html',
         'notifications': 'parent-notifications.html',
         'announcements': 'parent-announcements-board.html',
-        'schedule': 'parent-schedule.html' // NEW: Add schedule page route
+        'schedule': 'parent-schedule.html',
+        'calendar': 'parent-calendar.html' // NEW: Add calendar page route
     };
     
     if (pageMap[page]) {
@@ -428,3 +441,169 @@ function logout() {
     }
 }
 window.logout = logout;
+
+// ============================================
+// NOTIFICATION HELPER FUNCTIONS (Phase 2)
+// ============================================
+
+/**
+ * Get notification icon based on type
+ * Phase 2: Added gate_entry, gate_exit, late_notification, critical_absence
+ */
+function getNotificationIcon(type) {
+    switch (type) {
+        case 'gate_entry': return '🚪';
+        case 'gate_exit': return '🚪';
+        case 'early_exit': return '⚠️';
+        case 'clinic':
+        case 'clinic_visit': return '🏥';
+        case 'attendance': return '📋';
+        case 'late_notification': return '⏰';
+        case 'critical_absence': return '⚠️';
+        case 'announcement': return '📢';
+        case 'excuse_approved': return '✅';
+        case 'excuse_rejected': return '❌';
+        case 'excuse_pending': return '⏳';
+        case 'excuse': return '📝';
+        default: return '🔔';
+    }
+}
+
+/**
+ * Get notification color classes based on type
+ * Phase 2: Color coding per notification type
+ */
+function getNotificationColor(type) {
+    switch (type) {
+        case 'gate_entry': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
+        case 'gate_exit': return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
+        case 'early_exit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'clinic':
+        case 'clinic_visit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'attendance': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
+        case 'late_notification': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
+        case 'critical_absence': return { bg: 'bg-red-50', border: 'border-l-red-600', icon: 'text-red-700' };
+        case 'announcement': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
+        case 'excuse_approved': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
+        case 'excuse_rejected': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
+        case 'excuse_pending': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
+        case 'excuse': return { bg: 'bg-purple-50', border: 'border-l-purple-500', icon: 'text-purple-600' };
+        default: return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
+    }
+}
+
+/**
+ * Get notification label for display
+ * Phase 2: Category labels
+ */
+function getNotificationLabel(type) {
+    switch (type) {
+        case 'gate_entry': return 'Gate Entry';
+        case 'gate_exit': return 'Gate Exit';
+        case 'early_exit': return 'Early Exit Alert';
+        case 'clinic':
+        case 'clinic_visit': return 'Clinic Visit';
+        case 'attendance': return 'Attendance';
+        case 'late_notification': return 'Late Arrival';
+        case 'critical_absence': return 'Critical Absence';
+        case 'announcement': return 'Announcement';
+        case 'excuse_approved': return 'Excuse Approved';
+        case 'excuse_rejected': return 'Excuse Rejected';
+        case 'excuse_pending': return 'Excuse Pending';
+        case 'excuse': return 'Excuse Letter';
+        default: return 'Notification';
+    }
+}
+
+/**
+ * Show notification toast
+ * Phase 2: Reusable toast function
+ */
+function showNotificationToast(notification) {
+    const icon = getNotificationIcon(notification.type);
+    const colors = getNotificationColor(notification.type);
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 left-4 right-4 ${colors.bg} rounded-lg shadow-lg p-4 z-50 animate-slide-in border-l-4 ${colors.border}`;
+    toast.innerHTML = `
+        <div class="flex items-start gap-3">
+            <span class="text-2xl">${icon}</span>
+            <div class="flex-1">
+                <p class="font-bold text-gray-800">${notification.title}</p>
+                <p class="text-sm text-gray-600 truncate">${notification.message}</p>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('animate-slide-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+/**
+ * Update notification badge in header
+ * Phase 2: Updates the badge count on notification bell
+ */
+async function updateNotificationBadge() {
+    try {
+        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
+        if (!userStr) return;
+        
+        const user = JSON.parse(userStr);
+        const parentId = user.id;
+        
+        // Get unread count
+        const { count, error } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('recipient_id', parentId)
+            .eq('recipient_role', 'parents')
+            .eq('is_read', false);
+        
+        if (error) {
+            console.error('Error getting notification count:', error);
+            return;
+        }
+        
+        // Update badge in header (look for notification badge element)
+        const badge = document.getElementById('notif-badge-quick-action');
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count > 9 ? '9+' : count;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+        
+    } catch (err) {
+        console.error('Error in updateNotificationBadge:', err);
+    }
+}
+
+// Export notification functions
+window.getNotificationIcon = getNotificationIcon;
+window.getNotificationColor = getNotificationColor;
+window.getNotificationLabel = getNotificationLabel;
+window.showNotificationToast = showNotificationToast;
+window.updateNotificationBadge = updateNotificationBadge;
+
+// MISSING: loadClinicHistory - stub function for button in dashboard
+window.loadClinicHistory = function() {
+    // Navigate to clinic history section or show notification
+    showNotificationToast({
+        title: 'Clinic History',
+        message: 'Clinic history feature is available in the clinic module.',
+        type: 'info'
+    });
+};

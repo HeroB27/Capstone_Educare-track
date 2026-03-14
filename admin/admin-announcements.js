@@ -166,75 +166,8 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
-function showConfirmationModal(title, message, onConfirm, type = 'danger') {
-    const existing = document.getElementById('confirmation-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[90] flex items-center justify-center animate-fade-in p-4';
-
-    let iconColor = 'text-red-500';
-    let iconBg = 'bg-red-50';
-    let btnBg = 'bg-red-600 hover:bg-red-700 shadow-red-200';
-    let iconName = 'alert-triangle';
-
-    if (type === 'warning') {
-        iconColor = 'text-amber-500';
-        iconBg = 'bg-amber-50';
-        btnBg = 'bg-amber-500 hover:bg-amber-600 shadow-amber-200';
-        iconName = 'alert-circle';
-    } else if (type === 'info') {
-        iconColor = 'text-blue-500';
-        iconBg = 'bg-blue-50';
-        btnBg = 'bg-blue-600 hover:bg-blue-700 shadow-blue-200';
-        iconName = 'info';
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-auto p-6 transform transition-all animate-fade-in-up"><div class="text-center"><div class="w-16 h-16 ${iconBg} ${iconColor} rounded-full flex items-center justify-center mb-4 mx-auto"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${message}</p><div class="flex gap-3"><button id="confirm-cancel-btn" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button><button id="confirm-action-btn" class="flex-1 py-3 ${btnBg} text-white rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-lg">Confirm</button></div></div></div>`;
-
-    document.body.appendChild(modal);
-
-    document.getElementById('confirm-cancel-btn').onclick = () => modal.remove();
-    document.getElementById('confirm-action-btn').onclick = () => {
-        modal.remove();
-        if (onConfirm) onConfirm();
-    };
-    
-    if (window.lucide) lucide.createIcons();
-}
-
-function showNotification(msg, type='info', callback=null) {
-    const existing = document.getElementById('notification-modal');
-    if(existing) existing.remove();
-    const modal = document.createElement('div');
-    modal.id = 'notification-modal';
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center animate-fade-in';
-    const iconColor = type === 'success' ? 'text-emerald-500' : type === 'error' ? 'text-red-500' : 'text-violet-600';
-    const bgColor = type === 'success' ? 'bg-emerald-50' : type === 'error' ? 'bg-red-50' : 'bg-violet-50';
-    const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-    const title = type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Information';
-
-    const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
-    if (!dndEnabled) {
-        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
-        try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = type === 'error' ? 220 : 550;
-            gain.gain.setValueAtTime(0.05, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-            osc.start(); osc.stop(ctx.currentTime + 0.2);
-        } catch(e){}
-    }
-
-    modal.innerHTML = `<div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 transform transition-all animate-fade-in-up"><div class="flex flex-col items-center text-center"><div class="w-16 h-16 ${bgColor} ${iconColor} rounded-full flex items-center justify-center mb-4"><i data-lucide="${iconName}" class="w-8 h-8"></i></div><h3 class="text-xl font-black text-gray-800 mb-2">${title}</h3><p class="text-sm text-gray-500 font-medium mb-6">${msg}</p><button id="notif-btn" class="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-800 transition-all">Okay, Got it</button></div></div>`;
-    document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => { modal.remove(); if(callback) callback(); };
-    if(window.lucide) lucide.createIcons();
-}
+// showConfirmationModal REMOVED - now using general-core.js showConfirm
+// showNotification REMOVED - now using general-core.js showNotification
 
 // --- MODAL UTILITY FUNCTIONS ---
 
@@ -292,7 +225,19 @@ window.loadAnnouncements = loadAnnouncements;
 window.editAnnouncement = editAnnouncement;
 
 // Save announcement - with posted_by_admin_id support
-async function saveAnnouncement() {
+// UPDATED: Added button locking pattern to prevent double-clicks
+async function saveAnnouncement(event) {
+    if (event) event.preventDefault();
+    
+    const btn = document.getElementById('save-announcement-btn');
+    const origText = btn ? btn.innerHTML : '';
+    
+    // 1. Lock UI
+    if (btn) {
+        btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Processing...';
+        btn.disabled = true;
+    }
+    
     const annId = document.getElementById('annId').value;
     const annTitle = document.getElementById('annTitle').value.trim();
     const annType = document.getElementById('annType').value;
@@ -304,11 +249,26 @@ async function saveAnnouncement() {
     const targetParents = document.getElementById('targetParents').checked;
     const targetStudents = document.getElementById('targetStudents').checked;
     
-    if (!annTitle || !annContent) return showNotification("Please fill in title and content", "error");
-    if (!targetTeachers && !targetParents && !targetStudents) return showNotification("Please select at least one target audience", "error");
+    if (!annTitle || !annContent) {
+        showNotification("Please fill in title and content", "error");
+        btn.innerHTML = origText;
+        btn.disabled = false;
+        return;
+    }
+    if (!targetTeachers && !targetParents && !targetStudents) {
+        showNotification("Please select at least one target audience", "error");
+        btn.innerHTML = origText;
+        btn.disabled = false;
+        return;
+    }
 
     const adminUser = checkSession('admins');
-    if (!adminUser) return showNotification("Authentication error. Please log in again.", "error");
+    if (!adminUser) {
+        showNotification("Authentication error. Please log in again.", "error");
+        btn.innerHTML = origText;
+        btn.disabled = false;
+        return;
+    }
 
     try {
         const payload = {
@@ -341,13 +301,22 @@ async function saveAnnouncement() {
         
         if (error) throw error;
         
+        // 2. Clear Form & Notify Success
         showNotification(annId ? "Broadcast updated!" : "Broadcast posted successfully!", "success");
         closeAnnouncementModal();
         loadAnnouncements();
         
     } catch (err) {
         console.error("Error saving announcement:", err);
-        showNotification("Database Error: " + err.message, "error");
+        // 3. Catch & Notify Error
+        showNotification(err.message || "Action failed. Please try again.", "error");
+    } finally {
+        // 4. Unlock UI
+        if (btn) {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+            if (window.lucide) lucide.createIcons();
+        }
     }
 }
 

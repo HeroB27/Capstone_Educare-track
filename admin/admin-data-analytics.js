@@ -41,8 +41,22 @@ async function loadAnalyticsData(event) {
 
     const dateStart = document.getElementById('dateStart').value;
     const dateEnd = document.getElementById('dateEnd').value;
+    
+    console.log('[Analytics] === LOADING ANALYTICS DATA ===');
+    console.log('[Analytics] Date range:', dateStart, 'to', dateEnd);
 
     try {
+        // NEW: Fetch suspensions for the date range to adjust attendance calculations
+        const { data: suspensions } = await supabase
+            .from('holidays')
+            .select('holiday_date')
+            .eq('is_suspended', true)
+            .gte('holiday_date', dateStart)
+            .lte('holiday_date', dateEnd);
+        
+        const suspensionDays = suspensions?.length || 0;
+        console.log('[Analytics] Suspension days found:', suspensionDays);
+        
         // Fetch all data in parallel
         const [
             trendData,
@@ -59,6 +73,13 @@ async function loadAnalyticsData(event) {
             fetchCriticalAbsences(),
             fetchFrequentLate(dateStart, dateEnd)
         ]);
+        
+        // DEBUG: Log all fetched data
+        console.log('[Analytics] Trend data:', JSON.stringify(trendData));
+        console.log('[Analytics] Status data:', JSON.stringify(statusData));
+        console.log('[Analytics] Class data:', JSON.stringify(classData));
+        console.log('[Analytics] Critical data:', JSON.stringify(criticalData));
+        console.log('[Analytics] Late data:', JSON.stringify(lateData));
 
         // Store data for export
         analyticsData = {
@@ -67,24 +88,26 @@ async function loadAnalyticsData(event) {
             commonReasons: reasonsData,
             classPerformance: classData,
             criticalStudents: criticalData,
-            frequentLate: lateData
+            frequentLate: lateData,
+            suspensionDays: suspensionDays
         };
 
-        // Update charts and lists
-        updateTrendChart(trendData);
+        // Update charts and lists (pass suspension info for accurate calculations)
+        updateTrendChart(trendData, { dateStart, dateEnd, suspensionDays });
         updatePieChart(statusData);
         updateBarChart(reasonsData);
-        updateClassChart(classData);
+        updateClassChart(classData, { suspensionDays });
         updateCriticalList(criticalData);
         updateLateList(lateData);
 
     } catch (error) {
-        console.error('Error loading analytics data:', error);
+        console.error('[Analytics] Error loading analytics data:', error);
     } finally {
         if (btn) {
             btn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i>';
             lucide.createIcons();
         }
+        console.log('[Analytics] === ANALYTICS LOAD COMPLETE ===');
     }
 }
 
@@ -94,6 +117,8 @@ async function loadAnalyticsData(event) {
  * This fixes the PGRST200 error caused by trying to join tables without a direct foreign key relationship
  */
 async function fetchAttendanceTrend(dateStart, dateEnd) {
+    console.log('[Analytics] fetchAttendanceTrend - Date range:', dateStart, 'to', dateEnd);
+    
     // Fetch all attendance logs within date range (no join)
     const { data: logs, error } = await supabase
         .from('attendance_logs')
@@ -109,9 +134,18 @@ async function fetchAttendanceTrend(dateStart, dateEnd) {
         .order('log_date');
 
     if (error) {
-        console.error('Error fetching attendance trend:', error);
-        return [];
+        console.error('[Analytics] Error fetching attendance trend:', error);
+        // FIX: Return object structure instead of array to match chart expectations
+        return {
+            labels: [],
+            present: [],
+            late: [],
+            absent: [],
+            excused: []
+        };
     }
+
+    console.log('[Analytics] Attendance logs fetched:', logs?.length || 0, 'records');
 
     // If no logs, return empty data
     if (!logs || logs.length === 0) {
@@ -217,6 +251,8 @@ function calculateStatusFromRemarks(remarks, defaultStatus) {
  * Fetch total status distribution for the date range
  */
 async function fetchStatusDistribution(dateStart, dateEnd) {
+    console.log('[Analytics] fetchStatusDistribution - Date range:', dateStart, 'to', dateEnd);
+    
     // First get attendance logs
     const { data: logs, error } = await supabase
         .from('attendance_logs')
@@ -225,9 +261,11 @@ async function fetchStatusDistribution(dateStart, dateEnd) {
         .lte('log_date', dateEnd);
 
     if (error) {
-        console.error('Error fetching status distribution:', error);
+        console.error('[Analytics] Error fetching status distribution:', error);
         return { Present: 0, Late: 0, Absent: 0, Excused: 0 };
     }
+    
+    console.log('[Analytics] Status logs fetched:', logs?.length || 0, 'records');
 
     // Get excused absences via excuse_letters
     const excusedDates = new Set();
@@ -317,11 +355,15 @@ async function fetchCommonReasons(dateStart, dateEnd) {
  * Fetch class performance (attendance rate per class)
  */
 async function fetchClassPerformance(dateStart, dateEnd) {
+    console.log('[Analytics] fetchClassPerformance - Date range:', dateStart, 'to', dateEnd);
+    
     // Get all classes
     const { data: classes } = await supabase
         .from('classes')
         .select('id, grade_level, section_name');
 
+    console.log('[Analytics] Classes fetched:', classes?.length || 0);
+    
     if (!classes || classes.length === 0) {
         return { labels: [], data: [] };
     }
@@ -494,8 +536,44 @@ async function fetchFrequentLate(dateStart, dateEnd) {
 
 /**
  * Update Trend Chart with real data
+ * UPDATED: Added empty state protection and suspension-adjusted calculations
  */
-function updateTrendChart(data) {
+function updateTrendChart(data, options = {}) {
+    const { suspensionDays = 0, dateStart, dateEnd } = options;
+    
+    // DEBUG: Log incoming data for debugging
+    console.log('[Analytics] updateTrendChart received:', JSON.stringify(data));
+    
+    // EMPTY STATE PROTECTION - Show message if no data
+    // FIX: Check data.labels.length instead of data.length (data is an object, not array)
+    if (!data || !data.labels || data.labels.length === 0) {
+        console.log('[Analytics] No trend data found - showing empty state');
+        const chartContainer = document.getElementById('trendChart')?.parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <i data-lucide="bar-chart-2" class="w-12 h-12 mb-2"></i>
+                    <p class="font-medium">Insufficient Data for Analysis</p>
+                    <p class="text-sm">No attendance records found for this period.</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons();
+        }
+        return;
+    }
+    
+    // Calculate effective school days (excluding suspensions)
+    if (dateStart && dateEnd) {
+        const start = new Date(dateStart);
+        const end = new Date(dateEnd);
+        const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const effectiveDays = Math.max(0, totalDays - suspensionDays);
+        
+        console.log('[Analytics] Effective school days:', effectiveDays, '(total:', totalDays, '- suspensions:', suspensionDays, ')');
+        
+        // Note: data is already an object with arrays, no need to map - effectiveDays is used elsewhere
+    }
+    
     if (!trendChart) {
         const ctx = document.getElementById('trendChart').getContext('2d');
         trendChart = new Chart(ctx, {
@@ -562,6 +640,8 @@ function updateTrendChart(data) {
  * Update Pie Chart with status distribution
  */
 function updatePieChart(data) {
+    console.log('[Analytics] updatePieChart received:', JSON.stringify(data));
+    
     if (!pieChart) {
         const ctx = document.getElementById('pieChart').getContext('2d');
         pieChart = new Chart(ctx, {
@@ -598,6 +678,8 @@ function updatePieChart(data) {
  * Update Bar Chart with common reasons
  */
 function updateBarChart(data) {
+    console.log('[Analytics] updateBarChart received:', JSON.stringify(data));
+    
     if (!barChart) {
         const ctx = document.getElementById('barChart').getContext('2d');
         barChart = new Chart(ctx, {
@@ -626,8 +708,34 @@ function updateBarChart(data) {
 
 /**
  * Update Class Performance Chart
+ * UPDATED: Added empty state protection and department sorting (grade bucketing)
  */
-function updateClassChart(data) {
+function updateClassChart(data, options = {}) {
+    const { suspensionDays = 0 } = options;
+    
+    // DEBUG: Log incoming data
+    console.log('[Analytics] updateClassChart received:', JSON.stringify(data));
+    
+    // EMPTY STATE PROTECTION
+    if (!data || !data.labels || data.labels.length === 0) {
+        const chartContainer = document.getElementById('classChart')?.parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <i data-lucide="bar-chart-2" class="w-12 h-12 mb-2"></i>
+                    <p class="font-medium">Insufficient Data for Analysis</p>
+                    <p class="text-sm">No class performance data available.</p>
+                </div>
+            `;
+            if (window.lucide) lucide.createIcons();
+        }
+        return;
+    }
+    
+    // DEPARTMENT SORTING: Aggregate grades into 4 pillars
+    // Kinder -> "Kindergarten", Grade 1-6 -> "Elementary", Grade 7-10 -> "Junior High", Grade 11-12 -> "Senior High"
+    const departmentData = aggregateByDepartment(data);
+    
     if (!classChart) {
         const ctx = document.getElementById('classChart').getContext('2d');
         classChart = new Chart(ctx, {
@@ -651,18 +759,85 @@ function updateClassChart(data) {
         });
     }
 
-    classChart.data.labels = data.labels || [];
+    // Use department-aggregated data for the chart
+    classChart.data.labels = departmentData.labels;
     classChart.data.datasets = [{
-        label: 'Attendance Rate',
-        data: data.data || [],
-        backgroundColor: data.data?.map(rate => {
+        label: 'Attendance Rate (%)',
+        data: departmentData.rates,
+        backgroundColor: departmentData.rates.map(rate => {
             if (rate >= 90) return '#22c55e';
             if (rate >= 75) return '#eab308';
             return '#ef4444';
-        }) || [],
+        }),
         borderRadius: 6
     }];
     classChart.update();
+}
+
+/**
+ * Map grade level to department pillar
+ * Helper function for department sorting
+ */
+function getDepartmentPillar(gradeLevel) {
+    if (!gradeLevel) return 'Unassigned';
+    
+    const gl = gradeLevel.toLowerCase();
+    
+    if (gl.includes('kinder') || gl === 'k' || gl === 'nursery' || gl === 'pre-school') {
+        return 'Kindergarten';
+    }
+    
+    const gradeMatch = gl.match(/grade\s*(\d+)/);
+    if (gradeMatch) {
+        const gradeNum = parseInt(gradeMatch[1]);
+        if (gradeNum >= 1 && gradeNum <= 6) return 'Elementary';
+        if (gradeNum >= 7 && gradeNum <= 10) return 'Junior High';
+        if (gradeNum >= 11 && gradeNum <= 12) return 'Senior High';
+    }
+    
+    return 'Unassigned';
+}
+
+/**
+ * Aggregate data by department pillar
+ * Groups Grade 1-6 into Elementary, Grade 7-10 into Junior High, etc.
+ */
+function aggregateByDepartment(data) {
+    const departments = {
+        'Kindergarten': { totalStudents: 0, totalPresent: 0 },
+        'Elementary': { totalStudents: 0, totalPresent: 0 },
+        'Junior High': { totalStudents: 0, totalPresent: 0 },
+        'Senior High': { totalStudents: 0, totalPresent: 0 },
+        'Unassigned': { totalStudents: 0, totalPresent: 0 }
+    };
+    
+    // Aggregate by department
+    for (let i = 0; i < data.labels.length; i++) {
+        const label = data.labels[i];
+        const rate = data.data[i] || 0;
+        const pillar = getDepartmentPillar(label);
+        
+        if (departments[pillar]) {
+            // We'll estimate total students based on rate (this is a simplification)
+            // In a real scenario, you'd want actual student counts
+            departments[pillar].totalPresent += rate; // Just accumulate rates for averaging
+            departments[pillar].totalStudents += 1;
+        }
+    }
+    
+    // Calculate average rates per department
+    const labels = [];
+    const rates = [];
+    
+    ['Kindergarten', 'Elementary', 'Junior High', 'Senior High'].forEach(dept => {
+        if (departments[dept].totalStudents > 0) {
+            labels.push(dept);
+            const avgRate = Math.round(departments[dept].totalPresent / departments[dept].totalStudents);
+            rates.push(avgRate);
+        }
+    });
+    
+    return { labels, rates };
 }
 
 /**

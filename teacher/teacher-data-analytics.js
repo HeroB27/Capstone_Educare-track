@@ -470,3 +470,6 @@ function initAnalyticsRealtime() {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(initAnalyticsRealtime, 2000); 
 });
+
+// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.exportToCSV = exportToCSV;

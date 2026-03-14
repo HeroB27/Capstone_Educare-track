@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await loadAllSettings();
     injectDeviceSettingsUI();
-    injectPasswordChangeUI();
     injectStyles();
     loadThemePreferences();
     // Update color button states
@@ -56,13 +55,14 @@ function switchTab(event, tabId) {
 
 async function loadAllSettings() {
     try {
-        const { data, error } = await supabase.from('settings').select('*');
-        if (!error && data) {
-            data.forEach(s => {
-                const el = document.getElementById(s.setting_key);
+        // UPDATED: Use getSettings() from general-core.js for caching
+        const data = await getSettings();
+        if (data) {
+            Object.keys(data).forEach(key => {
+                const el = document.getElementById(key);
                 if (el) {
-                    if (el.type === 'checkbox') el.checked = (s.setting_value === 'true');
-                    else el.value = s.setting_value;
+                    if (el.type === 'checkbox') el.checked = (data[key] === 'true');
+                    else el.value = data[key];
                 }
             });
         }
