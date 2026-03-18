@@ -172,7 +172,17 @@ function renderUserTable() {
 }
 
 // --- BRANCH REGISTRATION FLOW ---
-function openEnrollmentModal() { currentStep = 1; setEnrollType(null, 'parent'); document.getElementById('enrollmentModal').classList.remove('hidden'); }
+function openEnrollmentModal() { 
+    currentStep = 1; 
+    setEnrollType(null, 'parent'); 
+    // UPDATED: Reset parent photo input
+    const pPhotoInput = document.getElementById('p-photo');
+    if (pPhotoInput) pPhotoInput.value = '';
+    const pPreview = document.getElementById('p-preview');
+    if (pPreview) pPreview.innerHTML = '<i data-lucide="camera" class="w-5 h-5"></i>';
+    if (window.lucide) lucide.createIcons();
+    document.getElementById('enrollmentModal').classList.remove('hidden'); 
+}
 function setEnrollType(event, type) {
     enrollType = type;
     document.getElementById('btn-type-parent').className = type === 'parent' ? 'px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all' : 'px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all';
@@ -214,7 +224,9 @@ async function nextStep() {
 
     if (currentStep === 1) { 
         if (!val('p-name') || !val('p-phone')) return showNotification("Full Name and Phone are required.", "error");
-        parentInfo = { full_name: val('p-name'), address: val('p-address'), relationship_type: val('p-role'), contact_number: val('p-phone') };
+        // UPDATED: Include parent photo file in parentInfo
+        const parentPhotoFile = document.getElementById('p-photo')?.files[0] || null;
+        parentInfo = { full_name: val('p-name'), address: val('p-address'), relationship_type: val('p-role'), contact_number: val('p-phone'), photo_file: parentPhotoFile };
         showStep(2);
     } else if (currentStep === 2) { 
         if (!val('p-user') || !val('p-pass')) return showNotification("Username and Password are required.", "error");
@@ -386,23 +398,44 @@ async function finalizeParentStudent() {
     }
     
     try {
-        const { data: parent, error: pErr } = await supabase.from('parents').insert([{ ...parentInfo, parent_id_text: generateID('parents', parentInfo.contact_number), is_active: true }]).select().single();
+        // UPDATED: Upload parent photo to Supabase Storage before creating parent
+        let parentPhotoUrl = null;
+        if (parentInfo.photo_file) {
+            const fileExt = parentInfo.photo_file.name.split('.').pop();
+            const fileName = `parent-${parentInfo.contact_number}-${Date.now()}.${fileExt}`;
+            
+            const { error: uploadErr } = await supabase.storage.from('profiles').upload(fileName, parentInfo.photo_file, {
+                contentType: parentInfo.photo_file.type
+            });
+            if (!uploadErr) {
+                const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(fileName);
+                parentPhotoUrl = urlData.publicUrl;
+            } else {
+                console.error("Parent photo upload failed:", uploadErr);
+                showNotification("Parent photo upload failed, continuing without photo", "warning");
+            }
+        }
+        
+        // UPDATED: Include profile_photo_url in parent insert
+        const { data: parent, error: pErr } = await supabase.from('parents').insert([{ ...parentInfo, profile_photo_url: parentPhotoUrl, parent_id_text: generateID('parents', parentInfo.contact_number), is_active: true }]).select().single();
         if (pErr) throw pErr;
         
         const studentPayload = [];
         for (let s of studentData) {
             let photoUrl = null;
-            // NEW: Upload photo to Supabase Storage
+            // UPDATED: Upload photo to Supabase Storage with content-type and error handling
             if (s.photo_file) {
                 const fileExt = s.photo_file.name.split('.').pop();
                 const fileName = `stu-${s.lrn}-${Date.now()}.${fileExt}`;
                 
-                const { error: uploadErr } = await supabase.storage.from('profiles').upload(fileName, s.photo_file);
+                const { error: uploadErr } = await supabase.storage.from('profiles').upload(fileName, s.photo_file, {
+                    contentType: s.photo_file.type
+                });
                 if (!uploadErr) {
                     const { data: urlData } = supabase.storage.from('profiles').getPublicUrl(fileName);
                     photoUrl = urlData.publicUrl;
                 } else {
-                    console.error("Photo upload failed:", uploadErr);
+                    console.error("Student photo upload failed:", uploadErr);
                 }
             }
             

@@ -1,5 +1,8 @@
 // clinic/clinic-core.js
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 // ============================================================================
 // CLINIC MODULE - Core Logic (Enhanced Workflow)
 // ============================================================================
@@ -258,14 +261,14 @@ async function admitReferredStudent(visitId) {
                 visit.students.parent_id,
                 visit.students.full_name
             );
-            console.log('[DEBUG] Parent notified of clinic admission');
+            if (DEBUG) console.log('[DEBUG] Parent notified of clinic admission');
         }
         
         // Show success toast and refresh
         if (typeof showToast === 'function') {
             showToast('Student admitted successfully', 'success');
         } else {
-            alert('Student admitted successfully');
+            showNotification('Student admitted successfully', 'success');
         }
         
         // Refresh dashboard data if function exists
@@ -362,14 +365,14 @@ async function saveMedicalFindings(visitId, findings) {
         if (typeof showToast === 'function') {
             showToast('Findings saved successfully', 'success');
         } else {
-            alert('Findings saved successfully');
+            showNotification('Findings saved successfully', 'success');
         }
     } catch (err) {
         console.error("Error saving findings:", err);
         if (typeof showToast === 'function') {
             showToast('Failed to save findings', 'error');
         } else {
-            alert('Failed to save findings');
+            showNotification('Failed to save findings', 'error');
         }
         throw err;
     }
@@ -437,7 +440,7 @@ async function dischargeStudent(visitId, outcome, nurseNotes = '', parentNotifie
         if (typeof showToast === 'function') {
             showToast(`Discharged: ${outcome}`, 'success');
         } else {
-            alert(`Discharged: ${outcome}`);
+            showNotification(`Discharged: ${outcome}`, 'success');
         }
         
         return true;
@@ -556,7 +559,7 @@ async function addClinicFindings(visitId, notes, action) {
             if (typeof showToast === 'function') {
                 showToast('Sent home request submitted. Waiting for teacher approval.', 'info');
             } else {
-                alert('Sent home request submitted. Waiting for teacher approval.');
+                showNotification('Sent home request submitted. Waiting for teacher approval.', 'success');
             }
         } else {
             // For "Rest at Clinic" or other actions, keep student in clinic
@@ -942,7 +945,7 @@ async function checkInPatient(visitData) {
  * @param {object} dischargeData - Discharge information (notes, action taken, parent notified)
  */
 async function dischargePatient(visitId, dischargeData) {
-    console.log('[DEBUG] dischargePatient called with:', visitId, dischargeData);
+    if (DEBUG) console.log('[DEBUG] dischargePatient called with:', visitId, dischargeData);
     try {
         const currentTime = new Date().toISOString();
 
@@ -957,7 +960,7 @@ async function dischargePatient(visitId, dischargeData) {
             console.error('[DEBUG] Error fetching visit data:', fetchError);
             throw fetchError;
         }
-        console.log('[DEBUG] Visit data fetched:', visitData);
+        if (DEBUG) console.log('[DEBUG] Visit data fetched:', visitData);
 
         // 2. Update the Clinic Visit record
         const { error } = await supabase
@@ -976,11 +979,11 @@ async function dischargePatient(visitId, dischargeData) {
             console.error(error);
             throw error;
         }
-        console.log('[DEBUG] Visit updated successfully');
+        if (DEBUG) console.log('[DEBUG] Visit updated successfully');
 
         // 3. The Parent Handshake: Send notification
         if (dischargeData.parentNotified && visitData?.students?.parent_id) {
-            console.log('[DEBUG] Sending parent notification');
+            if (DEBUG) console.log('[DEBUG] Sending parent notification');
             await supabase.from('notifications').insert({
                 recipient_id: visitData.students.parent_id,
                 recipient_role: 'parent',
@@ -993,7 +996,7 @@ async function dischargePatient(visitId, dischargeData) {
 
         // Notify referring teacher if parent was notified
         if (dischargeData.teacherId && dischargeData.parentNotified) {
-            console.log('[DEBUG] Sending teacher notification');
+            if (DEBUG) console.log('[DEBUG] Sending teacher notification');
             await notifyTeacherClearance(dischargeData.teacherId, dischargeData.studentName);
         }
         
@@ -1383,7 +1386,7 @@ async function fetchDailyClinicStats(date) {
         const { data: allVisits, error: allError } = await supabase
             .from('clinic_visits')
             .select('id', { count: 'exact' });
-        console.log('[DEBUG] All visits count:', allVisits?.count ?? allVisits?.length);
+        if (DEBUG) console.log('[DEBUG] All visits count:', allVisits?.count ?? allVisits?.length);
         
         // Total check-ins for the day
         const { data: checkIns, error: checkInsError } = await supabase
@@ -1391,7 +1394,7 @@ async function fetchDailyClinicStats(date) {
             .select('id', { count: 'exact' })
             .gte('time_in', `${date}T00:00:00`)
             .lt('time_in', `${date}T23:59:59`);
-        console.log('[DEBUG] Check-ins for', date, ':', checkIns?.count ?? checkIns?.length);
+        if (DEBUG) console.log('[DEBUG] Check-ins for', date, ':', checkIns?.count ?? checkIns?.length);
         
         // Still in clinic (all active visits - students currently in clinic system)
         // Count all visits where time_out is NULL (most accurate indicator)
@@ -1399,7 +1402,7 @@ async function fetchDailyClinicStats(date) {
             .from('clinic_visits')
             .select('id', { count: 'exact' })
             .is('time_out', null);
-        console.log('[DEBUG] Active (time_out null):', active?.count ?? active?.length);
+        if (DEBUG) console.log('[DEBUG] Active (time_out null):', active?.count ?? active?.length);
         
         // Discharged today - query all visits with time_out set (regardless of status)
         const dischargedStart = new Date(date);
@@ -1411,7 +1414,7 @@ async function fetchDailyClinicStats(date) {
             .not('time_out', 'is', null)
             .gte('time_out', `${dischargedStartStr}T00:00:00`)
             .lt('time_out', `${date}T23:59:59`);
-        console.log('[DEBUG] Discharged:', discharged?.count ?? discharged?.length);
+        if (DEBUG) console.log('[DEBUG] Discharged:', discharged?.count ?? discharged?.length);
         
         if (checkInsError || activeError || dischargedError) {
             console.error('Error fetching clinic stats:', checkInsError || activeError || dischargedError);

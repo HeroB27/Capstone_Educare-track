@@ -2,6 +2,9 @@
 // Excuse letter submission and tracking logic
 // UPDATED: Phase 3 - Enhanced edit with file upload, realtime status
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 let selectedChildId = null;
 let uploadedFile = null;
 let editUploadedFile = null;  // Phase 3: Track file in edit modal
@@ -66,7 +69,7 @@ function setupExcuseRealtime() {
             table: 'excuse_letters',
             filter: `parent_id=eq.${currentUser.id}`
         }, async (payload) => {
-            console.log('Excuse letter status changed:', payload);
+            if (DEBUG) console.log('Excuse letter status changed:', payload);
             const updatedLetter = payload.new;
             
             // Find the letter in history and update it
@@ -275,9 +278,12 @@ async function submitExcuse(event) {
         // Upload file if selected
         if (uploadedFile) {
             const filePath = `${selectedChildId}/${Date.now()}_${uploadedFile.name}`;
+            // UPDATED: Add contentType to support PDF and image uploads
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from('excuse-proofs')
-                .upload(filePath, uploadedFile);
+                .upload(filePath, uploadedFile, {
+                    contentType: uploadedFile.type
+                });
 
             if (uploadError) {
                 console.error('Upload error:', uploadError);
@@ -349,7 +355,7 @@ async function notifyTeacherOfExcuse(studentId, dateAbsent) {
             .single();
 
         if (studentError || !studentData?.classes?.adviser_id) {
-            console.log('No adviser assigned for this student, cannot send notification.');
+            if (DEBUG) console.log('No adviser assigned for this student, cannot send notification.');
             return;
         }
 
@@ -364,7 +370,7 @@ async function notifyTeacherOfExcuse(studentId, dateAbsent) {
 
         if (notifError) throw notifError;
 
-        console.log('Teacher notified successfully');
+        if (DEBUG) console.log('Teacher notified successfully');
 
     } catch (err) {
         console.error('Error notifying teacher:', err);
@@ -726,9 +732,12 @@ async function submitEdit() {
             const letter = excuseHistory.find(l => l.id === letterId);
             if (letter) {
                 const filePath = `${letter.student_id}/${Date.now()}_${editUploadedFile.name}`;
+                // UPDATED: Add contentType to support PDF and image uploads
                 const { data: uploadData, error: uploadError } = await supabase.storage
                     .from('excuse-proofs')
-                    .upload(filePath, editUploadedFile);
+                    .upload(filePath, editUploadedFile, {
+                        contentType: editUploadedFile.type
+                    });
 
                 if (uploadError) {
                     console.error('Upload error:', uploadError);

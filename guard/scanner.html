@@ -42,10 +42,10 @@
     <!-- Main Scanner Interface -->
     <div class="min-h-screen flex flex-col lg:flex-row">
         <!-- Left Panel: Scanner & Result -->
-        <div class="flex-1 lg:w-2/3 bg-slate-900 flex flex-col items-center justify-center p-8">
-            <div class="w-full max-w-lg relative">
+        <div class="flex-1 lg:w-2/3 bg-slate-900 flex flex-col items-center justify-center p-4 sm:p-8">
+            <div class="w-full max-w-lg relative px-2 sm:px-0">
                 <!-- Camera Scanner -->
-                <div id="reader" class="w-full aspect-square bg-black rounded-3xl overflow-hidden shadow-2xl shadow-black/50"></div>
+                <div id="reader" class="w-full aspect-square max-w-sm mx-auto bg-black rounded-3xl overflow-hidden shadow-2xl shadow-black/50"></div>
                 
                 <!-- Scanner Overlay -->
                 <div class="absolute inset-0 pointer-events-none">
@@ -78,10 +78,15 @@
             <div id="scan-placeholder" class="w-full max-w-lg mt-8 p-6 text-center text-slate-500">
                 <p>Scan a student ID to begin...</p>
             </div>
+            
+            <!-- Gate Status Indicator -->
+            <div id="status-indicator" class="w-full max-w-lg mt-4 text-center">
+                <span class="inline-block bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-bold">GATE ACTIVE</span>
+            </div>
         </div>
 
         <!-- Right Panel: Info & Recent Scans -->
-        <div class="lg:w-1/3 bg-slate-800 p-8 flex flex-col border-l border-slate-700">
+        <div class="lg:w-1/3 bg-slate-800 p-4 sm:p-8 flex flex-col border-l border-slate-700">
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <h2 class="text-2xl font-black">Guard Terminal</h2>

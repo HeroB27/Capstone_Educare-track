@@ -502,6 +502,79 @@ window.showModal = function(id, title, contentHtml, buttons = [], onClose) {
     }
 };
 
+// ==========================================
+// SMART GATEKEEPER PROTOCOL ENGINE
+// ==========================================
+// Evaluates campus gate status based on:
+// - Weekend (Sunday always closed, Saturday depends on suspension settings)
+// - Pre-Planned Suspensions (created before today = Campus Closed)
+// - Emergency Mid-Day Suspensions (created today = Exits Only)
+// Returns: { active, allowEntry, allowExit, message }
+window.evaluateGateStatus = async function() {
+    try {
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const todayStr = localDate.toISOString().split('T')[0];
+        const dayOfWeek = localDate.getDay(); // 0 = Sunday, 6 = Saturday
+
+        // 1. Fetch Active Suspensions/Holidays for Today
+        const { data: suspensions, error } = await supabase
+            .from('suspensions')
+            .select('title, created_at, start_date, saturday_enabled')
+            .eq('is_active', true)
+            .lte('start_date', todayStr)
+            .gte('end_date', todayStr)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+
+        // 2. Weekend Check (Strict Sunday block, Saturday depends on active suspensions)
+        if (dayOfWeek === 0) {
+            return { active: false, allowEntry: false, allowExit: false, message: 'CAMPUS CLOSED (Sunday)' };
+        }
+        if (dayOfWeek === 6) {
+            // Check if there's an active override for this Saturday
+            const hasSaturdayOverride = suspensions && suspensions.length > 0 && suspensions[0].saturday_enabled;
+            if (!hasSaturdayOverride) {
+                return { active: false, allowEntry: false, allowExit: false, message: 'CAMPUS CLOSED (Saturday)' };
+            }
+        }
+
+        if (suspensions && suspensions.length > 0) {
+            const sus = suspensions[0];
+            const createdDateStr = new Date(sus.created_at).toISOString().split('T')[0];
+
+            // 3. Emergency vs Pre-Planned Check
+            if (createdDateStr === todayStr) {
+                // Suspension was declared TODAY (Mid-day emergency)
+                return { 
+                    active: true, 
+                    allowEntry: false, 
+                    allowExit: true, 
+                    message: `EMERGENCY EXITS ONLY: ${sus.title}` 
+                };
+            } else {
+                // Suspension was declared BEFORE today (Pre-planned)
+                return { 
+                    active: false, 
+                    allowEntry: false, 
+                    allowExit: false, 
+                    message: `CAMPUS CLOSED: ${sus.title}` 
+                };
+            }
+        }
+
+        // Default: Normal Operations
+        return { active: true, allowEntry: true, allowExit: true, message: 'GATE ACTIVE' };
+
+    } catch (err) {
+        console.error("Gate Protocol Error:", err);
+        // Fail-safe Open: If database fails, don't trap students at the gate
+        return { active: true, allowEntry: true, allowExit: true, message: 'GATE ACTIVE (Offline Mode)' }; 
+    }
+};
+
 // Export functions to window for global access
 window.formatDate = formatDate;
 window.formatTime = formatTime;

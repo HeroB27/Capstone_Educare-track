@@ -175,6 +175,16 @@
                             <select id="p-role" class="px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"><option value="Parent">Parent</option><option value="Guardian">Guardian</option></select>
                             <div class="relative"><i data-lucide="phone" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="p-phone" placeholder="Phone Number" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
                         </div>
+                        <!-- UPDATED: Add parent photo upload field -->
+                        <div class="col-span-2 flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 mt-2">
+                            <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 overflow-hidden shrink-0" id="p-preview">
+                                <i data-lucide="camera" class="w-5 h-5"></i>
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-[10px] font-black text-violet-600 uppercase mb-1">Parent Photo Profile (Optional)</label>
+                                <input type="file" accept="image/*" id="p-photo" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 transition-all cursor-pointer" onchange="const f=this.files[0]; if(f){ const r=new FileReader(); r.onload=e=>document.getElementById('p-preview').innerHTML='<img src=&quot;'+e.target.result+'&quot; class=&quot;w-full h-full object-cover&quot;>'; r.readAsDataURL(f); }">
+                            </div>
+                        </div>
                     </div>
                     <div id="step-2" class="hidden space-y-6">
                         <div class="grid grid-cols-2 gap-4">

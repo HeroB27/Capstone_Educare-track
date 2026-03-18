@@ -9,9 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
 });
 
-// NEW: QR Code format validation regex
-// Matches: EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G001-A1B2)
-const SCAN_REGEX = /^EDU-\d{4}-[GK]\d{3}-[A-Z0-9]{4}$/;
+// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G010-A1B2)
+const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
 
 // jsQR scanner variables
 let videoStream = null;
@@ -175,12 +174,17 @@ async function handleScanSuccess(decodedText) {
         // Query by student_id_text field (the new format)
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, class_id, classes(grade_level, section_name, adviser_id), parent_id')
+            .select('id, full_name, student_id_text, class_id, status, classes(grade_level, section_name, adviser_id), parent_id')
             .eq('student_id_text', decodedText)
             .single();
 
         if (studentError || !student) {
             throw new Error('Student ID not found. Please register first.');
+        }
+        
+        // Check if student is active/enrolled - reject dropped/inactive students
+        if (student.status === 'Dropped' || student.status === 'Inactive') {
+            throw new Error('Student record is not active. Cannot use clinic services.');
         }
 
         // ==========================================

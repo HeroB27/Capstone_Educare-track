@@ -1,6 +1,9 @@
 // parent/parent-core.js
 // Core logic for Parent Module - handles session, child switching, and real-time sync
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 // ============================================
 // SESSION MANAGEMENT
 // ============================================
@@ -74,7 +77,7 @@ async function loadChildren() {
         const user = JSON.parse(userStr);
         const parentId = user.id;
         
-        console.log('Loading children for parentId:', parentId);
+        if (DEBUG) console.log('Loading children for parentId:', parentId);
         
         // FIX: Added classes join to get grade_level and section_name
         // UPDATED: Also fetch class info for display
@@ -311,7 +314,7 @@ function setupRealtimeSubscriptions() {
             table: 'attendance_logs',
             filter: `student_id=eq.${currentChild.id}`
         }, async (payload) => {
-            console.log('Attendance change received:', payload);
+            if (DEBUG) console.log('Attendance change received:', payload);
             await loadChildLiveStatus(); // Re-fetch the latest status
             // Refresh dashboard or calendar if the functions exist on the current page
             if (typeof refreshDashboard === 'function') {
@@ -324,7 +327,7 @@ function setupRealtimeSubscriptions() {
             table: 'clinic_visits',
             filter: `student_id=eq.${currentChild.id}`
         }, async (payload) => {
-            console.log('Clinic visit change received:', payload);
+            if (DEBUG) console.log('Clinic visit change received:', payload);
             if (typeof refreshDashboard === 'function') {
                 refreshDashboard();
             }

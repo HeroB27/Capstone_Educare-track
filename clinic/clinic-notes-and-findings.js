@@ -1,5 +1,8 @@
 // clinic/clinic-notes-and-findings.js
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 let currentVisitHistory = [];
 let selectedStudentId = null;
 let searchTimeout;
@@ -149,7 +152,7 @@ async function selectStudentForHistory(studentId, studentName) {
 }
 
 async function loadAllVisits() {
-    console.log('[DEBUG] loadAllVisits called - showing today\'s visits');
+    if (DEBUG) console.log('[DEBUG] loadAllVisits called - showing today\'s visits');
     // Set the date filter to today - FIX: Use local timezone-adjusted date
     const localDate = new Date();
     localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
@@ -157,7 +160,7 @@ async function loadAllVisits() {
     document.getElementById('filter-date').value = today;
     
     currentVisitHistory = await fetchVisitsByDateRange(today, today);
-    console.log('[DEBUG] fetchVisitsByDateRange returned:', currentVisitHistory.length, 'visits for today');
+    if (DEBUG) console.log('[DEBUG] fetchVisitsByDateRange returned:', currentVisitHistory.length, 'visits for today');
     renderVisitHistory(currentVisitHistory);
 }
 

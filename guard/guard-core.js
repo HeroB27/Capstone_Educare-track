@@ -17,7 +17,8 @@ let canvasContext = null;
 let animationFrameId = null;
 let lastScanTime = 0;
 const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes in milliseconds
-const SCAN_REGEX = /^STU-\d{4}-\d{4}$/;
+// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G010-A1B2)
+const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
 
 // NEW: Debounce variables for machine-gun protection
 let isProcessingScan = false;
@@ -284,6 +285,30 @@ async function handleScan(studentId, qrCode) {
         // Show loading state
         showLoading(true);
 
+        // ==========================================
+        // SMART GATE PROTOCOL CHECK
+        // ==========================================
+        // Evaluate gate status BEFORE processing student lookup
+        const gateStatus = await window.evaluateGateStatus();
+        
+        // Update UI to show emergency mode if applicable
+        const statusIndicator = document.getElementById('status-indicator');
+        if (statusIndicator && !gateStatus.allowEntry) {
+            statusIndicator.innerHTML = `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">${gateStatus.message}</span>`;
+        } else if (statusIndicator && gateStatus.active) {
+            statusIndicator.innerHTML = `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">GATE ACTIVE</span>`;
+        }
+        
+        // Check if gate is completely closed (Campus Closed)
+        if (!gateStatus.active) {
+            showWarning(gateStatus.message);
+            return;
+        }
+        
+        // ==========================================
+        // END SMART GATE PROTOCOL CHECK
+        // ==========================================
+
         // 1. Check if today is a holiday/suspended day
         // UPDATED: Now checks time_coverage for half-day suspensions
         const today = getLocalISOString();
@@ -329,6 +354,18 @@ async function handleScan(studentId, qrCode) {
         
         // Determine tap direction (ENTRY or EXIT)
         const direction = determineTapDirection(lastLog);
+        
+        // ==========================================
+        // SMART GATE DIRECTIONAL CHECK
+        // ==========================================
+        // If emergency mode is active and this would be an ENTRY, block it
+        if (!gateStatus.allowEntry && direction === 'ENTRY') {
+            showError(`ENTRY DENIED: ${gateStatus.message}`);
+            return;
+        }
+        // ==========================================
+        // END SMART GATE DIRECTIONAL CHECK
+        // ==========================================
         
         // --- WORKFLOW IMPROVEMENT: Status Protection ---
         // If the student is already marked 'Excused' for the day, do not overwrite it.
@@ -586,6 +623,11 @@ async function getStudentById(studentId) {
             .single();
         
         if (data && !error) {
+            // Check if student is active/enrolled - reject dropped/inactive students
+            if (data.status === 'Dropped' || data.status === 'Inactive') {
+                console.log('Student status:', data.status);
+                return null;
+            }
             return data;
         }
         
@@ -610,6 +652,11 @@ async function getStudentById(studentId) {
             .single();
         
         if (qrData && !qrError) {
+            // Check if student is active/enrolled - reject dropped/inactive students
+            if (qrData.status === 'Dropped' || qrData.status === 'Inactive') {
+                console.log('Student status:', qrData.status);
+                return null;
+            }
             return qrData;
         }
         
@@ -635,6 +682,11 @@ async function getStudentById(studentId) {
         
         if (error2) {
             console.error('Student not found:', error2);
+            return null;
+        }
+        // Check if student is active/enrolled - reject dropped/inactive students
+        if (data2.status === 'Dropped' || data2.status === 'Inactive') {
+            console.log('Student status:', data2.status);
             return null;
         }
         return data2;

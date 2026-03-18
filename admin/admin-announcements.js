@@ -70,6 +70,8 @@ async function loadAnnouncements() {
                         ${ann.target_teachers ? '<span class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black tracking-widest rounded-md border border-violet-100">TEACHERS</span>' : ''}
                         ${ann.target_parents ? '<span class="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black tracking-widest rounded-md border border-blue-100">PARENTS</span>' : ''}
                         ${ann.target_students ? '<span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[9px] font-black tracking-widest rounded-md border border-emerald-100">STUDENTS</span>' : ''}
+                        ${ann.target_clinic ? '<span class="px-2.5 py-1 bg-red-50 text-red-700 text-[9px] font-black tracking-widest rounded-md border border-red-100">CLINIC</span>' : ''}
+                        ${ann.target_guards ? '<span class="px-2.5 py-1 bg-amber-50 text-amber-700 text-[9px] font-black tracking-widest rounded-md border border-amber-100">GUARDS</span>' : ''}
                     </div>
                 </td>
                 <td class="px-10 py-5 text-xs text-gray-500">
@@ -104,6 +106,12 @@ async function editAnnouncement(id) {
         document.getElementById('targetTeachers').checked = data.target_teachers;
         document.getElementById('targetParents').checked = data.target_parents;
         document.getElementById('targetStudents').checked = data.target_students;
+        if (document.getElementById('targetClinic')) {
+            document.getElementById('targetClinic').checked = data.target_clinic;
+        }
+        if (document.getElementById('targetGuards')) {
+            document.getElementById('targetGuards').checked = data.target_guards;
+        }
 
         if (data.scheduled_at) {
             const dt = new Date(data.scheduled_at);
@@ -245,9 +253,11 @@ async function saveAnnouncement(event) {
     const annDate = document.getElementById('annDate').value;
     const annTime = document.getElementById('annTime').value;
     
-    const targetTeachers = document.getElementById('targetTeachers').checked;
-    const targetParents = document.getElementById('targetParents').checked;
-    const targetStudents = document.getElementById('targetStudents').checked;
+    const targetTeachers = document.getElementById('targetTeachers')?.checked || false;
+    const targetParents = document.getElementById('targetParents')?.checked || false;
+    const targetStudents = document.getElementById('targetStudents')?.checked || false;
+    const targetClinic = document.getElementById('targetClinic')?.checked || false;
+    const targetGuards = document.getElementById('targetGuards')?.checked || false;
     
     if (!annTitle || !annContent) {
         showNotification("Please fill in title and content", "error");
@@ -255,7 +265,7 @@ async function saveAnnouncement(event) {
         btn.disabled = false;
         return;
     }
-    if (!targetTeachers && !targetParents && !targetStudents) {
+    if (!targetTeachers && !targetParents && !targetStudents && !targetClinic && !targetGuards) {
         showNotification("Please select at least one target audience", "error");
         btn.innerHTML = origText;
         btn.disabled = false;
@@ -279,8 +289,8 @@ async function saveAnnouncement(event) {
             target_teachers: targetTeachers,
             target_parents: targetParents,
             target_students: targetStudents,
-            target_guards: false, 
-            target_clinic: false,
+            target_clinic: targetClinic,
+            target_guards: targetGuards,
             posted_by_admin_id: adminUser.id
         };
         

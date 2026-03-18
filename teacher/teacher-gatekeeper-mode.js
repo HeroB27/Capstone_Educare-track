@@ -21,9 +21,8 @@ const scanCooldowns = new Map(); // Map<studentId, timestamp>
 const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes (Fix #4)
 let lastToastTime = 0; // Global debounce tracker for toast notifications
 
-// NEW: QR Code format validation regex
-// Matches: EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G001-A1B2)
-const SCAN_REGEX = /^EDU-\d{4}-[GK]\d{1,3}-[A-Z0-9]{4}$/;
+// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G010-A1B2)
+const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
 
 // DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -195,6 +194,27 @@ async function processScan(studentIdText) {
     statusIndicator.innerHTML = `<p class="text-sm text-yellow-300">Processing: ${studentIdText}</p>`;
     
     try {
+        // ==========================================
+        // SMART GATE PROTOCOL CHECK
+        // ==========================================
+        // Evaluate gate status BEFORE processing student lookup
+        const gateStatus = await window.evaluateGateStatus();
+        
+        // Update UI to show emergency mode if applicable
+        if (!gateStatus.allowEntry) {
+            statusIndicator.innerHTML = `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">${gateStatus.message}</span>`;
+        }
+        
+        // Check if gate is completely closed (Campus Closed)
+        if (!gateStatus.active) {
+            showNotification(gateStatus.message, 'error');
+            return;
+        }
+        
+        // ==========================================
+        // END SMART GATE PROTOCOL CHECK
+        // ==========================================
+
         // 1. Check if today is a holiday/suspended day
         // UPDATED: Now checks time_coverage for half-day suspensions
         // UPDATED: Use unmutated date for accurate hour checking (fixes timezone bug)
@@ -226,7 +246,7 @@ async function processScan(studentIdText) {
 
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
+            .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
             .eq('student_id_text', studentIdText)
             .single();
         
@@ -235,7 +255,7 @@ async function processScan(studentIdText) {
         if (studentError || !studentData) {
             const { data: qrStudent, error: qrError } = await supabase
                 .from('students')
-                .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
+                .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
                 .eq('qr_code_data', studentIdText)
                 .single();
             
@@ -252,7 +272,7 @@ async function processScan(studentIdText) {
                 const extractedId = parts[3];
                 const { data: extractedStudent } = await supabase
                     .from('students')
-                    .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, classes(grade_level, section_name)')
+                    .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
                     .eq('student_id_text', extractedId)
                     .single();
                 if (extractedStudent) studentData = extractedStudent;
@@ -261,6 +281,11 @@ async function processScan(studentIdText) {
         
         if (!studentData) {
             throw new Error('Student not found. Please check the ID.');
+        }
+        
+        // Check if student is active/enrolled - reject dropped/inactive students
+        if (studentData.status === 'Dropped' || studentData.status === 'Inactive') {
+            throw new Error('Student record is not active. Cannot scan.');
         }
         
         // Process the scan (entry/exit logic) - get the result
@@ -310,24 +335,52 @@ async function processScan(studentIdText) {
 
 // Handle attendance scan logic
 async function handleAttendanceScan(student) {
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const today = localDate.toISOString().split('T')[0];
+    // ==========================================
+    // SMART GATE DIRECTIONAL CHECK
+    // ==========================================
+    const gateStatus = await window.evaluateGateStatus();
+    
+    // Get current direction before processing
+    const checkDate = new Date();
+    checkDate.setMinutes(checkDate.getMinutes() - checkDate.getTimezoneOffset());
+    const checkDateStr = checkDate.toISOString().split('T')[0];
+    
+    // Check existing log to determine direction
+    const { data: priorLog } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('student_id', student.id)
+        .eq('log_date', checkDateStr)
+        .order('time_in', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    
+    const isEmergencyExitOnly = !gateStatus.allowEntry;
+    
+    // If emergency mode is active and this would be an ENTRY, block it
+    if (isEmergencyExitOnly && (!priorLog || (priorLog.time_in && priorLog.time_out))) {
+        throw new Error(`ENTRY DENIED: ${gateStatus.message}`);
+    }
+    // ==========================================
+    // END SMART GATE DIRECTIONAL CHECK
+    // ==========================================
+
     const now = new Date();
     const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
     
     // Get grade level for threshold calculation
     const gradeLevel = student.classes?.grade_level || null;
     
-    // Check existing log for today
-    const { data: existingLog } = await supabase
+    // Check existing log for today - reuse priorLog if available, otherwise fetch
+    const existingLog = priorLog || await supabase
         .from('attendance_logs')
         .select('*')
         .eq('student_id', student.id)
-        .eq('log_date', today)
+        .eq('log_date', checkDateStr)
         .order('time_in', { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .maybeSingle()
+        .then(r => r.data);
     
     let status = 'On Time';
     let direction = 'ENTRY';
@@ -371,7 +424,7 @@ async function handleAttendanceScan(student) {
             .from('attendance_logs')
             .insert({
                 student_id: student.id,
-                log_date: today,
+                log_date: checkDateStr,
                 time_in: now.toISOString(),
                 status: status
             });

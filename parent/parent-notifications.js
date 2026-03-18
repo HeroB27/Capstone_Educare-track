@@ -1,6 +1,9 @@
 // parent/parent-notifications.js
 // Notifications handling for parents
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 let allNotifications = [];
 let currentFilter = 'all';
 let notificationsChannel = null;
@@ -35,7 +38,7 @@ function setupNotificationsRealtime() {
             table: 'notifications',
             filter: `recipient_id=eq.${currentUser.id}`
         }, async (payload) => {
-            console.log('New notification received:', payload);
+            if (DEBUG) console.log('New notification received:', payload);
             const newNotification = payload.new;
             
             // Add to local notifications
@@ -64,7 +67,7 @@ function setupNotificationsRealtime() {
             table: 'notifications',
             filter: `recipient_id=eq.${currentUser.id}`
         }, async (payload) => {
-            console.log('Notification updated:', payload);
+            if (DEBUG) console.log('Notification updated:', payload);
             const updatedNotification = payload.new;
             
             // Update local state
@@ -86,7 +89,7 @@ function setupNotificationsRealtime() {
             table: 'announcements',
             filter: 'target_parents=eq.true'
         }, async (payload) => {
-            console.log('New announcement received:', payload);
+            if (DEBUG) console.log('New announcement received:', payload);
             const newAnnouncement = payload.new;
             
             // Convert to notification format
@@ -164,7 +167,7 @@ async function loadNotifications() {
         const user = JSON.parse(userStr);
         const parentId = user.id;
         
-        console.log('Loading notifications for parentId:', parentId, 'role: parents');
+        if (DEBUG) console.log('Loading notifications for parentId:', parentId, 'role: parents');
         
         const now = new Date().toISOString();
         
@@ -214,7 +217,7 @@ async function loadNotifications() {
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
             .slice(0, 100);  // Limit total to 100
 
-        console.log('Notifications loaded:', allNotifications.length, '(includes', announcementNotifications.length, 'announcements)');
+        if (DEBUG) console.log('Notifications loaded:', allNotifications.length, '(includes', announcementNotifications.length, 'announcements)');
         renderNotifications();
 
         document.getElementById('loading-indicator').classList.add('hidden');
@@ -506,7 +509,7 @@ async function markAsRead(notificationId) {
     try {
         // Skip marking announcements as read in notifications table (they're not stored there)
         if (notificationId.toString().startsWith('ann_')) {
-            console.log('Announcement notifications are read-only (not stored in notifications table)');
+            if (DEBUG) console.log('Announcement notifications are read-only (not stored in notifications table)');
             return;
         }
         

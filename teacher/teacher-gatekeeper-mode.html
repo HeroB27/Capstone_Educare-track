@@ -40,34 +40,34 @@
 <body class="text-white min-h-screen flex flex-col">
     
     <!-- Header -->
-    <header class="bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50 p-4">
+    <header class="bg-slate-900/90 backdrop-blur-xl border-b border-slate-700/50 p-3 sm:p-4">
         <div class="flex items-center justify-between max-w-2xl mx-auto">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 sm:gap-3">
                 <button onclick="window.location.href='teacher-dashboard.html'" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                     </svg>
                 </button>
                 <div>
-                    <h1 class="font-bold text-lg">Gatekeeper Mode</h1>
-                    <p class="text-xs text-slate-400">Scan Student ID at Gate</p>
+                    <h1 class="font-bold text-base sm:text-lg">Gatekeeper Mode</h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Scan Student ID at Gate</p>
                 </div>
             </div>
             <!-- UPDATED: Added teacher name display for Phase 1 -->
             <div class="text-right">
-                <p id="teacher-name-display" class="font-medium text-blue-300">Loading...</p>
+                <p id="teacher-name-display" class="font-medium text-blue-300 text-sm">Loading...</p>
                 <p id="current-time" class="font-mono text-lg font-bold text-emerald-400">--:--:--</p>
-                <p id="current-date" class="text-xs text-slate-400">Loading...</p>
+                <p id="current-date" class="text-xs text-slate-400 hidden sm:block">Loading...</p>
             </div>
         </div>
     </header>
     
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col items-center p-4 gap-4 max-w-2xl mx-auto w-full">
+    <main class="flex-1 flex flex-col items-center p-3 sm:p-4 gap-3 sm:gap-4 max-w-2xl mx-auto w-full">
         
         <!-- Scanner Container -->
-        <div class="w-full relative">
-            <div id="qr-reader" class="w-full aspect-square bg-slate-800 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"></div>
+        <div class="w-full relative px-2 sm:px-0">
+            <div id="qr-reader" class="w-full aspect-square max-w-sm mx-auto bg-slate-800 rounded-2xl overflow-hidden shadow-2xl shadow-black/50"></div>
             
             <!-- Scanner Overlay -->
             <div class="absolute inset-0 pointer-events-none">
@@ -99,7 +99,7 @@
         </div>
         
         <!-- Manual Entry Button -->
-        <button onclick="showManualEntry()" class="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+        <button onclick="showManualEntry()" class="w-full max-w-sm mx-auto py-3 sm:py-3 px-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 text-sm sm:text-base">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>

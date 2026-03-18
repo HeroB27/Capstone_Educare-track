@@ -1,5 +1,8 @@
 // guard/guard-basic-analytics.js - Guard Analytics Dashboard
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 // Session check
 // currentUser is now global in guard-core.js
 
@@ -104,7 +107,7 @@ async function loadTodayStats() {
         if (elLate) elLate.textContent = lateCount;
         if (elAbsent) elAbsent.textContent = absentCount;
         
-        console.log('Today stats:', { 
+        if (DEBUG) console.log('Today stats:', { 
             total: totalStudents, 
             present: presentCount, 
             late: lateCount, 
@@ -162,7 +165,7 @@ async function loadTodayBreakdown() {
         const lateCount = lateResult.count || 0;
         const absentCount = absentResult.count || 0;
         
-        console.log('Today breakdown:', { present: presentCount, late: lateCount, absent: absentCount, total: totalStudents });
+        if (DEBUG) console.log('Today breakdown:', { present: presentCount, late: lateCount, absent: absentCount, total: totalStudents });
         
         renderBreakdownChart(presentCount, lateCount, absentCount);
         
@@ -256,7 +259,7 @@ async function loadTopLates() {
         const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1));
         const weekStart = monday.toISOString().split('T')[0];
         
-        console.log('Week start:', weekStart); // Debug log
+        if (DEBUG) console.log('Week start:', weekStart); // Debug log
         
         // First, get all late attendance logs this week
         const logsResult = await supabase
@@ -270,7 +273,7 @@ async function loadTopLates() {
             throw logsResult.error;
         }
         
-        console.log('Late logs:', logsResult.data); // Debug log
+        if (DEBUG) console.log('Late logs:', logsResult.data); // Debug log
         
         // Get unique student IDs who were late
         const studentIds = [...new Set((logsResult.data || []).map(log => log.student_id))];
@@ -292,7 +295,7 @@ async function loadTopLates() {
             throw studentsResult.error;
         }
         
-        console.log('Students data:', studentsResult.data); // Debug log
+        if (DEBUG) console.log('Students data:', studentsResult.data); // Debug log
         
         // Count lates per student
         const counts = {};
@@ -324,7 +327,7 @@ async function loadTopLates() {
                 };
             });
         
-        console.log('Top lates:', topLates); // Debug log
+        if (DEBUG) console.log('Top lates:', topLates); // Debug log
         renderTopLates(topLates);
         
     } catch (err) {
@@ -379,7 +382,7 @@ async function loadTopAbsentees() {
         const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1));
         const weekStart = monday.toISOString().split('T')[0];
         
-        console.log('Absences - Week start:', weekStart);
+        if (DEBUG) console.log('Absences - Week start:', weekStart);
         
         // Get attendance records with Absent status this week
         const absentResult = await supabase
@@ -393,7 +396,7 @@ async function loadTopAbsentees() {
             throw absentResult.error;
         }
         
-        console.log('Absent logs:', absentResult.data);
+        if (DEBUG) console.log('Absent logs:', absentResult.data);
         
         // Count unique absent days per student
         const absentDaysCount = {};
@@ -445,7 +448,7 @@ async function loadTopAbsentees() {
         // Sort and get top 10
         const topAbsentees = absences.sort((a, b) => b.absentDays - a.absentDays).slice(0, 10);
         
-        console.log('Top absentees:', topAbsentees);
+        if (DEBUG) console.log('Top absentees:', topAbsentees);
         renderTopAbsentees(topAbsentees);
         
     } catch (err) {

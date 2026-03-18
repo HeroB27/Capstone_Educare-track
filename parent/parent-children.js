@@ -1,6 +1,9 @@
 // parent/parent-children.js
 // Logic for children management and detail view
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 let childrenData = [];
 
 /**
@@ -27,7 +30,7 @@ async function loadAllChildren() {
         const user = JSON.parse(userStr);
         const parentId = user.id;
         
-        console.log('Loading children for parentId:', parentId);
+        if (DEBUG) console.log('Loading children for parentId:', parentId);
         
         // FIX: Added classes join to get grade_level and section_name
         // UPDATED: Also fetch class info for display
@@ -43,7 +46,7 @@ async function loadAllChildren() {
         }
 
         childrenData = children || [];
-        console.log('Children loaded:', childrenData.length);
+        if (DEBUG) console.log('Children loaded:', childrenData.length);
         
         if (childrenData.length === 0) {
             showEmptyState();
@@ -82,19 +85,19 @@ async function renderChildrenList() {
     }));
 
     container.innerHTML = childrenData.map((child, index) => {
-        console.log('[Parent Children] Rendering child:', child.full_name, 'Attendance stats:', child.attendanceStats);
+        if (DEBUG) console.log('[Parent Children] Rendering child:', child.full_name, 'Attendance stats:', child.attendanceStats);
         
         const statusColor = getStatusColor(child.todayStatus);
         const statusText = getStatusText(child.todayStatus);
         const stats = child.attendanceStats || { present: 0, late: 0, absent: 0, percentage: 100 };
         
-        console.log('[Parent Children] Stats for', child.full_name, ':', JSON.stringify(stats));
+        if (DEBUG) console.log('[Parent Children] Stats for', child.full_name, ':', JSON.stringify(stats));
         
         // Get percentage color - show actual data
         const percentageColor = stats.percentage >= 90 ? 'text-green-600' : 
                               stats.percentage >= 75 ? 'text-yellow-600' : 'text-red-600';
         
-        console.log('[Parent Children] Using percentage:', stats.percentage, 'for color:', percentageColor);
+        if (DEBUG) console.log('[Parent Children] Using percentage:', stats.percentage, 'for color:', percentageColor);
         
         // Fallback for missing photos - show initials if no photo
         const avatar = child.profile_photo_url 
@@ -187,7 +190,7 @@ async function getChildAttendanceStats(childId) {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-        console.log('[Parent Children] Getting attendance stats for child:', childId, 'Date range:', monthStart, 'to', monthEnd);
+        if (DEBUG) console.log('[Parent Children] Getting attendance stats for child:', childId, 'Date range:', monthStart, 'to', monthEnd);
 
         const { data: logs, error } = await supabase
             .from('attendance_logs')
@@ -196,23 +199,23 @@ async function getChildAttendanceStats(childId) {
             .gte('log_date', monthStart)
             .lte('log_date', monthEnd);
 
-        console.log('[Parent Children] Attendance logs found:', logs?.length || 0, 'records');
+        if (DEBUG) console.log('[Parent Children] Attendance logs found:', logs?.length || 0, 'records');
 
         // FIX: Also check for empty array since [] is truthy in JS
         if (error || !logs || logs.length === 0) {
-            console.log('[Parent Children] No logs - returning default 100%');
+            if (DEBUG) console.log('[Parent Children] No logs - returning default 100%');
             return { present: 0, late: 0, absent: 0, percentage: 100 };
         }
 
         const schoolDays = getSchoolDaysInMonth(now.getFullYear(), now.getMonth());
-        console.log('[Parent Children] School days in month:', schoolDays);
+        if (DEBUG) console.log('[Parent Children] School days in month:', schoolDays);
         
         const present = logs.filter(l => l.status === 'On Time' || l.status === 'Present' || l.status === 'Excused').length;
         const late = logs.filter(l => l.status === 'Late').length;
         const absent = Math.max(0, schoolDays - (present + late));
         const percentage = schoolDays > 0 ? Math.round((present / schoolDays) * 100) : 100;
         
-        console.log('[Parent Children] Calculated - Present:', present, 'Late:', late, 'Absent:', absent, 'Percentage:', percentage);
+        if (DEBUG) console.log('[Parent Children] Calculated - Present:', present, 'Late:', late, 'Absent:', absent, 'Percentage:', percentage);
 
         return { present, late, absent, percentage, schoolDays };
 

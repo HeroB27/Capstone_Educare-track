@@ -1,6 +1,9 @@
 // teacher/teacher-core.js
 // Core logic for Teacher Module - Session, data fetching, gatekeeper mode
 
+// DEBUG FLAG - Set to false in production
+const DEBUG = false;
+
 // 1. Session Check - Verifies teacher login
 var currentUser = checkSession('teachers');
 
@@ -13,7 +16,7 @@ let isGatekeeperMode = false;
 let isAdviserMode = false; // Track if teacher is an adviser
 if (currentUser && currentUser.is_gatekeeper === true) {
     isGatekeeperMode = true;
-    console.log('Gatekeeper mode enabled for this teacher');
+    if (DEBUG) console.log('Gatekeeper mode enabled for this teacher');
 }
 
 // 3. Initialize on DOM Ready
@@ -63,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // THE PARANOIA SHIELD: Only fetch if we haven't fetched it yet this session!
 async function initializeTeacherPortal() {
     if (sessionStorage.getItem('teacher_identity_loaded') === 'true') {
-        console.log('Teacher identity already loaded from session, skipping API call');
+        if (DEBUG) console.log('Teacher identity already loaded from session, skipping API call');
         return; // Skip the database call, we already know who they are!
     }
     
@@ -123,7 +126,7 @@ async function initializeTeacherPortal() {
         // Once fetched successfully, set the flag so we don't spam the API again
         sessionStorage.setItem('teacher_identity_loaded', 'true');
         
-        console.log('Teacher Portal Initialized:', isAdviserMode ? 'Adviser Mode' : 'Subject Teacher Mode');
+        if (DEBUG) console.log('Teacher Portal Initialized:', isAdviserMode ? 'Adviser Mode' : 'Subject Teacher Mode');
         
     } catch (err) {
         console.error('Error in initializeTeacherPortal:', err);
@@ -134,7 +137,7 @@ async function initializeTeacherPortal() {
 async function loadHomeroomStats(classId) {
     // This function prepares data for dashboard stats cards
     // Called when teacher is an adviser
-    console.log('Loading homeroom stats for class:', classId);
+    if (DEBUG) console.log('Loading homeroom stats for class:', classId);
     // Stats will be loaded via loadDashboardStats() in teacher-dashboard.js
 }
 
@@ -145,7 +148,7 @@ function hideAdvisoryOnlyFeatures() {
     elements.forEach(el => {
         el.style.display = 'none';
     });
-    console.log('Advisory-only features hidden for Subject Teacher');
+    if (DEBUG) console.log('Advisory-only features hidden for Subject Teacher');
 }
 
 // 3d. Load Teacher Schedule (Live)
@@ -163,7 +166,7 @@ async function loadTeacherSchedule(teacherId) {
 
         if (subjectLoads) {
             mySubjectLoads = subjectLoads;
-            console.log('Schedule loaded:', mySubjectLoads.length, 'subjects');
+            if (DEBUG) console.log('Schedule loaded:', mySubjectLoads.length, 'subjects');
             renderScheduleOnDashboard();
         }
     } catch (err) {
@@ -1633,7 +1636,7 @@ async function logTeacherAction(actionType, details = {}, targetId = null, targe
             }
         });
         
-        console.log('[Audit] Logged:', actionType, details);
+        if (DEBUG) console.log('[Audit] Logged:', actionType, details);
         
     } catch (err) {
         console.error('[Audit] Error logging teacher action:', err);
@@ -2764,7 +2767,7 @@ async function notifyParentOnAttendance(studentId, status, date) {
             is_read: false
         });
         
-        console.log('Parent notified of attendance change');
+        if (DEBUG) console.log('Parent notified of attendance change');
         
     } catch (err) {
         console.error('Error notifying parent:', err);
@@ -2925,7 +2928,7 @@ window.notifySubjectTeachersOfExcuse = async function(studentId, dateAbsent, stu
         }));
         
         await supabase.from('notifications').insert(notifications);
-        console.log("Subject teachers successfully notified.");
+        if (DEBUG) console.log("Subject teachers successfully notified.");
     } catch (e) {
         console.error("Failed to notify subject teachers:", e);
     }
