@@ -308,9 +308,11 @@ async function processScan(studentIdText) {
         actionBadge.innerText = scanResult.direction;
         actionBadge.className = `px-3 py-1 rounded-full text-xs font-bold uppercase ${scanResult.direction === 'ENTRY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`;
 
-        // Play Audio
-        const audioEl = document.getElementById(scanResult.status === 'Late' ? 'audio-late' : 'audio-success');
-        if (audioEl) audioEl.play().catch(e => console.log('Audio play blocked:', e));
+        // Play Audio - safe version that fails silently if file is missing
+        try {
+            let audio = new Audio('../assets/sounds/success.mp3');
+            audio.play().catch(() => {}); // Fails silently if file is missing
+        } catch (err) {}
         
         // Create parent notification for all events
         await createParentNotification(studentData, scanResult.direction, scanResult.status);
@@ -327,9 +329,11 @@ async function processScan(studentIdText) {
         document.getElementById('scan-student-name').innerText = 'Error';
         document.getElementById('scan-grade-level').innerText = error.message;
         
-        // Play error audio
-        const errAudio = document.getElementById('audio-error');
-        if (errAudio) errAudio.play().catch(e => {});
+        // Play error audio - safe version that fails silently if file is missing
+        try {
+            let audio = new Audio('../assets/sounds/error.mp3');
+            audio.play().catch(() => {}); // Fails silently if file is missing
+        } catch (err) {}
     }
 }
 

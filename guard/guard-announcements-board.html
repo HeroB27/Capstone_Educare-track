@@ -159,7 +159,8 @@
         // Session check
         const user = checkSession('guards');
         if (user) {
-            document.getElementById('guard-name').innerText = user.full_name;
+            const nameDisplay = document.getElementById('guard-name');
+            if (nameDisplay) nameDisplay.innerText = user.full_name;
         }
 
         document.addEventListener('DOMContentLoaded', () => {

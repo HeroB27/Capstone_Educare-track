@@ -449,7 +449,7 @@ async function confirmAndAnnounceSuspension() {
 // ATTENDANCE INTERCEPTOR UTILITY (For Guard/Teacher modules to call)
 window.checkSuspensionStatus = async function(dateStr) {
     try {
-        const { data, error } = await supabase.from('holidays').select('*').eq('holiday_date', dateStr).single();
+        const { data, error } = await supabase.from('holidays').select('*').eq('holiday_date', dateStr).maybeSingle();
         if (error || !data) return { isSuspended: false, coverage: null, targetGrades: null };
         return { isSuspended: data.is_suspended, coverage: data.time_coverage || 'Full Day', targetGrades: data.target_grades };
     } catch (err) { return { isSuspended: false, coverage: null, targetGrades: null }; }
