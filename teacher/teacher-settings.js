@@ -62,7 +62,7 @@ async function loadTeacherProfile() {
     try {
         const { data: teacher, error } = await supabase
             .from('teachers')
-            .select('*, classes(id, grade_level, section_name)')
+            .select('*, classes(id, grade_level, department)')
             .eq('id', currentUser.id)
             .single();
         
@@ -72,7 +72,7 @@ async function loadTeacherProfile() {
         }
         
         const homeroomInfo = teacher.classes 
-            ? `${teacher.classes?.grade_level || 'Unassigned'} - ${teacher.classes?.section_name || 'N/A'}`
+            ? `${teacher.classes?.grade_level || 'Unassigned'} - ${teacher.classes?.department || 'N/A'}`
             : 'No Homeroom Assigned';
         
         container.innerHTML = `

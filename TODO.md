@@ -1,27 +1,11 @@
-# TODO: Change Scanners from html5-qrcode to jsQR
+# User Management Tables + Pagination Fix
+Status: [IN PROGRESS] 🚧
 
-## Status: COMPLETED
-
-### HTML Files Updated:
-- [x] 1. clinic/clinic-scanner.html - Replaced html5-qrcode script with jsQR
-- [x] 2. guard/scanner.html - Replaced html5-qrcode script with jsQR
-- [x] 3. guard/guard-dashboard.html - Replaced html5-qrcode script with jsQR
-- [x] 4. teacher/teacher-gatekeeper-mode.html - Replaced html5-qrcode script with jsQR
-
-### JavaScript Files Updated:
-- [x] 5. clinic/clinic-scanner.js - Rewritten scanner to use jsQR
-- [x] 6. guard/guard-core.js - Rewritten scanner to use jsQR
-- [x] 7. teacher/teacher-gatekeeper-mode.js - Rewritten scanner to use jsQR
-
-### Implementation Details:
-- jsQR requires manual camera stream handling via MediaDevices API
-- Implemented video element for camera stream
-- Implemented canvas element for capturing frames
-- Used requestAnimationFrame loop for continuous scanning
-- Kept existing business logic (QR validation, database queries) unchanged
-- Maintained USB HID scanner support for PC mode in guard module
-
-### Library Change:
-- Old: `<script src="https://unpkg.com/html5-qr-code" type="text/javascript"></script>`
-- New: `<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js" type="text/javascript"></script>`
+## Steps:
+### 1. ✅ Create TODO.md with plan breakdown
+### 2. ✅ Read admin-user-management.html (confirmed table structure)
+### 3. ✅ Edit JS: Added pagination vars/logic/renderPagination()
+### 4. ✅ Edit HTML: Added pagination-top/bottom divs
+### 5. ✅ Test: Tables fixed with pagination (15/page), top/bottom nav works, search/tab resets to page 1
+### 6. ✅ Complete: User management tables fixed with pagination
 

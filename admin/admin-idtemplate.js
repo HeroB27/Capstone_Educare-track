@@ -64,7 +64,7 @@ function generatePortraitIDHTML(u, config) {
                     <i data-lucide="graduation-cap" class="w-4 h-4 text-violet-900"></i>
                 </div>
                 <div class="text-white overflow-hidden leading-none">
-                    <h4 class="text-[7px] font-black uppercase">Educare Colleges Inc</h4>
+                    <h4 class="text-[7px] font-black uppercase">Eudcare Colleges Inc</h4>
                     <p class="text-[5px] opacity-80 uppercase tracking-tighter">Purok 4 Irisan Baguio City</p>
                 </div>
             </div>

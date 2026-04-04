@@ -1,7 +1,5 @@
 // guard/guard-basic-analytics.js - Guard Analytics Dashboard
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 // Session check
 // currentUser is now global in guard-core.js
@@ -286,7 +284,7 @@ async function loadTopLates() {
         // Query students table directly for these IDs with class info
         const studentsResult = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, classes(id, grade_level, section_name)')
+            .select('id, full_name, student_id_text, classes(id, grade_level, department)')
             .in('id', studentIds)
             .eq('status', 'Enrolled');
         
@@ -322,7 +320,7 @@ async function loadTopLates() {
                     name: student?.full_name || 'Unknown',
                     studentId: student?.student_id_text || '-',
                     grade: student?.classes?.grade_level || '-',
-                    section: student?.classes?.section_name || '-',
+                    section: student?.classes?.department || '-',
                     count: count
                 };
             });
@@ -418,7 +416,7 @@ async function loadTopAbsentees() {
         // Query students table for these IDs with class info
         const studentsResult = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, classes(grade_level, section_name)')
+            .select('id, full_name, student_id_text, classes(grade_level, department)')
             .in('id', studentIds)
             .eq('status', 'Enrolled');
         
@@ -440,7 +438,7 @@ async function loadTopAbsentees() {
                 id: sid,
                 name: student?.full_name || 'Unknown',
                 grade: student?.classes?.grade_level || '-',
-                section: student?.classes?.section_name || '-',
+                section: student?.classes?.department || '-',
                 absentDays: absentDaysCount[sid].size
             };
         });

@@ -27,7 +27,7 @@
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
             <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
         </div>
-        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
             <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
@@ -75,19 +75,42 @@
                 <h2 class="text-3xl font-black text-gray-900 tracking-tight">ID Management</h2>
                 <span id="studentCount" class="px-4 py-1.5 bg-violet-100 text-violet-700 rounded-full text-sm font-bold"></span>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-6">
                 <div class="relative">
                     <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-                    <input type="text" id="searchInput" oninput="filterStudents()" placeholder="Search student name..." 
+                    <input type="text" id="searchInput" oninput="filterStudents()" placeholder="Search student name or ID..." 
                         class="pl-12 pr-6 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-sm outline-none focus:border-violet-200 w-80 transition-all">
                 </div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
-            <!-- Student ID Grid -->
-            <div id="idGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <!-- Grid items will be rendered by JavaScript -->
+        <div class="flex-1 overflow-y-auto p-10">
+            <!-- Pagination Controls - Above Table -->
+            <div id="paginationControls" class="mb-6 flex items-center justify-center gap-4" style="display: flex !important;">
+                <button onclick="prevPage()" class="px-6 py-3 bg-violet-100 text-violet-700 rounded-2xl font-bold hover:bg-violet-200 transition-all">
+                    <i data-lucide="chevron-left" class="w-5 h-5 inline"></i> Prev
+                </button>
+                <span id="pageIndicator" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-bold">Page 1</span>
+                <button onclick="nextPage()" class="px-6 py-3 bg-violet-100 text-violet-700 rounded-2xl font-bold hover:bg-violet-200 transition-all">
+                    Next <i data-lucide="chevron-right" class="w-5 h-5 inline"></i>
+                </button>
+            </div>
+            
+            <!-- Student ID Table -->
+            <div id="idTableContainer" class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-8" style="display: block !important;">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50/50 border-b">
+                        <tr>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student Details</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Class & Dept</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Parent / Contact</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="idListBody" class="divide-y divide-gray-50">
+                        <!-- Table rows will be rendered by JavaScript -->
+                    </tbody>
+                </table>
             </div>
             
             <!-- Empty State -->
@@ -101,23 +124,21 @@
         </div>
     </main>
 
-    <!-- View ID Modal -->
-    <div id="viewIdModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white shrink-0">
-                <h3 class="font-black text-xl uppercase tracking-tight">Student ID Preview</h3>
-                <button onclick="closeViewIdModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
+    <!-- View ID Drawer (Right Side Slide-Out) -->
+    <div id="viewIdDrawer" class="fixed top-0 right-0 w-full max-w-2xl h-full bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50">
+        <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-6 py-5 flex justify-between items-center text-white shrink-0">
+            <h3 class="font-black text-lg uppercase tracking-tight">Student ID Preview</h3>
+            <button onclick="closeViewIdDrawer()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 h-[calc(100%-140px)]">
+            <div id="idPreviewContainer" class="flex gap-6 justify-center items-start flex-wrap">
+                <!-- ID preview will be rendered here -->
             </div>
-            <div class="p-8 overflow-y-auto custom-scrollbar flex-1">
-                <div id="idPreviewContainer" class="flex gap-8 justify-center items-center flex-wrap">
-                    <!-- ID preview will be rendered here -->
-                </div>
-            </div>
-            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end gap-4 shrink-0">
-                <button onclick="closeViewIdModal()" class="px-8 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold transition-all hover:bg-gray-200">Close</button>
-            </div>
+        </div>
+        <div class="px-6 py-5 bg-gray-50 border-t flex justify-end gap-4 shrink-0">
+            <button onclick="closeViewIdDrawer()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold transition-all hover:bg-gray-200">Close</button>
         </div>
     </div>
 

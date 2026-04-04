@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Staff - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="admin-add-staff.js" defer></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-print { display: block; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
+
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0 no-print">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
+        </div>
+        
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="users" class="w-5 h-5"></i> User Management
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
+            </a>
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
+            </a>
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
+        </nav>
+        
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden no-print">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <div class="flex items-center gap-6">
+                <a href="admin-user-management.html" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    <span class="font-bold text-sm">Back to User Management</span>
+                </a>
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Staff Management</h2>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="openStaffWizardModal()" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 inline mr-2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Staff
+                </button>
+                <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black">A</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-10">
+            <!-- CRUD Table Section -->
+            <div id="crud-section" class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-8">
+                <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50/30">
+                    <div class="flex gap-6">
+                        <button onclick="switchStaffView(event, 'teachers')" id="tab-teachers" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Teachers</button>
+                        <button onclick="switchStaffView(event, 'guards')" id="tab-guards" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Guards</button>
+                        <button onclick="switchStaffView(event, 'clinic')" id="tab-clinic" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Clinic Staff</button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="relative w-64">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                            <input type="text" id="staffSearch" oninput="filterStaff()" placeholder="Search..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                        </div>
+                    </div>
+                </div>
+                <!-- Pagination Controls -->
+                <div id="staff-pagination-controls" class="mb-4 mt-4 px-6 flex items-center justify-between">
+                    <div class="text-xs text-gray-500 font-medium">
+                        <span id="staff-page-indicator">Showing 1-10 of 0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="staffPrevPage()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <span class="text-xs font-bold text-gray-500">Page <span id="staff-current-page">1</span></span>
+                        <button onclick="staffNextPage()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50/50 border-b">
+                        <tr>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Staff Name</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Role / Position</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</th>
+                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="staff-table-body" class="divide-y divide-gray-50"></tbody>
+                
+            </div>
+        </div>
+    </main>
+
+    <!-- Staff Wizard Modal -->
+    <div id="staffWizardModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 hidden overflow-y-auto">
+        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 sticky top-0 z-10 flex justify-between items-center text-white">
+                <h3 class="font-black text-xl uppercase tracking-tight">Staff Enrollment</h3>
+                <button onclick="closeStaffWizardModal()" class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-8">
+                <div id="staff-stepper-dots" class="flex gap-2 mb-6">
+                    <div id="staff-dot-1" class="w-3 h-3 rounded-full bg-violet-600"></div>
+                    <div id="staff-dot-2" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="staff-dot-3" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="staff-dot-4" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                </div>
+
+                <!-- Step 1: Role Selection -->
+                <div id="staff-step-1" class="wizard-step active space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 1: Select Staff Role</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <button onclick="selectRole('teachers')" id="role-teachers" class="role-btn p-6 bg-gray-50 border-2 border-transparent rounded-2xl text-center hover:bg-violet-50 hover:border-violet-200 transition-all">
+                            <i data-lucide="GraduationCap" class="w-10 h-10 mx-auto mb-3 text-violet-600"></i>
+                            <div class="font-black text-gray-800">TEACHER</div>
+                        </button>
+                        <button onclick="selectRole('guards')" id="role-guards" class="role-btn p-6 bg-gray-50 border-2 border-transparent rounded-2xl text-center hover:bg-violet-50 hover:border-violet-200 transition-all">
+                            <i data-lucide="Shield" class="w-10 h-10 mx-auto mb-3 text-violet-600"></i>
+                            <div class="font-black text-gray-800">GUARD</div>
+                        </button>
+                        <button onclick="selectRole('clinic_staff')" id="role-clinic_staff" class="role-btn p-6 bg-gray-50 border-2 border-transparent rounded-2xl text-center hover:bg-violet-50 hover:border-violet-200 transition-all">
+                            <i data-lucide="HeartPulse" class="w-10 h-10 mx-auto mb-3 text-violet-600"></i>
+                            <div class="font-black text-gray-800">CLINIC STAFF</div>
+                        </button>
+                    </div>
+                    <input type="hidden" id="selected-role" value="">
+                </div>
+
+                <!-- Step 2: Staff Info -->
+                <div id="staff-step-2" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 2: Staff Information</h4>
+                    <div class="grid grid-cols-1 gap-5">
+                        <div class="relative">
+                            <i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                            <input type="text" id="s-name" placeholder="Full Name" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </div>
+                        <div class="relative">
+                            <i data-lucide="phone" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                            <input type="text" id="s-phone" placeholder="Contact Number" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </div>
+                        
+                        <!-- Teacher-specific fields -->
+                        <div id="teacher-fields" class="hidden space-y-4">
+                            <div class="relative">
+                                <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                                <input type="email" id="s-email" placeholder="Email Address" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                            </div>
+                            <select id="s-department" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                                <option value="">Select Department</option>
+                                <option value="English">English</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="Science">Science</option>
+                                <option value="Filipino">Filipino</option>
+                                <option value="Araling Panlipunan">Araling Panlipunan</option>
+                                <option value="MAPEH">MAPEH</option>
+                                <option value="TLE">TLE</option>
+                                <option value="Computer">Computer</option>
+                                <option value="Physical Education">Physical Education</option>
+                                <option value="Values Education">Values Education</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Clinic-specific fields -->
+                        <div id="clinic-fields" class="hidden space-y-4">
+                            <div class="relative">
+                                <i data-lucide="briefcase" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                                <input type="text" id="s-role-title" placeholder="Role Title (e.g., Nurse, School Physician)" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Account Creation -->
+                <div id="staff-step-3" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 3: Create Account</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="s-user" placeholder="Create Username" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        <input type="password" id="s-pass" placeholder="Create Password" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                    </div>
+                </div>
+
+                <!-- Step 4: Confirmation -->
+                <div id="staff-step-4" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 4: Confirm Staff Details</h4>
+                    <div class="p-8 bg-violet-50 rounded-[32px] border border-violet-100 relative text-center">
+                        <div id="staff-summary" class="grid grid-cols-2 gap-y-6 text-sm font-bold text-gray-700 text-left px-4"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-between shrink-0">
+                <button onclick="staffPrevStep()" id="staff-prev-btn" class="px-6 py-3 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-gray-600 transition-colors flex items-center gap-2">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Previous
+                </button>
+                <div class="flex-1"></div>
+                <button onclick="staffNextStep()" id="staff-next-btn" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-violet-200 hover:scale-105 active:scale-95 transition-all">
+                    Next Step
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

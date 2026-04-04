@@ -58,13 +58,13 @@ async function loadTeacherClasses() {
     try {
         select.innerHTML = '';
         // 1. Force fetch Homeroom first
-        const { data: homeroom } = await supabase.from('classes').select('id, grade_level, section_name').eq('adviser_id', currentTeacher.id).single();
+        const { data: homeroom } = await supabase.from('classes').select('id, grade_level, department').eq('adviser_id', currentTeacher.id).single();
         if (homeroom) {
-            select.innerHTML += `<option value="${homeroom.id}">Homeroom: ${homeroom.grade_level} - ${homeroom.section_name}</option>`;
+            select.innerHTML += `<option value="${homeroom.id}">Homeroom: ${homeroom.grade_level} - ${homeroom.department}</option>`;
         }
 
         // 2. Fetch Subject Classes
-        const { data: subjects } = await supabase.from('subject_loads').select('class_id, classes(grade_level, section_name)').eq('teacher_id', currentTeacher.id);
+        const { data: subjects } = await supabase.from('subject_loads').select('class_id, classes(grade_level, department)').eq('teacher_id', currentTeacher.id);
         if (subjects) {
             const seen = new Set();
             if (homeroom) seen.add(homeroom.id); // Don't duplicate homeroom
@@ -72,7 +72,7 @@ async function loadTeacherClasses() {
             subjects.forEach(s => {
                 if (s.classes && !seen.has(s.class_id)) {
                     seen.add(s.class_id);
-                    select.innerHTML += `<option value="${s.class_id}">${s.classes.grade_level} - ${s.classes.section_name}</option>`;
+                    select.innerHTML += `<option value="${s.class_id}">${s.classes.grade_level} - ${s.classes.department}</option>`;
                 }
             });
         }

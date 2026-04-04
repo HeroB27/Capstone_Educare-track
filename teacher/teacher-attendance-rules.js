@@ -48,7 +48,7 @@ async function loadMyHomeroom() {
         // Get teacher's homeroom class
         const { data: teacherClass, error } = await supabase
             .from('classes')
-            .select('id, grade_level, section_name')
+            .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
         
@@ -60,7 +60,7 @@ async function loadMyHomeroom() {
         
         // Show homeroom card
         homeroomCard.classList.remove('hidden');
-        homeroomName.textContent = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.section_name || 'N/A'}`;
+        homeroomName.textContent = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.department || 'N/A'}`;
         
         // Find the grade level info safely
         const gradeInfo = GRADE_LEVELS.find(g => {

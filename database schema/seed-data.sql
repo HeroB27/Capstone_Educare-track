@@ -155,8 +155,8 @@ ON CONFLICT (username) DO NOTHING;
 -- SECTION 8: SEED CLASSES
 -- ============================================================================
 
-INSERT INTO public.classes (grade_level, section_name, strand, adviser_id, room_number, school_year) VALUES
-('Grade 7', 'Sapphire', NULL, (SELECT id FROM teachers WHERE username = 'teacher1' LIMIT 1), 'Room 101', '2025-2026'),
+INSERT INTO public.classes (grade_level, department, strand, adviser_id, room_number, school_year) VALUES
+('Grade 7', 'Junior High School', NULL, (SELECT id FROM teachers WHERE username = 'teacher1' LIMIT 1), 'Room 101', '2025-2026'),
 ('Grade 8', 'Ruby', NULL, (SELECT id FROM teachers WHERE username = 'teacher2' LIMIT 1), 'Room 102', '2025-2026'),
 ('Grade 9', 'Emerald', NULL, (SELECT id FROM teachers WHERE username = 'teacher3' LIMIT 1), 'Room 103', '2025-2026'),
 ('Grade 10', 'Diamond', NULL, (SELECT id FROM teachers WHERE username = 'teacher4' LIMIT 1), 'Room 104', '2025-2026'),
@@ -174,22 +174,22 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO public.students (lrn, student_id_text, full_name, parent_id, class_id, gender, address, emergency_contact, qr_code_data, status) VALUES
 -- Students for Grade 7 - Sapphire
-('123456789001', 'STU-2025-0001', 'Alden Rivera', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND section_name = 'Sapphire' LIMIT 1), 'Male', '123 Main St, Barangay 1', '09123456740', 'STU-2025-0001', 'Enrolled'),
-('123456789002', 'STU-2025-0002', 'Bella Cruz', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND section_name = 'Sapphire' LIMIT 1), 'Female', '124 Main St, Barangay 1', '09123456741', 'STU-2025-0002', 'Enrolled'),
-('123456789003', 'STU-2025-0003', 'Charles Ong', (SELECT id FROM parents WHERE username = 'parent2' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND section_name = 'Sapphire' LIMIT 1), 'Male', '125 Main St, Barangay 1', '09123456742', 'STU-2025-0003', 'Enrolled'),
+('123456789001', 'STU-2025-0001', 'Alden Rivera', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND department = 'Junior High School' LIMIT 1), 'Male', '123 Main St, Barangay 1', '09123456740', 'STU-2025-0001', 'Enrolled'),
+('123456789002', 'STU-2025-0002', 'Bella Cruz', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND department = 'Junior High School' LIMIT 1), 'Female', '124 Main St, Barangay 1', '09123456741', 'STU-2025-0002', 'Enrolled'),
+('123456789003', 'STU-2025-0003', 'Charles Ong', (SELECT id FROM parents WHERE username = 'parent2' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 7' AND department = 'Junior High School' LIMIT 1), 'Male', '125 Main St, Barangay 1', '09123456742', 'STU-2025-0003', 'Enrolled'),
 -- Students for Grade 8 - Ruby
-('123456789004', 'STU-2025-0004', 'Diana Lim', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 8' AND section_name = 'Ruby' LIMIT 1), 'Female', '456 Oak Ave, Barangay 2', '09123456743', 'STU-2025-0004', 'Enrolled'),
-('123456789005', 'STU-2025-0005', 'Ethan Uy', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 8' AND section_name = 'Ruby' LIMIT 1), 'Male', '457 Oak Ave, Barangay 2', '09123456744', 'STU-2025-0005', 'Enrolled'),
+('123456789004', 'STU-2025-0004', 'Diana Lim', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 8' AND department = 'Junior High School' LIMIT 1), 'Female', '456 Oak Ave, Barangay 2', '09123456743', 'STU-2025-0004', 'Enrolled'),
+('123456789005', 'STU-2025-0005', 'Ethan Uy', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 8' AND department = 'Junior High School' LIMIT 1), 'Male', '457 Oak Ave, Barangay 2', '09123456744', 'STU-2025-0005', 'Enrolled'),
 -- Students for Grade 9 - Emerald
-('123456789006', 'STU-2025-0006', 'Fiona Sy', (SELECT id FROM parents WHERE username = 'parent4' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 9' AND section_name = 'Emerald' LIMIT 1), 'Female', '458 Oak Ave, Barangay 2', '09123456745', 'STU-2025-0006', 'Enrolled'),
+('123456789006', 'STU-2025-0006', 'Fiona Sy', (SELECT id FROM parents WHERE username = 'parent4' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 9' AND department = 'Junior High School' LIMIT 1), 'Female', '458 Oak Ave, Barangay 2', '09123456745', 'STU-2025-0006', 'Enrolled'),
 -- Students for Grade 10 - Diamond
-('123456789007', 'STU-2025-0007', 'Gabriel Tan', (SELECT id FROM parents WHERE username = 'parent4' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 10' AND section_name = 'Diamond' LIMIT 1), 'Male', '459 Oak Ave, Barangay 2', '09123456746', 'STU-2025-0007', 'Enrolled'),
+('123456789007', 'STU-2025-0007', 'Gabriel Tan', (SELECT id FROM parents WHERE username = 'parent4' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 10' AND department = 'Junior High School' LIMIT 1), 'Male', '459 Oak Ave, Barangay 2', '09123456746', 'STU-2025-0007', 'Enrolled'),
 -- Students for Kinder - Sunflower
-('123456789008', 'STU-2025-0008', 'Hannah Bae', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Kinder' AND section_name = 'Sunflower' LIMIT 1), 'Female', '123 Main St, Barangay 1', '09123456747', 'STU-2025-0008', 'Enrolled'),
+('123456789008', 'STU-2025-0008', 'Hannah Bae', (SELECT id FROM parents WHERE username = 'parent1' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Kinder' AND department = 'Kinder' LIMIT 1), 'Female', '123 Main St, Barangay 1', '09123456747', 'STU-2025-0008', 'Enrolled'),
 -- Students for Grade 1 - Rose
-('123456789009', 'STU-2025-0009', 'Ian Castro', (SELECT id FROM parents WHERE username = 'parent2' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 1' AND section_name = 'Rose' LIMIT 1), 'Male', '124 Main St, Barangay 1', '09123456748', 'STU-2025-0009', 'Enrolled'),
+('123456789009', 'STU-2025-0009', 'Ian Castro', (SELECT id FROM parents WHERE username = 'parent2' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 1' AND department = 'Elementary' LIMIT 1), 'Male', '124 Main St, Barangay 1', '09123456748', 'STU-2025-0009', 'Enrolled'),
 -- Students for Grade 2 - Lily
-('123456789010', 'STU-2025-0010', 'Julia Diaz', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 2' AND section_name = 'Lily' LIMIT 1), 'Female', '456 Oak Ave, Barangay 2', '09123456749', 'STU-2025-0010', 'Enrolled')
+('123456789010', 'STU-2025-0010', 'Julia Diaz', (SELECT id FROM parents WHERE username = 'parent3' LIMIT 1), (SELECT id FROM classes WHERE grade_level = 'Grade 2' AND department = 'Elementary' LIMIT 1), 'Female', '456 Oak Ave, Barangay 2', '09123456749', 'STU-2025-0010', 'Enrolled')
 ON CONFLICT (lrn) DO NOTHING;
 
 -- ============================================================================

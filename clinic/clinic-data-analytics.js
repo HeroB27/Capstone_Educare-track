@@ -223,7 +223,7 @@ function exportData() {
         Time_Out: v.time_out ? formatTime(v.time_out) : 'N/A',
         Student_Name: v.students?.full_name,
         // FIX: Prevent "undefined" from rendering in official CSV reports
-        Class: `${v.students?.classes?.grade_level || ''} ${v.students?.classes?.section_name || ''}`.trim() || 'Unassigned',
+        Class: `${v.students?.classes?.grade_level || ''} ${v.students?.classes?.department || ''}`.trim() || 'Unassigned',
         Reason: v.reason,
         Referred_By: v.teachers?.full_name || 'Walk-in',
         Action_Taken: v.action_taken,

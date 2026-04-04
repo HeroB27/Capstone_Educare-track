@@ -74,7 +74,7 @@ CREATE TABLE public.attendance_patterns (
 CREATE TABLE public.classes (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   grade_level text,
-  section_name text,
+  department text,
   strand text,
   adviser_id bigint,
   room_number text,
@@ -191,6 +191,7 @@ CREATE TABLE public.parents (
   relationship_type text,
   is_active boolean DEFAULT true,
   notification_preferences jsonb DEFAULT '{"entry_exit": true, "clinic": true, "urgent": true, "excuse": true}'::jsonb,
+  profile_photo_url text,
   CONSTRAINT parents_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.password_resets (

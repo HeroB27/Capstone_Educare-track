@@ -1,8 +1,6 @@
 // parent/parent-core.js
 // Core logic for Parent Module - handles session, child switching, and real-time sync
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 // ============================================
 // SESSION MANAGEMENT
@@ -79,11 +77,11 @@ async function loadChildren() {
         
         if (DEBUG) console.log('Loading children for parentId:', parentId);
         
-        // FIX: Added classes join to get grade_level and section_name
+        // FIX: Added classes join to get grade_level and department
         // UPDATED: Also fetch class info for display
         const { data: children, error } = await supabase
             .from('students')
-            .select('*, classes(grade_level, section_name)')
+            .select('*, classes(grade_level, department)')
             .eq('parent_id', parentId);
 
         if (error) {
@@ -226,7 +224,7 @@ function updateChildSwitcher() {
                 </div>
                 <div>
                     <p class="font-bold text-gray-800">${child.full_name}</p>
-                    <p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.section_name}</p>
+                    <p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.department}</p>
                 </div>
             </div>
         `;

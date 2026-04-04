@@ -544,7 +544,7 @@
                             </div>
                             <div>
                                 <p class="font-bold text-gray-800">${student?.full_name || 'Unknown'}</p>
-                                <p class="text-sm text-gray-500">${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || ''} | ${visit.reason || 'No reason'}</p>
+                                <p class="text-sm text-gray-500">${student?.classes?.grade_level || ''} - ${student?.classes?.department || ''} | ${visit.reason || 'No reason'}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -591,7 +591,7 @@
                             </div>
                             <div>
                                 <p class="font-bold text-gray-800">${student?.full_name || 'Unknown'}</p>
-                                <p class="text-sm text-gray-500">${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || ''} | ${visit.reason || 'No reason'}</p>
+                                <p class="text-sm text-gray-500">${student?.classes?.grade_level || ''} - ${student?.classes?.department || ''} | ${visit.reason || 'No reason'}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -697,7 +697,7 @@
             document.getElementById('assessment-student-name').textContent = student?.full_name || 'Unknown';
             document.getElementById('assessment-student-avatar').textContent = student?.full_name?.charAt(0) || '?';
             document.getElementById('assessment-class-info').textContent = 
-                `${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || 'Unknown Class'}`;
+                `${student?.classes?.grade_level || ''} - ${student?.classes?.department || 'Unknown Class'}`;
             document.getElementById('assessment-time-in').textContent = 
                 `Time In: ${timeIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
             
@@ -748,7 +748,7 @@
                 // Get visit details for notifications
                 const { data: visit } = await supabase
                     .from('clinic_visits')
-                    .select(`*, students(full_name, parent_id, classes(grade_level, section_name, adviser_id))`)
+                    .select(`*, students(full_name, parent_id, classes(grade_level, department, adviser_id))`)
                     .eq('id', visitId)
                     .single();
                 
@@ -757,7 +757,7 @@
                 let newStatus = 'In Clinic';
                 let notifications = [];
                 const studentName = visit.students?.full_name || 'Student';
-                const classInfo = `${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.section_name || ''}`;
+                const classInfo = `${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.department || ''}`;
                 
                 // ==========================================
                 // PHASE 4: NOTIFICATION LOOP
@@ -883,7 +883,7 @@
                                 <span class="font-bold text-gray-800">${student?.full_name || 'Unknown'}</span>
                             </div>
                         </td>
-                        <td class="px-6 py-4 font-medium text-gray-600">${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || ''}</td>
+                        <td class="px-6 py-4 font-medium text-gray-600">${student?.classes?.grade_level || ''} - ${student?.classes?.department || ''}</td>
                         <td class="px-6 py-4 font-medium text-gray-600">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                         <td class="px-6 py-4">
                             <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">${visit.reason || 'General'}</span>
@@ -934,7 +934,7 @@
                         </div>
                         <div>
                             <h4 class="text-xl font-black text-gray-900">${student?.full_name || 'Unknown'}</h4>
-                            <p class="text-gray-500 font-medium">${student?.classes?.grade_level || ''} - ${student?.classes?.section_name || ''}</p>
+                            <p class="text-gray-500 font-medium">${student?.classes?.grade_level || ''} - ${student?.classes?.department || ''}</p>
                             <p class="text-gray-400 text-sm">ID: ${student?.id || 'N/A'}</p>
                         </div>
                     </div>

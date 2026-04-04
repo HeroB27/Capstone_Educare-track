@@ -6,7 +6,6 @@
     <title>User Management - Educare Admin</title>
     <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
@@ -15,18 +14,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .no-print { display: block; }
-        @media print {
-            .no-print { display: none !important; }
-            #id-print-queue { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
-            .id-page-break { page-break-after: always; }
-        }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .modal-animate-in { animation: modalFade 0.3s ease-out forwards; }
-        @keyframes modalFade {
-            from { opacity: 0; transform: scale(0.95) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
@@ -37,7 +24,7 @@
             <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
         </div>
         
-        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
             <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
@@ -81,208 +68,42 @@
 
     <main class="flex-1 flex flex-col h-screen overflow-hidden no-print">
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight">User Management</h2>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">User Enrollment Hub</h2>
             <div class="flex items-center gap-4">
-                <button onclick="openEnrollmentModal()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Add User</button>
                 <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black">A</div>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
-            <div id="main-users-view" class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
-                <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50/30">
-                    <div class="flex gap-6">
-                        <button onclick="switchView(event, 'staff')" id="tab-staff" class="font-black uppercase text-[10px] tracking-widest text-violet-600 border-b-4 border-violet-500 pb-2 transition-all">Staff & Admins</button>
-                        <button onclick="switchView(event, 'parents')" id="tab-parents" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Parent - Student</button>
-                        <button onclick="switchView(event, 'password-resets')" id="tab-password-resets" class="font-black uppercase text-[10px] tracking-widest text-gray-400 pb-2 transition-all">Password Resets</button>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <div class="flex gap-2">
-                            <div class="relative w-64">
-                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
-                                <input type="text" id="userSearch" oninput="filterUsers()" placeholder="Search accounts..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
-                            </div>
-                            <button onclick="exportUsersToCSV()" class="px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors flex items-center gap-2" title="Export to CSV">
-                                <i data-lucide="download" class="w-4 h-4"></i>
-                                <span class="text-xs font-bold">Export</span>
-                            </button>
+        <div class="flex-1 overflow-y-auto p-10 flex items-center justify-center">
+            <div class="max-w-4xl w-full">
+                <div class="grid md:grid-cols-2 gap-8">
+                    <!-- Parent & Student Card -->
+                    <a href="admin-add-parent-and-child.html" class="group bg-white rounded-3xl shadow-lg border border-gray-100 p-8 text-center hover:shadow-2xl transition-all hover:scale-105">
+                        <div class="w-24 h-24 bg-violet-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-violet-200 transition">
+                            <i data-lucide="users" class="w-12 h-12 text-violet-700"></i>
                         </div>
-                    </div>
-                </div>
-                <table class="w-full text-left">
-                    <thead class="bg-gray-50/50 border-b">
-                        <tr>
-                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Identified User</th>
-                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Designated Role</th>
-                            <th class="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="user-table-body" class="divide-y divide-gray-50"></tbody>
-                </table>
-            </div>
+                        <h3 class="text-2xl font-black text-gray-800 mb-2">Parent & Student</h3>
+                        <p class="text-gray-500">Manage parent accounts, enroll new students, reissue ID cards, and track student records.</p>
+                        <div class="mt-6 inline-flex items-center gap-2 text-violet-600 font-bold text-sm">
+                            Launch Module <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </div>
+                    </a>
 
-            <!-- PASSWORD RESETS SECTION -->
-            <div id="password-resets-view" class="hidden">
-                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center gap-4">
-                        <div>
-                            <h3 class="font-black text-gray-800">Password Reset Requests</h3>
-                            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Requests from users who forgot their password.</p>
+                    <!-- Staff Card -->
+                    <a href="admin-add-staff.html" class="group bg-white rounded-3xl shadow-lg border border-gray-100 p-8 text-center hover:shadow-2xl transition-all hover:scale-105">
+                        <div class="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-emerald-200 transition">
+                            <i data-lucide="user-plus" class="w-12 h-12 text-emerald-700"></i>
                         </div>
-                        <div class="flex items-center gap-3">
-                            <div class="relative">
-                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-                                <input type="text" id="password-reset-search" oninput="loadPasswordResetsUM()" placeholder="Search by username..." class="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:border-violet-400 focus:outline-none transition-all">
-                            </div>
-                            <button onclick="deleteAllResolvedUM()" class="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-all">Delete All Resolved</button>
+                        <h3 class="text-2xl font-black text-gray-800 mb-2">Staff & Faculty</h3>
+                        <p class="text-gray-500">Manage teachers, guards, and clinic staff. Update roles, departments, and access credentials.</p>
+                        <div class="mt-6 inline-flex items-center gap-2 text-emerald-600 font-bold text-sm">
+                            Launch Module <i data-lucide="arrow-right" class="w-4 h-4"></i>
                         </div>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <tbody id="password-reset-list-um" class="divide-y divide-gray-50">
-                            </tbody>
-                        </table>
-                    </div>
+                    </a>
                 </div>
             </div>
         </div>
     </main>
 
-    <div id="enrollmentModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[100] p-4 no-print">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white shrink-0">
-                <h3 id="modal-title" class="font-black text-xl uppercase tracking-tight">System Enrollment</h3>
-                <div id="stepper-dots" class="flex gap-2">
-                    <div class="w-2 h-2 rounded-full bg-white"></div>
-                    <div class="w-2 h-2 rounded-full bg-white/30"></div>
-                    <div class="w-2 h-2 rounded-full bg-white/30"></div>
-                    <div class="w-2 h-2 rounded-full bg-white/30"></div>
-                    <div class="w-2 h-2 rounded-full bg-white/30"></div>
-                </div>
-            </div>
-
-            <div class="p-10 overflow-y-auto custom-scrollbar flex-1">
-                <div id="enroll-selector-box" class="mb-8 p-4 bg-gray-50 rounded-[24px] border border-gray-100 flex justify-center gap-4">
-                    <button onclick="setEnrollType(event, 'parent')" id="btn-type-parent" class="px-6 py-3 bg-violet-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Parent - Student</button>
-                    <button onclick="setEnrollType(event, 'staff')" id="btn-type-staff" class="px-6 py-3 bg-white text-gray-400 border border-gray-100 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all">Staff Member</button>
-                </div>
-
-                <div id="parent-flow-container">
-                    <div id="step-1" class="space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="col-span-2 relative"><i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="p-name" placeholder="Parent Full Name" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
-                            <div class="col-span-2 relative"><i data-lucide="map-pin" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="p-address" placeholder="Home Address" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
-                            <select id="p-role" class="px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"><option value="Parent">Parent</option><option value="Guardian">Guardian</option></select>
-                            <div class="relative"><i data-lucide="phone" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="p-phone" placeholder="Phone Number" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
-                        </div>
-                        <!-- UPDATED: Add parent photo upload field -->
-                        <div class="col-span-2 flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 mt-2">
-                            <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 overflow-hidden shrink-0" id="p-preview">
-                                <i data-lucide="camera" class="w-5 h-5"></i>
-                            </div>
-                            <div class="flex-1">
-                                <label class="block text-[10px] font-black text-violet-600 uppercase mb-1">Parent Photo Profile (Optional)</label>
-                                <input type="file" accept="image/*" id="p-photo" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 transition-all cursor-pointer" onchange="const f=this.files[0]; if(f){ const r=new FileReader(); r.onload=e=>document.getElementById('p-preview').innerHTML='<img src=&quot;'+e.target.result+'&quot; class=&quot;w-full h-full object-cover&quot;>'; r.readAsDataURL(f); }">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="step-2" class="hidden space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <input type="text" id="p-user" placeholder="Create Username" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
-                            <input type="password" id="p-pass" placeholder="Create Password" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
-                        </div>
-                    </div>
-                    <div id="step-3" class="hidden space-y-6">
-                        <div class="p-8 bg-violet-50 rounded-[32px] border border-violet-100 relative text-center">
-                            <h4 class="text-violet-900 font-black text-[10px] uppercase mb-6 tracking-widest">CONFIRMATION OF DETAILS</h4>
-                            <div id="p-summary" class="grid grid-cols-2 gap-y-6 text-sm font-bold text-gray-700"></div>
-                        </div>
-                    </div>
-                    <div id="step-4" class="hidden space-y-6">
-                        <div id="student-form-container" class="space-y-6"></div>
-                        <button onclick="addStudentForm()" class="w-full py-4 border-2 border-dashed border-violet-200 rounded-2xl text-violet-400 font-black uppercase text-[10px] tracking-widest hover:bg-violet-50 transition-all">+ Add Student</button>
-                        <div class="text-xs text-gray-500 mt-2">* LRN must be 12 digits. Gender and Class are required.</div>
-                    </div>
-                    <div id="step-5" class="hidden space-y-4">
-                        <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest text-center mb-6">Final confirmation of linked records</h4>
-                        <div id="s-summary-container" class="space-y-3"></div>
-                    </div>
-                </div>
-
-                <div id="staff-flow-container" class="hidden space-y-6">
-                    <div class="grid grid-cols-1 gap-5">
-<select id="s-role" onchange="toggleStaffFields()" class="w-full px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"><option value="admins">Admin</option><option value="teachers">Teacher</option><option value="clinic_staff">Clinic</option><option value="guards">Guard</option></select>
-                        <input type="text" id="s-name" placeholder="Full Name" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm">
-                        
-                        <!-- Teacher-specific fields -->
-                        <div id="teacher-fields" class="space-y-4">
-                            <input type="email" id="s-email" placeholder="Email Address" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm">
-                            <select id="s-department" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
-                                <option value="">Select Department</option>
-                                <option value="English">English</option>
-                                <option value="Mathematics">Mathematics</option>
-                                <option value="Science">Science</option>
-                                <option value="Filipino">Filipino</option>
-                                <option value="Araling Panlipunan">Araling Panlipunan</option>
-                                <option value="MAPEH">MAPEH</option>
-                                <option value="TLE">TLE</option>
-                                <option value="Computer">Computer</option>
-                                <option value="Physical Education">Physical Education</option>
-                                <option value="Values Education">Values Education</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Clinic-specific fields -->
-                        <div id="clinic-fields" class="hidden space-y-4">
-                            <input type="text" id="s-role-title" placeholder="Role Title (e.g., Nurse, School Physician)" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm">
-                        </div>
-                        
-                        <input type="text" id="s-phone" placeholder="Contact Number" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm">
-                        <div class="grid grid-cols-2 gap-4 pt-6 border-t border-gray-100"><input type="text" id="s-user" placeholder="Username" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm"><input type="password" id="s-pass" placeholder="Password" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm"></div>
-                        <div id="staff-confirm-area" class="hidden p-6 bg-violet-50 rounded-3xl border border-violet-100 text-center font-bold text-violet-900 text-sm"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="px-8 py-6 bg-gray-50 border-t flex justify-between shrink-0">
-                <button onclick="prevStep()" id="back-btn" class="hidden px-6 py-2 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-gray-600 transition-colors">Back</button>
-                <div class="flex-1"></div>
-                <button onclick="nextStep()" id="next-btn" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-violet-200 hover:scale-105 active:scale-95 transition-all">Next Step</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="editUserModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-[110] p-4 no-print">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-white/20">
-            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white shrink-0">
-                <div><h3 class="font-black text-xl uppercase tracking-tight">Modify Account</h3><p class="text-[10px] font-bold text-violet-300 uppercase mt-1">Administrative Control</p></div>
-                <button onclick="closeEditModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90"><i data-lucide="x"></i></button>
-            </div>
-            <div class="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                <input type="hidden" id="edit-user-id"><input type="hidden" id="edit-user-table">
-                <div class="space-y-4">
-                    <div class="flex items-center gap-2 mb-2"><i data-lucide="shield-check" class="w-4 h-4 text-violet-600"></i><h4 class="font-black text-gray-800 uppercase tracking-widest text-[11px]">Authentication Credentials</h4></div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="relative"><i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-username" placeholder="Username" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
-                        <div class="relative"><i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="password" id="edit-password" placeholder="Password" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 focus:ring-4 focus:ring-violet-500/5 transition-all shadow-sm"></div>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div class="flex items-center gap-2 mb-2"><i data-lucide="id-card" class="w-4 h-4 text-violet-600"></i><h4 class="font-black text-gray-800 uppercase tracking-widest text-[11px]">Identity & Contact</h4></div>
-                    <div class="space-y-4">
-                        <div class="relative"><i data-lucide="user-cog" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-name" placeholder="Full Legal Name" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
-                        <div class="relative"><i data-lucide="phone" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i><input type="text" id="edit-phone" placeholder="Active Contact Number" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all"></div>
-                        <div class="relative"><i data-lucide="map-pin" class="absolute left-4 top-4 text-gray-300 w-4 h-4"></i><textarea id="edit-address" placeholder="Residential Address" rows="3" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all resize-none"></textarea></div>
-                    </div>
-                </div>
-            </div>
-            <div class="px-8 py-6 bg-gray-50 border-t flex justify-end gap-4 shrink-0">
-                <button onclick="closeEditModal()" class="px-8 py-4 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-gray-600 transition-colors">Discard</button>
-                <button onclick="saveUserEdit()" class="px-12 py-4 bg-gradient-to-tr from-violet-600 to-indigo-600 text-white rounded-[24px] font-black uppercase text-xs tracking-widest shadow-xl shadow-violet-200 hover:scale-105 active:scale-95 transition-all">Commit Sync</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="id-print-queue" class="hidden bg-white"></div>
 </body>
 </html>

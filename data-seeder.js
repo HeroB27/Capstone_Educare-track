@@ -123,7 +123,7 @@ async function seedClasses() {
     ];
     const classes = defs.map((def, i) => ({
         grade_level: def.grade,
-        section_name: def.strand ? def.strand : def.grade,
+        department: def.strand ? def.strand : def.grade,
         strand: def.strand,
         adviser_id: seededData.teachers[i].id, // First 19 teachers are advisers. Teacher #20 is subject-only.
         school_year: '2025-2026'

@@ -1,6 +1,10 @@
 // admin/admin-idmanagement.js
+// ID Management with proper pagination - 10 students per page using Data Table
 
 let studentRecords = [];
+let filteredRecords = []; // For search/filter results
+let currentPage = 1;
+const rowsPerPage = 10; // Students per page
 let templateSettings = {
     primaryColor: '#4c1d95',
     secondaryColor: '#8b5cf6',
@@ -24,10 +28,8 @@ async function loadTemplateSettings() {
     }
 }
 
-// Load all students with their IDs - FIXED: Use separate queries instead of joins
+// Load all students with their IDs
 async function loadStudentIDs() {
-    const grid = document.getElementById('idGrid');
-    
     // Step 1: Fetch all students
     const { data: students, error: studentsError } = await supabase
         .from('students')
@@ -37,17 +39,17 @@ async function loadStudentIDs() {
     if (studentsError) {
         console.error('Error fetching students:', studentsError);
         studentRecords = [];
-        renderIDGrid([]);
+        renderIDList([]);
         return;
     }
     
     // Step 2: Fetch classes separately
-    const { data: classes, error: classesError } = await supabase
+    const { data: classes } = await supabase
         .from('classes')
-        .select('id, grade_level, section_name');
+        .select('id, grade_level, department');
     
     // Step 3: Fetch parents separately
-    const { data: parents, error: parentsError } = await supabase
+    const { data: parents } = await supabase
         .from('parents')
         .select('id, full_name, contact_number');
     
@@ -69,11 +71,16 @@ async function loadStudentIDs() {
         parents: s.parent_id ? parentMap[s.parent_id] : null
     }));
     
+    // Initialize filtered records
+    filteredRecords = [...studentRecords];
+    
     // Update student count
     const countEl = document.getElementById('studentCount');
     if (countEl) countEl.textContent = `${studentRecords.length} Students`;
     
-    renderIDGrid(studentRecords);
+    // Reset to first page when loading new data
+    currentPage = 1;
+    renderIDList(filteredRecords);
 }
 
 // Filter students by search term
@@ -81,51 +88,183 @@ function filterStudents() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
     
     if (!searchTerm) {
-        renderIDGrid(studentRecords);
-        return;
+        filteredRecords = [...studentRecords];
+    } else {
+        filteredRecords = studentRecords.filter(s => 
+            s.full_name.toLowerCase().includes(searchTerm) ||
+            (s.student_id_text && s.student_id_text.toLowerCase().includes(searchTerm)) ||
+            (s.lrn && s.lrn.toString().includes(searchTerm))
+        );
     }
     
-    const filtered = studentRecords.filter(s => 
-        s.full_name.toLowerCase().includes(searchTerm) ||
-        (s.student_id_text && s.student_id_text.toLowerCase().includes(searchTerm)) ||
-        (s.lrn && s.lrn.toString().includes(searchTerm))
-    );
-    
-    renderIDGrid(filtered);
+    // Reset to first page when filtering
+    currentPage = 1;
+    renderIDList(filteredRecords);
 }
 
-// Render the student ID grid
-function renderIDGrid(list) {
-    const grid = document.getElementById('idGrid');
-    const emptyState = document.getElementById('emptyState');
+// Render the student ID table with pagination
+function renderIDList(list) {
+    console.log('[ID-MGMT] renderIDList() called, list length:', list?.length || 0);
     
-    if (list.length === 0) {
-        grid.innerHTML = '';
-        emptyState.classList.remove('hidden');
+    const tbody = document.getElementById('idListBody');
+    const tableContainer = document.getElementById('idTableContainer');
+    const emptyState = document.getElementById('emptyState');
+    const paginationContainer = document.getElementById('paginationControls');
+    
+    console.log('[ID-MGMT] Elements found:', {
+        tbody: !!tbody,
+        tableContainer: !!tableContainer,
+        emptyState: !!emptyState,
+        paginationContainer: !!paginationContainer
+    });
+    
+    // Handle empty list
+    if (!list || list.length === 0) {
+        console.log('[ID-MGMT] List is empty - hiding table and pagination');
+        if (tableContainer) {
+            tableContainer.classList.add('hidden');
+            tableContainer.style.display = 'none';
+        }
+        if (emptyState) emptyState.classList.remove('hidden');
+        if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+            paginationContainer.classList.add('hidden');
+        }
         return;
     }
+
+    console.log('[ID-MGMT] List has data - showing table');
+    if (tableContainer) {
+        tableContainer.classList.remove('hidden');
+        tableContainer.style.display = 'block';
+    }
+    if (emptyState) emptyState.classList.add('hidden');
     
-    emptyState.classList.add('hidden');
+    // Calculate pagination
+    const totalPages = Math.ceil(list.length / rowsPerPage);
+    console.log('[ID-MGMT] Pagination calculation:', { totalItems: list.length, rowsPerPage, totalPages, currentPage });
     
-    grid.innerHTML = list.map(s => `
-        <div class="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-md transition-all animate-fade-in-up">
-            <div class="flex items-center gap-4 mb-5">
-                <div class="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center font-black text-violet-600 uppercase text-xs">${s.full_name.charAt(0)}</div>
-                <div class="min-w-0">
-                    <h4 class="font-bold text-gray-800 text-sm truncate">${s.full_name}</h4>
-                    <p class="text-[10px] text-gray-400 font-mono tracking-tighter uppercase">${s.student_id_text || 'No ID'}</p>
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const pageItems = list.slice(startIndex, startIndex + rowsPerPage);
+    
+    console.log('[ID-MGMT] Rendering page items:', pageItems.length);
+    
+    // Render table rows - only the current page
+    tbody.innerHTML = pageItems.map(s => {
+        // Use grade_level directly - it already contains "Grade X" from database
+        let classLabel = s.classes?.grade_level || 'No Class';
+        if (s.classes?.department) classLabel += ` - ${s.classes.department}`;
+        
+        return `
+        <tr class="hover:bg-violet-50/40 transition-all group">
+            <td class="px-8 py-5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center font-black text-xs uppercase overflow-hidden shrink-0 shadow-sm">
+                        ${s.profile_photo_url ? `<img src="${s.profile_photo_url}" class="w-full h-full object-cover">` : s.full_name.charAt(0)}
+                    </div>
+                    <div>
+                        <p class="font-bold text-gray-800 text-sm leading-tight mb-0.5">${s.full_name}</p>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest font-mono">${s.student_id_text || 'NO ID GENERATED'}</p>
+                    </div>
                 </div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="viewID(${s.id})" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-2xl font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-gray-200">View ID</button>
-                <button onclick="reissueID(${s.id})" class="flex-1 py-2.5 bg-violet-600 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-violet-100 transition-all hover:scale-105">Re-Issue</button>
-            </div>
-        </div>`).join('');
+            </td>
+            <td class="px-8 py-5">
+                <span class="inline-block px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-600">${classLabel}</span>
+            </td>
+            <td class="px-8 py-5">
+                <p class="font-bold text-gray-700 text-sm">${s.parents?.full_name || 'N/A'}</p>
+                <p class="text-[10px] text-gray-400 font-medium">${s.parents?.contact_number || ''}</p>
+            </td>
+            <td class="px-8 py-5 text-right">
+                <div class="flex justify-end gap-2">
+                    <button onclick="viewID(${s.id})" class="px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:border-violet-500 hover:text-violet-600 transition-all shadow-sm">View ID</button>
+                    <button onclick="reissueID(${s.id})" class="px-4 py-2 bg-violet-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">Re-Issue</button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+    
+    console.log('[ID-MGMT] Calling renderPaginationControls');
+    
+    // Handle pagination controls visibility
+    renderPaginationControls(list.length, totalPages);
+    
+    // Update count display
+    const countEl = document.getElementById('studentCount');
+    if (countEl) {
+        countEl.textContent = `${list.length} Students`;
+    }
     
     if (window.lucide) lucide.createIcons();
 }
 
-// View ID - Opens modal with front/back preview
+// Render pagination controls
+function renderPaginationControls(totalItems, totalPages) {
+    const paginationContainer = document.getElementById('paginationControls');
+    const pageIndicator = document.getElementById('pageIndicator');
+    
+    console.log('[ID-MGMT] renderPaginationControls called:', { totalItems, totalPages, currentPage });
+    
+    if (!paginationContainer) {
+        console.warn('[ID-MGMT] paginationControls element NOT FOUND');
+        return;
+    }
+    
+    // Force show the container first
+    paginationContainer.style.display = 'flex';
+    paginationContainer.classList.remove('hidden');
+    
+    if (totalPages <= 1 || totalItems === 0) {
+        // Hide only if truly needed
+        paginationContainer.style.display = 'none';
+        return;
+    }
+    
+    // Show the controls
+    paginationContainer.style.display = 'flex';
+    paginationContainer.classList.remove('hidden');
+    
+    if (pageIndicator) {
+        pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+    
+    console.log('[ID-MGMT] Pagination controls shown:', paginationContainer.style.display);
+}
+
+// Go to specific page
+function goToPage(page) {
+    const totalPages = Math.ceil(filteredRecords.length / rowsPerPage);
+    if (page < 1 || page > totalPages) return;
+    
+    currentPage = page;
+    renderIDList(filteredRecords);
+    
+    // Smooth scroll back to top of table
+    const scrollContainer = document.querySelector('.overflow-y-auto');
+    if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Previous page
+function prevPage() {
+    if (currentPage > 1) {
+        goToPage(currentPage - 1);
+    }
+}
+
+// Next page
+function nextPage() {
+    const totalPages = Math.ceil(filteredRecords.length / rowsPerPage);
+    if (currentPage < totalPages) {
+        goToPage(currentPage + 1);
+    }
+}
+
+// Expose to window for onclick handlers
+window.goToPage = goToPage;
+window.prevPage = prevPage;
+window.nextPage = nextPage;
+
+// View ID - Opens drawer with front/back preview
 async function viewID(dbId) {
     const student = studentRecords.find(x => x.id === dbId);
     if (!student) return;
@@ -136,17 +275,37 @@ async function viewID(dbId) {
     // Generate the ID card HTML using the same function as template editor
     container.innerHTML = generatePortraitIDHTML(student, config);
     
-    // Show modal
-    document.getElementById('viewIdModal').classList.remove('hidden');
-    document.getElementById('viewIdModal').classList.add('flex');
+    // Show drawer (slide in from right)
+    document.getElementById('viewIdDrawer').classList.remove('translate-x-full');
     
     if (window.lucide) lucide.createIcons();
 }
 
-// Close View ID Modal
+// Close View ID Drawer
+function closeViewIdDrawer() {
+    document.getElementById('viewIdDrawer').classList.add('translate-x-full');
+}
+
+// Legacy alias for backward compatibility
 function closeViewIdModal() {
-    document.getElementById('viewIdModal').classList.add('hidden');
-    document.getElementById('viewIdModal').classList.remove('flex');
+    closeViewIdDrawer();
+}
+
+// FIXED: Helper function for consistent ID generation across all files
+function generateOfficialID(prefix, year, identifierSource) {
+    const cleanSource = String(identifierSource).replace(/\D/g, '');
+    const last4 = cleanSource.slice(-4).padStart(4, '0');
+    // Use 3-char suffix as per requirements (EDU-YYYY-1234-ABCD format)
+    const suffix = (Date.now().toString(36).slice(-3) + Math.random().toString(36).substring(2, 5)).toUpperCase();
+    return `${prefix}-${year}-${last4}-${suffix}`;
+}
+
+// UPDATED: Helper function to prevent XSS attacks (copied from admin-user-management.js)
+function escapeHtml(text) {
+    if (text === null || typeof text === 'undefined') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Convert grade level to code (e.g., "Grade 1" -> "G001", "Kinder" -> "K000")
@@ -161,7 +320,7 @@ function getGradeLevelCode(gradeLevel) {
     return 'G000';
 }
 
-// Re-issue ID - Generate new student ID
+// Re-issue ID - Generate new student ID using standardized format
 async function reissueID(dbId) {
     const student = studentRecords.find(x => x.id === dbId);
     if (!student) return;
@@ -171,30 +330,9 @@ async function reissueID(dbId) {
         "Are you sure you want to re-issue this ID? This will generate a new student ID.",
         async () => {
             const year = new Date().getFullYear();
-            const gradeLevel = student.classes?.grade_level || 'Unknown';
-            const levelCode = getGradeLevelCode(gradeLevel);
-
-            // --- FIX: Loop to ensure the newly generated ID is unique before updating. ---
-            let newID;
-            let isUnique = false;
-            let attempts = 0;
-            const maxAttempts = 10;
-
-            while (!isUnique && attempts < maxAttempts) {
-                const suffix = Math.random().toString(36).substring(2, 6).toUpperCase(); // Simple random for this case
-                newID = `EDU-${year}-${levelCode}-${suffix}`;
-
-                const { count, error } = await supabase
-                    .from('students')
-                    .select('id', { head: true, count: 'exact' })
-                    .eq('student_id_text', newID);
-
-                if (error) break; // Exit on query error
-                if (count === 0) isUnique = true;
-                attempts++;
-            }
-
-            if (!isUnique) return showNotification('Could not generate a unique ID. Please try again.', 'error');
+            
+            // FIXED: Use standardized generateOfficialID format (EDU-YYYY-XXXX-ABC)
+            const newID = generateOfficialID('EDU', year, student.lrn);
 
             const { error } = await supabase.from('students').update({ student_id_text: newID, qr_code_data: newID }).eq('id', dbId);
             if (!error) {
@@ -219,7 +357,7 @@ function generatePortraitIDHTML(u, config) {
                     <i data-lucide="graduation-cap" class="w-4 h-4 text-violet-900"></i>
                 </div>
                 <div class="text-white overflow-hidden leading-none">
-                    <h4 class="text-[7px] font-black uppercase">Educare Colleges Inc</h4>
+                    <h4 class="text-[7px] font-black uppercase">Eudcare Colleges Inc</h4>
                     <p class="text-[5px] opacity-80 uppercase tracking-tighter">Purok 4 Irisan Baguio City</p>
                 </div>
             </div>
@@ -302,7 +440,6 @@ function showNotification(msg, type='info', callback=null) {
 
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
-        // Feedback: Vibrate (Mobile) & Sound (Desktop)
         if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 200);
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -325,5 +462,9 @@ function showNotification(msg, type='info', callback=null) {
 // ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
 window.viewID = viewID;
 window.closeViewIdModal = closeViewIdModal;
+window.closeViewIdDrawer = closeViewIdDrawer;
 window.reissueID = reissueID;
 window.filterStudents = filterStudents;
+window.prevPage = prevPage;
+window.nextPage = nextPage;
+window.goToPage = goToPage;

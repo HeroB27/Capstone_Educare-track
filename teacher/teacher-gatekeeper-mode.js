@@ -246,7 +246,7 @@ async function processScan(studentIdText) {
 
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
+            .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, department)')
             .eq('student_id_text', studentIdText)
             .single();
         
@@ -255,7 +255,7 @@ async function processScan(studentIdText) {
         if (studentError || !studentData) {
             const { data: qrStudent, error: qrError } = await supabase
                 .from('students')
-                .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
+                .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, department)')
                 .eq('qr_code_data', studentIdText)
                 .single();
             
@@ -272,7 +272,7 @@ async function processScan(studentIdText) {
                 const extractedId = parts[3];
                 const { data: extractedStudent } = await supabase
                     .from('students')
-                    .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, section_name)')
+                    .select('id, full_name, student_id_text, qr_code_data, class_id, parent_id, status, classes(grade_level, department)')
                     .eq('student_id_text', extractedId)
                     .single();
                 if (extractedStudent) studentData = extractedStudent;
@@ -293,7 +293,7 @@ async function processScan(studentIdText) {
         
         // Show success
         const gradeLevel = studentData.classes?.grade_level || 'N/A';
-        const section = studentData.classes?.section_name || '';
+        const section = studentData.classes?.department || '';
         
         statusIndicator.innerHTML = `<p class="text-green-300">Success! ${studentData.full_name}</p>`;
         
@@ -504,7 +504,7 @@ async function notifyTeacherFromTeacherModule(student, direction, status) {
         });
         
         const gradeLevel = student.classes?.grade_level || 'Unknown';
-        const section = student.classes?.section_name || '';
+        const section = student.classes?.department || '';
         
         let title = '';
         let message = '';

@@ -1,7 +1,5 @@
 // clinic/clinic-core.js
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 // ============================================================================
 // CLINIC MODULE - Core Logic (Enhanced Workflow)
@@ -100,7 +98,7 @@ async function fetchPendingApprovals() {
                     student_id_text,
                     lrn,
                     profile_photo_url,
-                    classes (grade_level, section_name, adviser_id)
+                    classes (grade_level, department, adviser_id)
                 ),
                 referred_by_teacher:teachers (full_name)
             `)
@@ -135,7 +133,7 @@ async function fetchApprovedPasses() {
                     student_id_text,
                     lrn,
                     profile_photo_url,
-                    classes (grade_level, section_name, adviser_id)
+                    classes (grade_level, department, adviser_id)
                 ),
                 referred_by_teacher:teachers (full_name)
             `)
@@ -165,7 +163,7 @@ async function approveClinicPass(visitId) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (full_name, classes (grade_level, section_name))
+                students (full_name, classes (grade_level, department))
             `)
             .eq('id', visitId)
             .single();
@@ -190,7 +188,7 @@ async function approveClinicPass(visitId) {
             visit.referred_by_teacher_id,
             visit.students.full_name,
             visit.students.classes?.grade_level || 'Unassigned',
-            visit.students.classes?.section_name || 'N/A'
+            visit.students.classes?.department || 'N/A'
         );
         
         return true;
@@ -238,7 +236,7 @@ async function admitReferredStudent(visitId) {
         // Get visit details for notification (including parent info)
         const { data: visit, error: fetchError } = await supabase
             .from('clinic_visits')
-            .select(`*, students(full_name, parent_id, classes(grade_level, section_name))`)
+            .select(`*, students(full_name, parent_id, classes(grade_level, department))`)
             .eq('id', visitId)
             .single();
         
@@ -465,7 +463,7 @@ async function clinicCheckIn(visitId) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (full_name, parent_id, classes (grade_level, section_name))
+                students (full_name, parent_id, classes (grade_level, department))
             `)
             .eq('id', visitId)
             .single();
@@ -516,7 +514,7 @@ async function addClinicFindings(visitId, notes, action) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (full_name, parent_id, classes (grade_level, section_name))
+                students (full_name, parent_id, classes (grade_level, department))
             `)
             .eq('id', visitId)
             .single();
@@ -738,7 +736,7 @@ async function clinicCheckOut(visitId, disposition) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (full_name, classes (grade_level, section_name))
+                students (full_name, classes (grade_level, department))
             `)
             .eq('id', visitId)
             .single();
@@ -792,7 +790,7 @@ async function fetchActiveVisits() {
                     student_id_text,
                     lrn,
                     profile_photo_url,
-                    classes (grade_level, section_name)
+                    classes (grade_level, department)
                 ),
                 referred_by_teacher:teachers (full_name)
             `)
@@ -826,7 +824,7 @@ async function fetchStudentVisitHistory(studentId) {
                     id,
                     full_name,
                     student_id_text,
-                    classes (grade_level, section_name)
+                    classes (grade_level, department)
                 ),
                 referred_by_teacher:teachers (full_name)
             `)
@@ -858,7 +856,7 @@ async function fetchAllVisits() {
                     id,
                     full_name,
                     student_id_text,
-                    classes (grade_level, section_name)
+                    classes (grade_level, department)
                 ),
                 referred_by_teacher:teachers (full_name)
             `)
@@ -892,7 +890,7 @@ async function fetchVisitsByDateRange(startDate, endDate) {
             .from('clinic_visits')
             .select(`
                 *,
-                students (id, full_name, student_id_text, classes (grade_level, section_name)),
+                students (id, full_name, student_id_text, classes (grade_level, department)),
                 referred_by_teacher:teachers (full_name)
             `)
             .gte('time_in', startDate)
@@ -1053,7 +1051,7 @@ async function searchStudents(query) {
                 student_id_text,
                 lrn,
                 profile_photo_url,
-                classes (grade_level, section_name),
+                classes (grade_level, department),
                 parents (id, full_name, contact_number)
             `)
             .or(`full_name.ilike.%${query}%,student_id_text.ilike.%${query}%,lrn.ilike.%${query}%`)
@@ -1082,7 +1080,7 @@ async function getStudentById(studentId) {
             .from('students')
             .select(`
                 *,
-                classes (grade_level, section_name),
+                classes (grade_level, department),
                 parents (id, full_name, contact_number, relationship_type)
             `)
             .eq('id', studentId)

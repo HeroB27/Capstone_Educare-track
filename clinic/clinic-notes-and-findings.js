@@ -1,7 +1,5 @@
 // clinic/clinic-notes-and-findings.js
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 let currentVisitHistory = [];
 let selectedStudentId = null;
@@ -134,7 +132,7 @@ function handleStudentSearch(query) {
                     </div>
                     <div>
                         <p class="font-medium text-sm">${student.full_name}</p>
-                        <p class="text-xs text-gray-500">${student.classes?.grade_level || ''} - ${student.classes?.section_name || ''}</p>
+                        <p class="text-xs text-gray-500">${student.classes?.grade_level || ''} - ${student.classes?.department || ''}</p>
                     </div>
                 </div>
             `).join('');
@@ -327,7 +325,7 @@ function exportRecords() {
         Time_Out: visit.time_out ? formatTime(visit.time_out) : 'N/A',
         Student_Name: visit.students?.full_name || 'Unknown',
         Student_ID: visit.students?.student_id_text || 'N/A',
-        Class: `${visit.students?.classes?.grade_level || ''} ${visit.students?.classes?.section_name || ''}`,
+        Class: `${visit.students?.classes?.grade_level || ''} ${visit.students?.classes?.department || ''}`,
         Reason: visit.reason || '',
         Referred_By: visit.teachers?.full_name || 'Walk-in',
         Action_Taken: visit.action_taken || '',

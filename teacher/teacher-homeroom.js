@@ -31,9 +31,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Note: We set up subscription first, then load students to populate IDs
     setupRealTimeSubscription();
     
+    // Initialize date picker for time travel feature
+    initializeDatePicker();
+    
     // Load students (this will populate myHomeroomStudentIds)
     await loadHomeroomStudents();
 });
+
+// =============================================================================
+// DATE PICKER - TIME TRAVEL FEATURE
+// =============================================================================
+
+/**
+ * Initialize the date picker with today's date and school year range
+ */
+function initializeDatePicker() {
+    const dateInput = document.getElementById('attendance-date');
+    if (!dateInput) return;
+    
+    // Set default to today
+    const now = new Date();
+    const manilaOffset = 8 * 60; // UTC+8
+    const localTime = new Date(now.getTime() + (manilaOffset - now.getTimezoneOffset()) * 60000);
+    const todayStr = localTime.toISOString().split('T')[0];
+    
+    // PHASE 3 ENHANCEMENT: Set max to today's date (cannot select future dates)
+    dateInput.max = todayStr;
+    dateInput.value = todayStr;
+    
+    // Set school year range (July previous year to June next year)
+    const currentYear = localTime.getFullYear();
+    const schoolYearStart = currentYear - 1;
+    const schoolYearEnd = currentYear + 1;
+    dateInput.min = `${schoolYearStart}-07-01`;
+    
+    // Add onchange event to reload students for the selected date
+    dateInput.onchange = async () => {
+        await loadHomeroomStudents(); // Reload for selected date
+    };
+}
+
+// PHASE 3: Load attendance for selected date
+async function loadAttendanceForDate() {
+    const dateInput = document.getElementById('attendance-date');
+    const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
+    
+    // Re-fetch attendance for the selected date
+    await preFetchTodayData();
+    updateStats();
+    renderStudents();
+}
+
+// Helper to get the selected date from the date picker
+function getSelectedDate() {
+    const dateInput = document.getElementById('attendance-date');
+    if (dateInput && dateInput.value) {
+        return dateInput.value;
+    }
+    // Default to today
+    const now = new Date();
+    const manilaOffset = 8 * 60;
+    const localTime = new Date(now.getTime() + (manilaOffset - now.getTimezoneOffset()) * 60000);
+    return localTime.toISOString().split('T')[0];
+}
 
 // ==========================================
 // REAL-TIME HOMEROOM ENGINE
@@ -96,7 +156,7 @@ async function loadHomeroomStudents() {
         // Get teacher's homeroom class
         const { data: homeroom, error: homeroomError } = await supabase
             .from('classes')
-            .select('id, grade_level, section_name')
+            .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
         
@@ -143,7 +203,7 @@ async function loadHomeroomStudents() {
         myHomeroomClassId = homeroom.id;
         
         // Update class info in header
-        const className = `${homeroom?.grade_level || 'Unassigned'} - ${homeroom?.section_name || 'N/A'}`;
+        const className = `${homeroom?.grade_level || 'Unassigned'} - ${homeroom?.department || 'N/A'}`;
         document.getElementById('homeroom-class-info').textContent = className;
         
         // Load students in this class
@@ -187,16 +247,17 @@ async function loadHomeroomStudents() {
  * This fixes the "Double Identity" bug where gate attendance gets overwritten
  */
 async function preFetchTodayData() {
-    const today = new Date().toISOString().split('T')[0];
+    // Use selected date from date picker, or default to today
+    const selectedDate = getSelectedDate();
     const studentIds = homeroomStudents.map(s => s.id);
     
     if (studentIds.length === 0) return;
     
-    // Fetch today's attendance (FIXED: Removed invalid 'source' column)
+    // Fetch attendance for the selected date (supports time travel)
     const { data: attendance } = await supabase
         .from('attendance_logs')
         .select('id, student_id, status, time_in')
-        .eq('log_date', today)
+        .eq('log_date', selectedDate)
         .in('student_id', studentIds);
     
     // FIXED: Build attendance lookup - store ALL records as array per student_id
@@ -283,13 +344,29 @@ function renderStudents() {
         const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
         
         const status = latestRecord?.status;
-        const isPresent = status === 'On Time';
+        const timeIn = latestRecord?.time_in;
+        const isGateScanned = !!timeIn; // TRUE if guard scanned them at the gate
+        const isPresent = status === 'On Time' || status === 'Present';
         const isLate = status === 'Late';
         const isAbsent = status === 'Absent';
         const isExcused = status === 'Excused';
         
         // Show raw gate tap time if it exists
-        const timeInStr = latestRecord?.time_in ? new Date(latestRecord.time_in).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        const timeInStr = timeIn ? new Date(timeIn).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+
+        // ==========================================
+        // GATE VERIFIED BADGE & LOCK LOGIC
+        // ==========================================
+        // If student has time_in (gate scan), show "Gate Verified" badge and lock buttons
+        const gateVerifiedBadge = isGateScanned 
+            ? `<span class="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-md"><i data-lucide="shield-check" class="w-3 h-3 inline mr-1"></i>Gate Verified</span>` 
+            : '';
+        
+        // If gate scanned, disable all buttons and force check Present
+        const buttonDisabled = isGateScanned ? 'disabled cursor-not-allowed opacity-50' : '';
+        const presentChecked = (isPresent || isGateScanned) ? 'checked' : '';
+        const lateChecked = isLate ? 'checked' : '';
+        const absentChecked = isAbsent ? 'checked' : '';
 
         return `
             <tr class="hover:bg-gray-50 transition-colors">
@@ -301,6 +378,7 @@ function renderStudents() {
                         <div>
                             <div class="flex items-center gap-2">
                                 <p class="font-medium text-gray-800">${escapeHtml(student.full_name)}</p>
+                                ${gateVerifiedBadge}
                                 ${student.total_absences >= 10 ? `<span title="DepEd Warning: 10+ Absences" class="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-600 animate-pulse"><i data-lucide="alert-triangle" class="w-3 h-3"></i></span>` : ''}
                             </div>
                             <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'N/A'}</p>
@@ -308,20 +386,21 @@ function renderStudents() {
                     </div>
                 </td>
                 <td class="px-6 py-4">
-                    <span class="text-sm font-bold text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded-md border border-gray-200">${timeInStr}</span>
+                    <span class="text-sm font-bold ${isGateScanned ? 'text-emerald-600 bg-emerald-50' : 'text-gray-600 bg-gray-100'} px-2 py-1 rounded-md border ${isGateScanned ? 'border-emerald-200' : 'border-gray-200'}">${timeInStr}</span>
                 </td>
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-2">
-                        <button onclick="verifyStudentAttendance('${student.id}', 'On Time')" 
-                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isPresent ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
+                        <button onclick="${!isGateScanned ? `verifyStudentAttendance('${student.id}', 'On Time')` : 'void(0)'}" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isPresent || isGateScanned ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'} ${buttonDisabled}"
+                            ${isGateScanned ? 'title="Gate Verified - Cannot override"' : ''}>
                             Present
                         </button>
-                        <button onclick="verifyStudentAttendance('${student.id}', 'Late')" 
-                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isLate ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
+                        <button onclick="${!isGateScanned ? `verifyStudentAttendance('${student.id}', 'Late')` : 'void(0)'}" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isLate ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'} ${buttonDisabled}">
                             Late
                         </button>
-                        <button onclick="verifyStudentAttendance('${student.id}', 'Absent')" 
-                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isAbsent ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
+                        <button onclick="${!isGateScanned ? `verifyStudentAttendance('${student.id}', 'Absent')` : 'void(0)'}" 
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${isAbsent ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'} ${buttonDisabled}">
                             Absent
                         </button>
                         ${isExcused ? `<span class="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
@@ -605,6 +684,8 @@ function escapeHtml(text) {
 // =============================================================================
 // FIXED: Using UPSERT to completely prevent 409 Duplicate Conflicts
 // UPDATED: Added event parameter and forced table reload for UI sync
+// UPDATED: Now supports time travel - uses selected date from date picker
+// UPDATED: BULLETPROOF UPSERT - includes existing ID to update instead of insert
 async function verifyStudentAttendance(studentId, newStatus, skipReload = false, event = null) {
     if (!newStatus) return;
     
@@ -614,22 +695,40 @@ async function verifyStudentAttendance(studentId, newStatus, skipReload = false,
         event.currentTarget.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin mx-auto"></i>';
     }
 
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const todayStr = localDate.toISOString().split('T')[0];
+    // Use selected date from date picker (supports time travel for editing past records)
+    const selectedDate = getSelectedDate();
 
     try {
+        // BULLETPROOF UPSERT: Fetch existing record to get its ID
+        const { data: existingRecords } = await supabase
+            .from('attendance_logs')
+            .select('id, time_in')
+            .eq('student_id', studentId)
+            .eq('log_date', selectedDate);
+        
+        const existingRecord = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
         const records = todayAttendance[studentId] || [];
         const latestRecord = records.length > 0 ? records[records.length - 1] : null;
 
         let fallbackTimeIn = null;
         if (newStatus !== 'Absent' && newStatus !== 'Excused') {
-            fallbackTimeIn = new Date(`${todayStr}T08:00:00`).toISOString();
+            fallbackTimeIn = new Date(`${selectedDate}T08:00:00`).toISOString();
         }
 
-        const { error } = await supabase.from('attendance_logs').upsert({
-            student_id: studentId, log_date: todayStr, status: newStatus, time_in: latestRecord?.time_in || fallbackTimeIn
-        }, { onConflict: 'student_id, log_date' });
+        // BULLETPROOF: Include existing ID if it exists, otherwise omit (will insert)
+        const payload = {
+            student_id: studentId,
+            log_date: selectedDate,
+            status: newStatus,
+            time_in: latestRecord?.time_in || existingRecord?.time_in || fallbackTimeIn
+        };
+        
+        // If existing record found, include its ID to UPDATE instead of INSERT
+        if (existingRecord && existingRecord.id) {
+            payload.id = existingRecord.id;
+        }
+
+        const { error } = await supabase.from('attendance_logs').upsert(payload, { onConflict: 'student_id, log_date' });
 
         if (error) throw error;
 
@@ -771,3 +870,4 @@ window.verifyAllPresent = verifyAllPresent;
 window.verifyGateData = verifyGateData;
 window.closeStudentModal = closeStudentModal;
 window.printHomeroomList = printHomeroomList;
+window.loadAttendanceForDate = loadAttendanceForDate;

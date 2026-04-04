@@ -1,8 +1,6 @@
 // parent/parent-notifications.js
 // Notifications handling for parents
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 let allNotifications = [];
 let currentFilter = 'all';

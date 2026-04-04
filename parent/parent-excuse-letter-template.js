@@ -2,8 +2,6 @@
 // Excuse letter submission and tracking logic
 // UPDATED: Phase 3 - Enhanced edit with file upload, realtime status
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 let selectedChildId = null;
 let uploadedFile = null;
@@ -168,7 +166,7 @@ function populateChildSelector() {
                 </div>
                 <div>
                     <p class="font-medium text-gray-800">${child.full_name}</p>
-                    <p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.section_name}</p>
+                    <p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.department}</p>
                 </div>
             </div>
         </label>
@@ -419,7 +417,7 @@ async function loadExcuseHistory() {
             .from('excuse_letters')
             .select(`
                 *,
-                students (full_name, classes (grade_level, section_name))
+                students (full_name, classes (grade_level, department))
             `)
             .eq('parent_id', currentUser.id)
             .order('created_at', { ascending: false })
@@ -476,7 +474,7 @@ function renderHistory(filter = 'all') {
     container.innerHTML = filtered.map(item => {
         const statusBadge = getStatusBadge(item.status);
         const childName = item.students?.full_name || 'Unknown';
-        const childClass = `${item.students?.classes?.grade_level || ''} - ${item.students?.classes?.section_name || ''}`;
+        const childClass = `${item.students?.classes?.grade_level || ''} - ${item.students?.classes?.department || ''}`;
 
         // Phase 3: Status timestamp
         let statusInfo = '';

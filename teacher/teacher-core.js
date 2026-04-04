@@ -1,8 +1,6 @@
 // teacher/teacher-core.js
 // Core logic for Teacher Module - Session, data fetching, gatekeeper mode
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 // 1. Session Check - Verifies teacher login
 var currentUser = checkSession('teachers');
@@ -74,7 +72,7 @@ async function initializeTeacherPortal() {
         // 1. Fetch Teacher Info + Advisory Class (from teachers table)
         const { data: teacher, error } = await supabase
             .from('teachers')
-            .select('*, classes(id, grade_level, section_name)')
+            .select('*, classes(id, grade_level, department)')
             .eq('id', currentUser.id)
             .single();
 
@@ -110,7 +108,7 @@ async function initializeTeacherPortal() {
         const badgeEl = document.getElementById('advisory-badge');
         if (badgeEl) {
             if (isAdviserMode) {
-                badgeEl.innerText = `Adviser: ${teacher.classes?.grade_level || 'Unassigned'}-${teacher.classes?.section_name || 'N/A'}`;
+                badgeEl.innerText = `Adviser: ${teacher.classes?.grade_level || 'Unassigned'}-${teacher.classes?.department || 'N/A'}`;
                 // Load homeroom stats for dashboard cards
                 loadHomeroomStats(teacher.classes?.id);
             } else {
@@ -156,7 +154,7 @@ async function loadTeacherSchedule(teacherId) {
     try {
         const { data: subjectLoads, error } = await supabase
             .from('subject_loads')
-            .select('*, classes(grade_level, section_name)')
+            .select('*, classes(grade_level, department)')
             .eq('teacher_id', teacherId);
 
         if (error) {
@@ -195,7 +193,7 @@ function renderScheduleOnDashboard() {
             <div>
                 <h4 class="font-black text-gray-800 text-lg leading-tight group-hover:text-blue-600 transition-colors">${load.subject_name || 'Unknown Subject'}</h4>
                 <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">
-                    ${load.classes?.grade_level || 'Unknown Grade'} - ${load.classes?.section_name || 'No Section'}
+                    ${load.classes?.grade_level || 'Unknown Grade'} - ${load.classes?.department || 'No Section'}
                 </p>
                 <div class="flex items-center gap-2 mt-3 text-emerald-500 text-[10px] font-black uppercase tracking-widest">
                     <i data-lucide="check-circle-2" class="w-3 h-3"></i>
@@ -269,7 +267,7 @@ async function loadSchedule() {
             .from('subject_loads')
             .select(`
                 *,
-                classes (grade_level, section_name)
+                classes (grade_level, department)
             `)
             .eq('teacher_id', currentUser.id);
         
@@ -289,7 +287,7 @@ async function loadSchedule() {
             const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0, 5) : 'N/A';
             const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0, 5) : 'N/A';
             const gradeLevel = load.classes?.grade_level || '';
-            const sectionName = load.classes?.section_name || '';
+            const sectionName = load.classes?.department || '';
             
             const row = document.createElement('tr');
             row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
@@ -324,7 +322,7 @@ window.loadHomeroomStudents = async function() {
         // Get teacher's homeroom class
         const { data: teacherClass, error: classError } = await supabase
             .from('classes')
-            .select('id, grade_level, section_name')
+            .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
 
@@ -336,7 +334,7 @@ window.loadHomeroomStudents = async function() {
         // Update header with class info
         const classInfoEl = document.getElementById('homeroom-class-info');
         if (classInfoEl) {
-            classInfoEl.innerText = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.section_name || 'N/A'}`;
+            classInfoEl.innerText = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.department || 'N/A'}`;
         }
 
         // Fetch Students + Today's Gate Logs
@@ -530,7 +528,7 @@ async function loadSubjectLoads() {
                 subject_name,
                 schedule_time_start,
                 schedule_time_end,
-                classes (grade_level, section_name)
+                classes (grade_level, department)
             `)
             .eq('teacher_id', currentUser.id);
         
@@ -546,7 +544,7 @@ async function loadSubjectLoads() {
             option.value = load.id;
             const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0, 5) : '';
             const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0, 5) : '';
-            option.text = `${load.subject_name} - ${load.classes?.grade_level} ${load.classes?.section_name} (${timeStart}-${timeEnd})`;
+            option.text = `${load.subject_name} - ${load.classes?.grade_level} ${load.classes?.department} (${timeStart}-${timeEnd})`;
             subjectSelect.appendChild(option);
         });
         
@@ -724,7 +722,7 @@ async function loadClinicPassInterface() {
         // Get teacher's homeroom class (adviser)
         const { data: teacherClass } = await supabase
             .from('classes')
-            .select('id, grade_level, section_name')
+            .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
         
@@ -755,7 +753,7 @@ async function loadClinicPassInterface() {
             
             const { data: students } = await supabase
                 .from('students')
-                .select('id, student_id_text, full_name, classes(grade_level, section_name)')
+                .select('id, student_id_text, full_name, classes(grade_level, department)')
                 .in('class_id', Array.from(classIds))
                 .order('full_name');
             
@@ -779,7 +777,7 @@ async function loadClinicPassInterface() {
         homeroomStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
-            option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass?.grade_level || 'Unassigned'}-${teacherClass?.section_name || 'N/A'})`;
+            option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass?.grade_level || 'Unassigned'}-${teacherClass?.department || 'N/A'})`;
             studentSelect.appendChild(option);
         });
         
@@ -787,7 +785,7 @@ async function loadClinicPassInterface() {
         subjectStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
-            const classInfo = student.classes ? `${student.classes?.grade_level || 'Unassigned'}-${student.classes?.section_name || 'N/A'}` : 'No Class';
+            const classInfo = student.classes ? `${student.classes?.grade_level || 'Unassigned'}-${student.classes?.department || 'N/A'}` : 'No Class';
             option.text = `${student.student_id_text} - ${student.full_name} (${classInfo})`;
             studentSelect.appendChild(option);
         });
@@ -1241,7 +1239,7 @@ async function loadExcuseLetters() {
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
-            .select('id, grade_level, section_name')
+            .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
         
@@ -1404,7 +1402,7 @@ function renderExcuseLetters(teacherClass) {
 // Filter excuse letters by status
 function filterLetters(status) {
     currentExcuseFilter = status;
-    const teacherClass = { grade_level: '', section_name: '' }; // Class info not needed for re-render
+    const teacherClass = { grade_level: '', department: '' }; // Class info not needed for re-render
     renderExcuseLetters(teacherClass);
 }
 
@@ -2932,10 +2930,10 @@ window.notifySubjectTeachersOfExcuse = async function(studentId, dateAbsent, stu
     } catch (e) {
         console.error("Failed to notify subject teachers:", e);
     }
-};
 }
 
 // EXPORT: Make button handler functions globally accessible for HTML onclick attributes
+window.navigateTo = navigateTo; // Export the navigateTo function for SPA navigation
 window.postAnnouncement = postAnnouncement;
 window.issueClinicPass = issueClinicPass;
 window.filterLetters = filterLetters;

@@ -135,11 +135,13 @@ async function deleteAnnouncement(id) {
         "Delete Announcement?",
         "Are you sure you want to delete this announcement?",
         async () => {
-            const { error } = await supabase.from('announcements').delete().eq('id', id);
-            if(error) showNotification("Error: " + error.message, "error");
-            else {
+            try {
+                const { error } = await supabase.from('announcements').delete().eq('id', id);
+                if (error) throw error;
                 showNotification("Announcement deleted successfully", "success");
                 loadAnnouncements();
+            } catch (err) {
+                showNotification("Error: " + err.message, "error");
             }
         }
     );

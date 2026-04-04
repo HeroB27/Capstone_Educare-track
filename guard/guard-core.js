@@ -28,6 +28,20 @@ const scanCooldowns = new Map(); // Tracks recent scans to prevent duplicate spa
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 // ============================================================================
+// MOBILE SIDEBAR TOGGLE
+// ============================================================================
+
+/**
+ * Toggle mobile sidebar visibility
+ */
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('mobile-sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('hidden');
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -616,7 +630,7 @@ async function getStudentById(studentId) {
                 status,
                 classes (
                     grade_level,
-                    section_name
+                    department
                 )
             `)
             .eq('student_id_text', studentId)
@@ -645,7 +659,7 @@ async function getStudentById(studentId) {
                 status,
                 classes (
                     grade_level,
-                    section_name
+                    department
                 )
             `)
             .eq('qr_code_data', studentId)
@@ -674,7 +688,7 @@ async function getStudentById(studentId) {
                 status,
                 classes (
                     grade_level,
-                    section_name
+                    department
                 )
             `)
             .eq('lrn', studentId)
@@ -879,7 +893,7 @@ async function notifyTeacher(student, direction, status) {
         });
         
         const gradeLevel = student.classes?.grade_level || 'Unknown';
-        const section = student.classes?.section_name || '';
+        const section = student.classes?.department || '';
         
         let title = '';
         let message = '';
@@ -936,7 +950,7 @@ function displayScanResult(student, direction, statusInfo, scanTime) {
     
     // Update student info
     const gradeLevel = student.classes?.grade_level || 'Unknown';
-    const section = student.classes?.section_name || '';
+    const section = student.classes?.department || '';
     const fullInfo = gradeLevel && section 
         ? `${gradeLevel} - ${section} • ${student.student_id_text}`
         : student.student_id_text;
@@ -1200,4 +1214,7 @@ window.addEventListener('beforeunload', () => {
         videoStream.getTracks().forEach(track => track.stop());
     }
 });
+
+// PHASE 4: Export mobile toggle function to window for onclick handlers
+window.toggleMobileSidebar = toggleMobileSidebar;
 

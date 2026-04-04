@@ -27,7 +27,7 @@ window.dispatchAbsenceNotifications = async function(studentId, date, absenceTyp
         // 1. Fetch Student, Parent, and Homeroom Info
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, parent_id, class_id, classes(id, adviser_id, grade_level, section_name)')
+            .select('id, full_name, parent_id, class_id, classes(id, adviser_id, grade_level, department)')
             .eq('id', studentId)
             .single();
             
@@ -90,7 +90,7 @@ window.dispatchAbsenceNotifications = async function(studentId, date, absenceTyp
         if (absenceType === 'PM_HALF') timeText = 'the afternoon session';
 
         const baseMessage = `${student.full_name} is marked as ${statusText} for ${timeText} on ${date}.`;
-        const classInfo = student.classes ? `${student.classes.grade_level}-${student.classes.section_name}` : 'Unknown Class';
+        const classInfo = student.classes ? `${student.classes.grade_level}` : 'Unknown Class';
 
         // Notify Subject Teachers (affected ones only based on time)
         if (targetTeacherIds.size > 0) {

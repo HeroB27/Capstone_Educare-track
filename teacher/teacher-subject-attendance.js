@@ -30,17 +30,32 @@ function initializeDatePicker() {
         const manilaOffset = 8 * 60; // UTC+8
         const localTime = new Date(now.getTime() + (manilaOffset - now.getTimezoneOffset()) * 60000);
         const todayStr = localTime.toISOString().split('T')[0];
+        
+        // PHASE 3 ENHANCEMENT: Set max to today's date (cannot select future dates)
+        dateInput.max = todayStr;
         dateInput.value = todayStr;
         
-        // Set min and max (optional: allow only current school year)
-        const year = localTime.getFullYear();
-        dateInput.min = `${year}-01-01`;
-        dateInput.max = `${year}-12-31`;
+        // Set min to cover full school year (July previous year to June next year)
+        const currentYear = localTime.getFullYear();
+        const schoolYearStart = currentYear - 1; // July of previous year
+        const schoolYearEnd = currentYear + 1;   // June of next year
+        dateInput.min = `${schoolYearStart}-07-01`;
         
         // Add onchange to reload subject cards when date changes
         dateInput.onchange = async () => {
             await loadSubjectLoads();
         };
+    }
+}
+
+// PHASE 3: Load attendance for selected date
+async function loadAttendanceForDate() {
+    const dateInput = document.getElementById('attendance-date');
+    const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
+    
+    // Fetch attendance logs for the selected date
+    if (currentSubjectLoadId) {
+        await loadSubjectStudents(currentSubjectLoadId);
     }
 }
 
@@ -74,6 +89,12 @@ function getDayCode(dateStr) {
     const day = date.getDay();
     const dayCodes = ['Su', 'M', 'T', 'W', 'Th', 'F', 'Sa']; // Fixed to match admin/dashboard schema
     return dayCodes[day];
+}
+
+// DEBUG: Add diagnostic logging for subject attendance
+if (window.DEBUG) {
+    console.log('=== SUBJECT ATTENDANCE DEBUG ===');
+    console.log('currentUser:', currentUser);
 }
 
 // ==========================================
@@ -148,20 +169,33 @@ async function loadSubjectLoads() {
     container.innerHTML = '<div class="col-span-full text-center py-8 text-blue-400 font-bold animate-pulse">Loading your classes...</div>';
 
     try {
+        // DEBUG: Log the query parameters
+        if (window.DEBUG) {
+            console.log('Loading subject loads for teacher ID:', currentUser.id);
+        }
+        
         const { data: subjectLoads, error } = await supabase
             .from('subject_loads')
-            .select('*, classes(grade_level, section_name)')
+            .select('*, classes(grade_level, department)')
             .eq('teacher_id', currentUser.id);
+
+        // DEBUG: Log raw database response
+        if (window.DEBUG) {
+            console.log('Raw subject loads from DB:', subjectLoads);
+            console.log('Query error (if any):', error);
+        }
 
         if (error) throw error;
 
-        const dateInput = document.getElementById('attendance-date');
-        const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
-        const dayCode = getDayCode(selectedDate);
+        // UPDATED: Show ALL subjects regardless of the day
+        // Teachers should be able to view their classes anytime
+        const todaysSubjects = subjectLoads || [];
 
-        const todaysSubjects = subjectLoads.filter(load =>
-            load.schedule_days && load.schedule_days.includes(dayCode)
-        );
+        // DEBUG: Log filtered results (now showing all)
+        if (window.DEBUG) {
+            console.log('All subjects (day filter removed):', todaysSubjects);
+            console.log('Schedule days in DB:', subjectLoads.map(s => s.schedule_days));
+        }
 
         if (todaysSubjects.length === 0) {
             container.innerHTML = `<div class="col-span-full bg-white rounded-2xl p-8 text-center border border-dashed border-gray-200"><p class="text-gray-500 font-medium">No classes scheduled for this date.</p></div>`;
@@ -180,7 +214,7 @@ async function loadSubjectLoads() {
                 </div>
                 <h4 class="font-black text-gray-800 text-lg leading-tight pr-10 mb-1 truncate">${load.subject_name}</h4>
                 <p class="text-xs font-bold text-blue-600 uppercase tracking-wide truncate">
-                    ${load.classes?.grade_level || 'Grade'} - ${load.classes?.section_name || 'Section'}
+                    ${load.classes?.grade_level || 'Grade'} - ${load.classes?.department || 'Section'}
                 </p>
             </div>
         `).join('');
@@ -192,7 +226,12 @@ async function loadSubjectLoads() {
 
     } catch (err) {
         console.error('Error loading subjects:', err);
-        container.innerHTML = '<div class="col-span-full text-center text-red-500 font-bold py-4">Failed to load subjects.</div>';
+        // DEBUG: Show actual error message
+        const errorMessage = window.DEBUG ? err.message : 'Failed to load subjects.';
+        container.innerHTML = `<div class="col-span-full text-center text-red-500 font-bold py-4">${errorMessage}</div>`;
+        if (window.DEBUG) {
+            alert('Subject Attendance Error: ' + err.message);
+        }
     }
 }
 
@@ -324,7 +363,8 @@ async function loadSubjectStudents(subjectLoadId) {
         let presentCount = 0, absentCount = 0, lateCount = 0;
         
         // CUP THEORY: Check if this is the first subject of the day BEFORE rendering
-        const classId = currentClassId || (allStudents[0]?.class_id);
+        // FIX: Use subjectLoad.class_id directly (already fetched above) instead of undefined currentClassId
+        const classId = subjectLoad.class_id;
         let isFirstSubject = false;
         if (classId && currentSubjectLoadId) {
             isFirstSubject = await isFirstSubjectOfDay(classId, currentSubjectLoadId, lookupDate);
@@ -362,6 +402,14 @@ async function loadSubjectStudents(subjectLoadId) {
                 // Status badge for gate status
                 const statusBadge = getStatusBadge(gateStatus);
                 
+                // ==========================================
+                // GATE VERIFIED BADGE & LOCK LOGIC (SUBJECT)
+                // ==========================================
+                const hasGateScan = !!log?.time_in;
+                const gateVerifiedBadge = hasGateScan 
+                    ? `<span class="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-md"><i data-lucide="shield-check" class="w-3 h-3 inline mr-1"></i>Gate</span>` 
+                    : '';
+                
                 // Track stats (use displayStatus)
                 if (displayStatus === 'On Time' || displayStatus === 'Present') presentCount++;
                 else if (displayStatus === 'Absent') absentCount++;
@@ -378,6 +426,7 @@ async function loadSubjectStudents(subjectLoadId) {
                                 <div>
                                     <div class="flex items-center gap-2">
                                         <p class="font-bold text-gray-800">${student.full_name}</p>
+                                        ${gateVerifiedBadge}
                                         ${isAlreadyChecked ? '<span class="bg-emerald-50 text-emerald-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-emerald-200">Checked</span>' : ''}
                                         ${isInherited ? '<span class="bg-blue-50 text-blue-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-blue-200">Inherited</span>' : ''}
                                         <button onclick="viewSubjectStudentDetails('${student.id}', '${escapeHtml(student.full_name)}', '${student.profile_photo_url || ''}', '${student.student_id_text || ''}')" class="text-blue-400 hover:text-blue-600 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg p-1.5" title="View Subject Stats"><i data-lucide="eye" class="w-3 h-3"></i></button>
@@ -506,11 +555,12 @@ window.closeSubjectModal = () => document.getElementById('subject-student-modal'
  * Mark Subject Attendance with Status Protection
  * PROTECTS: Late and Excused statuses from being overwritten
  * PRESERVES: Gate time_in data when updating
+ * UPDATED: Bulletproof upsert - includes existing ID to prevent duplicates
  */
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus, skipReload = false) {
     // UPDATED: Add double-submit prevention
-    const studentRow = document.querySelector(`button[onclick*="'${studentId}'"]`).closest('tr');
-    const buttons = studentRow.querySelectorAll('button');
+    const studentRow = document.querySelector(`button[onclick*="'${studentId}'"]`)?.closest('tr');
+    const buttons = studentRow?.querySelectorAll('button') || [];
     
     try {
         // Disable buttons to prevent double-submission
@@ -520,10 +570,10 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
         const dateInput = document.getElementById('attendance-date');
         const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
         
-        // 1. Fetch existing daily log to preserve gate data
+        // 1. Fetch existing daily log to preserve gate data AND get ID for upsert
         const { data: existingLog } = await supabase
             .from('attendance_logs')
-            .select('status, time_in, remarks')
+            .select('id, status, time_in, remarks')
             .eq('student_id', studentId)
             .eq('log_date', selectedDate)
             .maybeSingle();
@@ -566,15 +616,23 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
             fallbackTimeIn = new Date(`${selectedDate}T08:00:00`).toISOString();
         }
 
-        const { error } = await supabase.from('attendance_logs').upsert({
-                student_id: studentId,
-                log_date: selectedDate, 
-                time_in: existingLog?.time_in || fallbackTimeIn, 
-                status: overallStatus,
-                remarks: newRemarks
-            }, {
-                onConflict: 'student_id, log_date'
-            });
+        // BULLETPROOF: Include existing ID if available to UPDATE instead of INSERT
+        const payload = {
+            student_id: studentId,
+            log_date: selectedDate,
+            time_in: existingLog?.time_in || fallbackTimeIn,
+            status: overallStatus,
+            remarks: newRemarks
+        };
+        
+        // If existing record found, include its ID to UPDATE (prevents duplicate inserts)
+        if (existingLog && existingLog.id) {
+            payload.id = existingLog.id;
+        }
+
+        const { error } = await supabase.from('attendance_logs').upsert(payload, {
+            onConflict: 'student_id, log_date'
+        });
         
         if (error) {
             console.error('Error marking attendance:', error);
@@ -701,3 +759,4 @@ async function markAllPresent() {
 
 // EXPORT: Make button handler functions globally accessible for HTML onclick attributes
 window.markAllPresent = markAllPresent;
+window.loadAttendanceForDate = loadAttendanceForDate;

@@ -174,7 +174,7 @@ async function handleScanSuccess(decodedText) {
         // Query by student_id_text field (the new format)
         const { data: student, error: studentError } = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, class_id, status, classes(grade_level, section_name, adviser_id), parent_id')
+            .select('id, full_name, student_id_text, class_id, status, classes(grade_level, department, adviser_id), parent_id')
             .eq('student_id_text', decodedText)
             .single();
 
@@ -374,7 +374,7 @@ async function manualSearch() {
         // Search by name or student_id_text
         const { data: students, error } = await supabase
             .from('students')
-            .select('id, full_name, student_id_text, classes(grade_level, section_name)')
+            .select('id, full_name, student_id_text, classes(grade_level, department)')
             .or(`full_name.ilike.%${searchTerm}%,student_id_text.ilike.%${searchTerm}%,lrn.ilike.%${searchTerm}%`)
             .limit(10);
         
@@ -392,7 +392,7 @@ async function manualSearch() {
                 class="w-full text-left p-3 rounded-xl hover:bg-red-50 transition-colors flex items-center justify-between">
                 <div>
                     <p class="font-bold text-gray-800">${student.full_name}</p>
-                    <p class="text-sm text-gray-500">${student.classes?.grade_level || ''} - ${student.classes?.section_name || ''}</p>
+                    <p class="text-sm text-gray-500">${student.classes?.grade_level || ''} - ${student.classes?.department || ''}</p>
                 </div>
                 <div class="text-right">
                     <p class="text-xs font-mono text-gray-400">${student.student_id_text || 'N/A'}</p>

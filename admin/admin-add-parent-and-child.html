@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Parent & Student - Educare Admin</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="admin-add-parent-and-child.js" defer></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-print { display: block; }
+        @media print {
+            .no-print { display: none !important; }
+            #id-print-queue { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+            .id-page-break { page-break-after: always; }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
+
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0 no-print">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
+        </div>
+        
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="users" class="w-5 h-5"></i> User Management
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
+            </a>
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
+            </a>
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
+        </nav>
+        
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center gap-3 px-4 py-3 w-full text-red-300 hover:bg-red-500/10 rounded-xl transition-all font-bold">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden no-print">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <div class="flex items-center gap-6">
+                <a href="admin-user-management.html" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    <span class="font-bold text-sm">Back to User Management</span>
+                </a>
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Parent & Student Management</h2>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="openWizardModal()" id="open-wizard-btn" class="px-6 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-violet-200 hover:scale-105 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 inline mr-2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Enrollment
+                </button>
+                <div class="h-12 w-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white font-black">A</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-10">
+            <!-- CRUD Table Section (unchanged) -->
+            <div id="crud-section" class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-8">
+                <div class="px-8 py-6 border-b flex justify-between items-center bg-gray-50/30">
+                    <h3 class="font-black text-gray-800 text-lg">EXISTING PARENTS & STUDENTS</h3>
+                    <div class="flex items-center gap-4">
+                        <div class="relative w-64">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                            <input type="text" id="userSearch" oninput="filterParentsStudents()" placeholder="Search..." class="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-violet-300 shadow-sm transition-all">
+                        </div>
+                    </div>
+                </div>
+                <!-- Pagination Controls -->
+                <div id="parent-pagination-controls" class="mb-4 mt-4 px-6 flex items-center justify-between">
+                    <div class="text-xs text-gray-500 font-medium">
+                        <span id="parent-page-indicator">Showing 1-10 of 0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="parentPrevPage()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <span class="text-xs font-bold text-gray-500">Page <span id="parent-current-page">1</span></span>
+                        <button onclick="parentNextPage()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50/50 border-b">
+                        <tr>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Parent Name</th>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Role</th>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Address</th>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Student(s)</th>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Contact</th>
+                            <th class="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="parent-student-table-body" class="divide-y divide-gray-50"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- WIZARD MODAL (hidden by default) -->
+    <div id="wizardModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 hidden overflow-y-auto">
+        <div class="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+            <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 sticky top-0 z-10 flex justify-between items-center text-white">
+                <h3 class="font-black text-xl uppercase tracking-tight">Parent & Student Enrollment</h3>
+                <button onclick="closeWizardModal()" class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-8">
+                <div id="stepper-dots" class="flex gap-2 mb-6">
+                    <div id="dot-1" class="w-3 h-3 rounded-full bg-violet-600"></div>
+                    <div id="dot-2" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="dot-3" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="dot-4" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="dot-5" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <div id="dot-6" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                </div>
+
+                <!-- Step 1: Parent Info -->
+                <div id="step-1" class="wizard-step active space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 1: Parent Information</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2 relative">
+                            <i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                            <input type="text" id="p-name" placeholder="Parent Full Name" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </div>
+                        <div class="col-span-2 relative">
+                            <i data-lucide="map-pin" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                            <input type="text" id="p-address" placeholder="Home Address" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </div>
+                        <select id="p-role" class="px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                            <option value="Parent">Parent</option>
+                            <option value="Guardian">Guardian</option>
+                        </select>
+                        <div class="relative">
+                            <i data-lucide="phone" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 w-4 h-4"></i>
+                            <input type="text" id="p-phone" placeholder="Phone Number" class="w-full pl-11 pr-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Account Creation -->
+                <div id="step-2" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 2: Create Account</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="p-user" placeholder="Create Username" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        <input type="password" id="p-pass" placeholder="Create Password" class="px-6 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                    </div>
+                </div>
+
+                <!-- Step 3: Parent Confirmation -->
+                <div id="step-3" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 3: Confirm Parent Details</h4>
+                    <div class="p-8 bg-violet-50 rounded-[32px] border border-violet-100 relative text-center">
+                        <div id="p-summary" class="grid grid-cols-2 gap-y-6 text-sm font-bold text-gray-700 text-left px-4"></div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Student Info (Loopable) -->
+                <div id="step-4" class="wizard-step space-y-6">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 4: Student Information</h4>
+                    <div id="student-form-container" class="space-y-6"></div>
+                    <button type="button" onclick="addStudentForm()" class="w-full py-4 border-2 border-dashed border-violet-200 rounded-2xl text-violet-400 font-black uppercase text-[10px] tracking-widest hover:bg-violet-50 transition-all">
+                        + Add Student
+                    </button>
+                    <div class="text-xs text-gray-500 mt-2">* LRN must be 12 digits. Gender and Class are required.</div>
+                </div>
+
+                <!-- Step 5: Student Confirmation -->
+                <div id="step-5" class="wizard-step space-y-4">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 5: Confirm Student Details</h4>
+                    <div id="child-selector-container" class="hidden mb-4">
+                        <label class="block text-xs font-black text-violet-600 uppercase mb-2">Select Child to Review</label>
+                        <select id="child-selector-dropdown" onchange="updateStudentSummaryView()" class="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </select>
+                    </div>
+                    <div id="s-summary-container" class="space-y-3"></div>
+                </div>
+
+                <!-- Step 6: ID Preview -->
+                <div id="step-6" class="wizard-step space-y-4">
+                    <h4 class="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-6">STEP 6: ID Card Preview</h4>
+                    <div id="id-student-selector" class="mb-4">
+                        <label class="block text-xs font-black text-violet-600 uppercase mb-2">Select Student to Preview ID</label>
+                        <select id="id-preview-student-select" onchange="updateIDPreview()" class="w-full px-4 py-3 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-violet-200 transition-all">
+                        </select>
+                    </div>
+                    <div id="id-preview-container" class="flex justify-center"></div>
+                    <div class="flex justify-center gap-3 mt-4">
+                        <button type="button" onclick="printIDCard()" class="px-4 py-2 bg-violet-100 text-violet-700 rounded-lg font-bold text-xs hover:bg-violet-200 transition-colors flex items-center gap-2">
+                            <i data-lucide="printer" class="w-3 h-3"></i> Print / Save as PDF
+                        </button>
+                        <button type="button" onclick="downloadIDCard()" class="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg font-bold text-xs hover:bg-emerald-200 transition-colors flex items-center gap-2">
+                            <i data-lucide="download" class="w-3 h-3"></i> Download JPEG
+                        </button>
+                    </div>
+                    <div class="text-center text-xs text-gray-400 mt-4">
+                        <p>ID Size: 2×3 inches</p>
+                    </div>
+                </div>
+            </div>
+            <div class="px-8 py-6 bg-gray-50 border-t flex justify-between shrink-0">
+                <button onclick="prevStep()" id="prev-btn" class="px-6 py-3 text-gray-400 font-black uppercase text-xs tracking-widest hover:text-gray-600 transition-colors flex items-center gap-2">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Previous
+                </button>
+                <div class="flex-1"></div>
+                <button onclick="nextStep()" id="next-btn" class="px-10 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-violet-200 hover:scale-105 active:scale-95 transition-all">
+                    Next Step
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print queue (hidden) -->
+    <div id="id-print-queue" class="hidden bg-white"></div>
+</body>
+</html>

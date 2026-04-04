@@ -1,8 +1,6 @@
 // parent/parent-children.js
 // Logic for children management and detail view
 
-// DEBUG FLAG - Set to false in production
-const DEBUG = false;
 
 let childrenData = [];
 
@@ -32,11 +30,11 @@ async function loadAllChildren() {
         
         if (DEBUG) console.log('Loading children for parentId:', parentId);
         
-        // FIX: Added classes join to get grade_level and section_name
+        // FIX: Added classes join to get grade_level and department
         // UPDATED: Also fetch class info for display
         const { data: children, error } = await supabase
             .from('students')
-            .select('*, classes(grade_level, section_name)')
+            .select('*, classes(grade_level, department)')
             .eq('parent_id', parentId);
 
         if (error) {
@@ -113,7 +111,7 @@ async function renderChildrenList() {
                         ${avatar}
                         <div class="flex-1">
                             <h3 class="font-bold text-lg text-gray-800">${child.full_name}</h3>
-                            <p class="text-sm text-gray-500">${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.section_name || 'N/A'}</p>
+                            <p class="text-sm text-gray-500">${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.department || 'N/A'}</p>
                             <p class="text-xs text-gray-400">LRN: ${child.lrn}</p>
                         </div>
                         <div class="text-right">
@@ -397,7 +395,7 @@ async function showChildDetail(index) {
             </div>
             <div>
                 <p class="font-bold text-gray-800">${child.full_name}</p>
-                <p class="text-sm text-gray-500">${child.classes?.grade_level || 'N/A'} - ${child.classes?.section_name || 'N/A'}</p>
+                <p class="text-sm text-gray-500">${child.classes?.grade_level || 'N/A'} - ${child.classes?.department || 'N/A'}</p>
                 ${child.classes?.strand ? `<p class="text-xs text-gray-400">${child.classes.strand}</p>` : ''}
             </div>
         </div>
@@ -430,7 +428,7 @@ async function showChildDetail(index) {
                     <div class="flex-1">
                         <button onclick="contactAdviser('${adviser.contact_number}')" class="text-left w-full">
                             <p class="font-bold text-gray-800 group-hover:text-green-600 transition-colors">${adviser.full_name}</p>
-                            <p class="text-xs text-gray-500">Adviser for ${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.section_name || 'N/A'}</p>
+                            <p class="text-xs text-gray-500">Adviser for ${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.department || 'N/A'}</p>
                         </button>
                     </div>
                     <div class="p-2 text-green-600 opacity-50 group-hover:opacity-100 transition-opacity">
@@ -665,7 +663,7 @@ async function showCompareChildren() {
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center gap-3">
                                 <div class="h-10 w-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">${getInitials(child.full_name)}</div>
-                                <div><p class="font-bold text-gray-800">${child.full_name}</p><p class="text-xs text-gray-500">${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.section_name || 'N/A'}</p></div>
+                                <div><p class="font-bold text-gray-800">${child.full_name}</p><p class="text-xs text-gray-500">${child.classes?.grade_level || 'Unassigned'} - ${child.classes?.department || 'N/A'}</p></div>
                             </div>
                             <span class="px-2 py-1 rounded-full text-xs font-medium ${statusColor}">${statusText}</span>
                         </div>

@@ -589,7 +589,7 @@
             if (!currentChild) return;
             document.getElementById('child-name').textContent = currentChild.full_name;
             document.getElementById('child-class').textContent = 
-                `${currentChild.classes?.grade_level || 'N/A'} - ${currentChild.classes?.section_name || 'N/A'}`;
+                `${currentChild.classes?.grade_level || 'N/A'} - ${currentChild.classes?.department || 'N/A'}`;
         }
 
         function updateStatusCard() {

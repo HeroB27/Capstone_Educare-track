@@ -39,20 +39,23 @@ async function loadSchedule() {
         const gradeLevel = currentChild.classes?.grade_level;
 
         if (gradeLevel) {
-            const { data: suspension } = await supabase
-                .from('holidays')
-                .select('*')
-                .eq('holiday_date', today)
-                .eq('is_suspended', true)
-                .single();
-            
-            // If there's a suspension that applies to this grade (or all grades)
-            if (suspension && (suspension.target_grades.includes('All') || suspension.target_grades.includes(gradeLevel))) {
-                container.innerHTML = `
-                    <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center"><i data-lucide="alert-triangle" class="w-12 h-12 text-red-500 mx-auto mb-3"></i><h3 class="text-lg font-black text-red-700 mb-1">Classes Suspended Today</h3><p class="text-sm text-red-600 font-medium">${suspension.description}</p></div>
-                `;
-                lucide.createIcons();
-                return; // Stop further processing
+            try {
+                const { data: suspension } = await supabase
+                    .from('holidays')
+                    .select('*')
+                    .eq('holiday_date', today)
+                    .eq('is_suspended', true)
+                    .single();
+                
+                if (suspension && (suspension.target_grades.includes('All') || suspension.target_grades.includes(gradeLevel))) {
+                    container.innerHTML = `
+                        <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center"><i data-lucide="alert-triangle" class="w-12 h-12 text-red-500 mx-auto mb-3"></i><h3 class="text-lg font-black text-red-700 mb-1">Classes Suspended Today</h3><p class="text-sm text-red-600 font-medium">${suspension.description}</p></div>
+                    `;
+                    lucide.createIcons();
+                    return;
+                }
+            } catch (e) {
+                console.debug('Holiday check skipped:', e.message);
             }
         }
 

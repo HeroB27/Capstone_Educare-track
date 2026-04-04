@@ -161,6 +161,9 @@ async function loadHolidays() {
                     </td>
                     <td class="px-6 py-5 text-right">
                         <div class="flex items-center justify-end gap-2">
+                            <button onclick="editCalendarEvent('${group.id}', '${group.start_date}')" class="p-2.5 bg-violet-50 text-violet-500 rounded-xl hover:bg-violet-100 hover:text-violet-600 transition-all" title="Edit Event">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                            </button>
                             <button onclick="deleteHolidayGroup('${group.description}')" class="p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 hover:text-red-600 transition-all" title="Delete Event">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
@@ -174,7 +177,13 @@ async function loadHolidays() {
 
     } catch (err) {
         console.error("Error loading holidays:", err);
-        list.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-red-500">Error loading holidays.</td></tr>';
+        // Check for network errors
+        const errorMessage = err.message || '';
+        if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('timeout') || err.name === 'TypeError') {
+            list.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-yellow-600">Network error. Please check your internet connection and try again.</td></tr>';
+        } else {
+            list.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-red-500">Error loading holidays.</td></tr>';
+        }
     }
 }
 
@@ -460,7 +469,38 @@ function editHoliday(date) {
     openHolidayModal(date);
 }
 
-// 9. Delete Holiday (Grouped - deletes all rows with same description)
+// 9. Delete Holiday (Single date - deletes entire range with same description)
+async function deleteHoliday(date) {
+    try {
+        // Get the holiday to find its description
+        const { data: holiday, error: fetchError } = await supabase
+            .from('holidays')
+            .select('description')
+            .eq('holiday_date', date)  // FIXED: was 'date', should be 'holiday_date'
+            .single();
+        
+        if (fetchError) throw fetchError;
+        if (!holiday) {
+            showNotification("Holiday not found", "error");
+            return;
+        }
+        
+        // Delete all holidays with the same description (the entire range)
+        const { error } = await supabase
+            .from('holidays')
+            .delete()
+            .eq('description', holiday.description);
+            
+        if (error) throw error;
+        showNotification("Holiday range deleted successfully!", "success");
+        loadHolidays();
+        loadStats();
+    } catch (err) {
+        showNotification("Error deleting: " + err.message, "error");
+    }
+}
+
+// 9b. Delete Holiday (Grouped - deletes all rows with same description)
 let pendingDeleteDesc = null;
 
 function deleteHolidayGroup(description) {
@@ -515,21 +555,126 @@ function debounce(func, wait) {
 // Notification helper (REMOVED - now using general-core.js showNotification)
 // UPDATED: Using window.showNotification from general-core.js
 
-// Delete confirmation handler - triggered from delete modal
-let pendingDeleteDate = null;
+// =============================================================================
+// CALENDAR EDIT FUNCTIONS - Dynamic Modal Implementation
+// =============================================================================
 
-function confirmDelete() {
-    if (pendingDeleteDate) {
-        deleteHoliday(pendingDeleteDate);
-        pendingDeleteDate = null;
-        document.getElementById('delete-modal').classList.add('hidden');
+/**
+ * Edit Calendar Event - Opens dynamic modal with pre-filled data
+ */
+async function editCalendarEvent(id, startDate) {
+    try {
+        // Fetch the exact event from holidays table
+        const { data: event, error } = await supabase
+            .from('holidays')
+            .select('*')
+            .eq('id', id)
+            .single();
+        
+        if (error) throw error;
+
+        // Build Modal UI
+        const modalHtml = `
+            <div id="editCalendarModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-fade-in">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-5 py-4 flex justify-between items-center text-white">
+                        <h3 class="font-black text-sm uppercase">Edit Calendar Event</h3>
+                        <button onclick="document.getElementById('editCalendarModal').remove()" class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <input type="hidden" id="edit-cal-id" value="${event.id}">
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Event Title</label>
+                            <input type="text" id="edit-cal-desc" value="${event.description || ''}" class="w-full px-3 py-2 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-sm outline-none focus:border-violet-200">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                <input type="date" id="edit-cal-date" value="${event.holiday_date || ''}" class="w-full px-3 py-2 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-sm outline-none focus:border-violet-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Type</label>
+                                <select id="edit-cal-type" class="w-full px-3 py-2 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-sm outline-none focus:border-violet-200">
+                                    <option value="false" ${!event.is_suspended ? 'selected' : ''}>Holiday</option>
+                                    <option value="true" ${event.is_suspended ? 'selected' : ''}>Suspension</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Target Grades (Optional)</label>
+                            <select id="edit-cal-grades" class="w-full px-3 py-2 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-sm outline-none focus:border-violet-200">
+                                <option value="All" ${event.target_grades === 'All' || !event.target_grades ? 'selected' : ''}>All Levels</option>
+                                <option value="Grade 7" ${event.target_grades === 'Grade 7' ? 'selected' : ''}>Grade 7</option>
+                                <option value="Grade 8" ${event.target_grades === 'Grade 8' ? 'selected' : ''}>Grade 8</option>
+                                <option value="Grade 9" ${event.target_grades === 'Grade 9' ? 'selected' : ''}>Grade 9</option>
+                                <option value="Grade 10" ${event.target_grades === 'Grade 10' ? 'selected' : ''}>Grade 10</option>
+                                <option value="Grade 11" ${event.target_grades === 'Grade 11' ? 'selected' : ''}>Grade 11</option>
+                                <option value="Grade 12" ${event.target_grades === 'Grade 12' ? 'selected' : ''}>Grade 12</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="px-5 py-4 bg-gray-50 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('editCalendarModal').remove()" class="px-4 py-2 text-gray-400 font-bold uppercase text-xs tracking-widest">Cancel</button>
+                        <button onclick="saveCalendarEdit()" id="btn-save-cal" class="px-6 py-2 bg-violet-600 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg">Save Update</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        lucide.createIcons();
+    } catch (e) {
+        showNotification("Error loading event: " + e.message, "error");
     }
 }
 
-// Open delete confirmation modal
-function openDeleteModal(date) {
-    pendingDeleteDate = date;
-    document.getElementById('delete-modal').classList.remove('hidden');
+/**
+ * Save Calendar Edit - Updates event and fires notification
+ */
+async function saveCalendarEdit() {
+    const id = document.getElementById('edit-cal-id').value;
+    const description = document.getElementById('edit-cal-desc').value.trim();
+    const date = document.getElementById('edit-cal-date').value;
+    const isSuspended = document.getElementById('edit-cal-type').value === 'true';
+    const targetGrades = document.getElementById('edit-cal-grades').value;
+
+    if (!description || !date) return showNotification("Title and Date are required.", "error");
+
+    const btn = document.getElementById('btn-save-cal');
+    btn.disabled = true; btn.innerText = "Saving...";
+
+    try {
+        // 1. Update Calendar Record
+        const { error: updateErr } = await supabase.from('holidays').update({
+            description: description,
+            holiday_date: date,
+            is_suspended: isSuspended,
+            target_grades: targetGrades
+        }).eq('id', id);
+
+        if (updateErr) throw updateErr;
+
+        // 2. Fire Automated Notification
+        await supabase.from('notifications').insert([{
+            title: 'Calendar Updated',
+            message: `School admin updated a calendar event: ${description}. Please check the calendar.`,
+            recipient_role: 'all',
+            type: 'system',
+            is_read: false
+        }]);
+
+        // 3. Cleanup
+        document.getElementById('editCalendarModal').remove();
+        showNotification("Event updated and users notified!", "success");
+        
+        // 4. Reload Calendar
+        loadHolidays();
+
+    } catch (e) {
+        console.error(e);
+        showNotification("Error updating event: " + e.message, "error");
+        btn.disabled = false; btn.innerText = "Save Update";
+    }
 }
 
 // ===== GLOBAL WINDOW ATTACHMENTS FOR HTML ONCLICK HANDLERS =====
@@ -544,3 +689,7 @@ window.confirmDelete = confirmDelete;
 window.openDeleteModal = openDeleteModal;
 window.closeAnnounceModal = closeAnnounceModal;
 window.confirmAndAnnounceSuspension = confirmAndAnnounceSuspension;
+
+// NEW: Calendar Edit Functions
+window.editCalendarEvent = editCalendarEvent;
+window.saveCalendarEdit = saveCalendarEdit;

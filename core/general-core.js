@@ -1,5 +1,9 @@
 // core/general-core.js
 
+// Global DEBUG flag (shared across all modules)
+// Set to true to enable debug logging for all modules
+window.DEBUG = false;
+
 // 1. Session Checker
 // Call this at the top of every dashboard's specific core.js
 function checkSession(requiredRole) {

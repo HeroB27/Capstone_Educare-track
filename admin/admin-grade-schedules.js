@@ -53,35 +53,74 @@ async function loadGlobalThresholds() {
     }
 }
 
-// 3. Ensure grade_schedules table exists (check and create via settings if needed)
-// Note: In production, you'd run migrations. Here we use settings as a fallback storage.
+// 3. Ensure grade_schedules table has default records
+// UPDATED: Now uses dedicated grade_schedules table instead of settings table
 async function ensureGradeSchedulesTable() {
-    // We'll store grade schedules in the settings table with prefixed keys
-    // This is simpler than creating a new table and works with existing infrastructure
-    // Keys format: grade_{id}_start, grade_{id}_end, grade_{id}_late_threshold
+    try {
+        // Check if we have any records in grade_schedules
+        const { data: existing, count } = await supabase
+            .from('grade_schedules')
+            .select('*', { count: 'exact', head: true });
+        
+        // If no records exist, initialize with default values
+        if (!count || count === 0) {
+            console.log('[Grade Schedules] Initializing with default schedules...');
+            const defaultRecords = GRADE_LEVELS.map(grade => {
+                const defaults = DEFAULT_SCHEDULES[grade.id];
+                return {
+                    grade_level: grade.id,
+                    start_time: defaults.start,
+                    end_time: defaults.end,
+                    late_threshold: defaults.late,
+                    early_cutoff: defaults.early
+                };
+            });
+            
+            const { error: insertError } = await supabase.from('grade_schedules').insert(defaultRecords);
+            if (insertError) {
+                console.error('[Grade Schedules] Error initializing defaults:', insertError);
+            } else {
+                console.log('[Grade Schedules] Default schedules initialized successfully');
+            }
+        } else {
+            console.log(`[Grade Schedules] Found ${count} existing records`);
+        }
+    } catch (err) {
+        console.error('[Grade Schedules] Error checking table:', err);
+    }
 }
 
 // 4. Load Grade Schedules
+// UPDATED: Now loads from grade_schedules table instead of settings
 async function loadGradeSchedules() {
     const container = document.getElementById('grade-schedules-container');
     container.innerHTML = '';
 
     try {
-        // Load all settings
-        const { data: settingsData, error } = await supabase.from('settings').select('*');
+        // Load all grade schedules from dedicated table
+        const { data: scheduleData, error } = await supabase
+            .from('grade_schedules')
+            .select('*')
+            .order('grade_level');
+        
         if (error) throw error;
 
-        // Create settings lookup
-        const settings = {};
-        settingsData?.forEach(s => settings[s.setting_key] = s.setting_value);
+        // Create lookup map by grade_level
+        const scheduleMap = {};
+        scheduleData?.forEach(s => {
+            scheduleMap[s.grade_level] = s;
+        });
 
-        // Build the grid
+        console.log('[Grade Schedules] Loaded schedule data:', scheduleMap);
+
+        // Build the grid using scheduleMap or fallbacks
         container.innerHTML = GRADE_LEVELS.map(grade => {
             const defaults = DEFAULT_SCHEDULES[grade.id];
-            const startTime = settings[`grade_${grade.id}_start`] || defaults.start;
-            const endTime = settings[`grade_${grade.id}_end`] || defaults.end;
-            const lateThreshold = settings[`grade_${grade.id}_late_threshold`] || defaults.late;
-            const earlyCutoff = settings[`grade_${grade.id}_early_cutoff`] || defaults.early;
+            const schedule = scheduleMap[grade.id];
+            const startTime = schedule?.start_time || defaults.start;
+            const endTime = schedule?.end_time || defaults.end;
+            const lateThreshold = schedule?.late_threshold || defaults.late;
+            const earlyCutoff = schedule?.early_cutoff || defaults.early;
 
             return `
                 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -146,6 +185,7 @@ async function loadGradeSchedules() {
 }
 
 // 5. Save All Grade Schedules (With Chronological Validation)
+// UPDATED: Now saves to grade_schedules table using UPSERT
 async function saveAllSchedules(event) {
     const btn = event.currentTarget;
     const originalText = btn.innerHTML;
@@ -153,6 +193,7 @@ async function saveAllSchedules(event) {
     btn.disabled = true;
 
     try {
+        // Collect all grade schedule records for UPSERT
         const payloads = [];
         let validationError = null;
 
@@ -173,10 +214,16 @@ async function saveAllSchedules(event) {
                 break;
             }
 
-            if (startTime) payloads.push({ setting_key: `grade_${grade.id}_start`, setting_value: startTime });
-            if (endTime) payloads.push({ setting_key: `grade_${grade.id}_end`, setting_value: endTime });
-            if (lateThreshold) payloads.push({ setting_key: `grade_${grade.id}_late_threshold`, setting_value: lateThreshold });
-            if (earlyCutoff) payloads.push({ setting_key: `grade_${grade.id}_early_cutoff`, setting_value: earlyCutoff });
+            // Build record for grade_schedules table
+            // Use grade_level as unique key for UPSERT
+            payloads.push({
+                grade_level: grade.id,
+                start_time: startTime,
+                end_time: endTime,
+                late_threshold: lateThreshold,
+                early_cutoff: earlyCutoff,
+                updated_at: new Date().toISOString()
+            });
         }
 
         if (validationError) {
@@ -186,11 +233,24 @@ async function saveAllSchedules(event) {
             return; // Stop execution, do not save to database
         }
 
-        // Bulk upsert if validation passes
-        const { error } = await supabase.from('settings').upsert(payloads, { onConflict: 'setting_key' });
-        if (error) throw error;
+        console.log('[Grade Schedules] Saving payloads:', payloads);
 
+        // UPSERT to grade_schedules table using grade_level as conflict key
+        // Supabase v2 syntax: upsert with onConflict
+        const { error } = await supabase
+            .from('grade_schedules')
+            .upsert(payloads, { onConflict: 'grade_level' });
+        
+        if (error) {
+            console.error('[Grade Schedules] Save error:', error);
+            throw error;
+        }
+
+        console.log('[Grade Schedules] Save successful!');
         showNotification("All grade schedules saved successfully!", "success");
+        
+        // Reload to reflect changes
+        await loadGradeSchedules();
 
     } catch (err) {
         console.error("Error saving grade schedules:", err);
