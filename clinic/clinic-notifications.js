@@ -44,7 +44,8 @@ async function fetchClinicNotifications() {
         const { data: notifications, error } = await supabase
             .from('notifications')
             .select('*')
-            .eq('recipient_role', 'clinic')
+            .eq('recipient_id', currentUser.id)          
+            .eq('recipient_role', 'clinic_staff')        
             .order('created_at', { ascending: false })
             .limit(100);
         

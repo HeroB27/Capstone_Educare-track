@@ -21,8 +21,8 @@ const scanCooldowns = new Map(); // Map<studentId, timestamp>
 const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes (Fix #4)
 let lastToastTime = 0; // Global debounce tracker for toast notifications
 
-// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G010-A1B2)
-const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
+// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (accepts 4-6 char suffix for backward compatibility)
+const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4,6}$/i;
 
 // DOM Ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -128,7 +128,8 @@ async function startCamera() {
  * Scan each video frame for QR codes
  */
 function scanFrame() {
-    if (!video || !video.readyState === video.HAVE_ENOUGH_DATA) {
+    // FIXED: Correct frame-ready check
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
         animationFrameId = requestAnimationFrame(scanFrame);
         return;
     }
@@ -383,7 +384,6 @@ async function handleAttendanceScan(student) {
         .eq('log_date', checkDateStr)
         .order('time_in', { ascending: false })
         .limit(1)
-        .maybeSingle()
         .then(r => r.data);
     
     let status = 'On Time';
@@ -599,7 +599,7 @@ function validateStudentId(studentId) {
         return false;
     }
     
-    // Validate format: EDU-YYYY-LLLL-XXXX
+    // Validate format: EDU-YYYY-LLLL-XXXX (XXXX can be 4-6 chars)
     return SCAN_REGEX.test(studentId.trim());
 }
 

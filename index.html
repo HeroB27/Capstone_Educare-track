@@ -47,7 +47,7 @@
         </div>
     </div>
 
-    <!-- Password Reset Modal -->
+    <!-- Password Reset Modal (same as before, kept for functionality) -->
     <div id="reset-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
             <div class="bg-gradient-to-r from-violet-900 to-indigo-800 px-8 py-6 flex justify-between items-center text-white">
@@ -59,7 +59,6 @@
                 </button>
             </div>
 
-            <!-- Step 1: Request Token -->
             <div id="reset-step-1" class="p-8 space-y-4">
                 <p class="text-sm text-gray-500">Enter your username to receive a reset token.</p>
                 <input type="text" id="reset-username" placeholder="Enter Username" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none">
@@ -71,7 +70,6 @@
                 </div>
             </div>
 
-            <!-- Step 2: Submit Token -->
             <div id="reset-step-2" class="p-8 space-y-4 hidden">
                 <p class="text-sm text-gray-500">Enter the token and your new password.</p>
                 <input type="text" id="reset-token" placeholder="Enter 6-Digit Token" class="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-violet-500 outline-none font-mono tracking-widest text-center uppercase">
@@ -85,15 +83,44 @@
     </div>
 
     <script>
+        // ============================================
+        // DEBUGGING MODE - Set to true to see console logs
+        // ============================================
+        const DEBUG_LOGIN = true;
+
+        function logDebug(message, data = null) {
+            if (DEBUG_LOGIN) {
+                if (data) {
+                    console.log(`[Login Debug] ${message}`, data);
+                } else {
+                    console.log(`[Login Debug] ${message}`);
+                }
+            }
+        }
+
+        // Check if Supabase client is loaded
+        logDebug("Checking Supabase client availability...");
+        if (typeof supabase === 'undefined') {
+            console.error("CRITICAL: Supabase client not loaded! Check supabase-client.js");
+            document.getElementById('error-msg').innerText = "System error: Database client not loaded. Please contact administrator.";
+            document.getElementById('error-msg').classList.remove('hidden');
+        } else {
+            logDebug("Supabase client loaded successfully");
+        }
+
         // Auto-redirect if session exists
         const existingSession = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
         if (existingSession) {
-            const user = JSON.parse(existingSession);
-            if (user.role === 'admins') window.location.href = 'admin/admin-dashboard.html';
-            else if (user.role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
-            else if (user.role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
-            else if (user.role === 'guards') window.location.href = 'guard/guard-dashboard.html';
-            else if (user.role === 'parents') window.location.href = 'parent/parent-dashboard.html';
+            try {
+                const user = JSON.parse(existingSession);
+                if (user.role === 'admins') window.location.href = 'admin/admin-dashboard.html';
+                else if (user.role === 'teachers') window.location.href = 'teacher/teacher-dashboard.html';
+                else if (user.role === 'clinic_staff') window.location.href = 'clinic/clinic-dashboard.html';
+                else if (user.role === 'guards') window.location.href = 'guard/guard-dashboard.html';
+                else if (user.role === 'parents') window.location.href = 'parent/parent-dashboard.html';
+            } catch(e) {
+                logDebug("Invalid session data, ignoring");
+            }
         }
 
         async function handleLogin() {
@@ -101,17 +128,19 @@
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('remember-me').checked;
             const errorMsg = document.getElementById('error-msg');
+            
+            logDebug(`Login attempt for username: "${username}"`);
  
             if (!username || !password) {
                 errorMsg.innerText = "Please enter both username and password.";
                 errorMsg.classList.remove('hidden');
+                logDebug("Login failed: missing username or password");
                 return;
             }
             
             errorMsg.classList.add('hidden');
- 
-            // Array of tables to check - XAMPP style direct queries
-            // All use username column for simplicity
+            
+            // Array of tables to check - each table must have username/password/is_active columns
             const userRoles = [
                 { table: 'admins', column: 'username', role: 'admins', redirect: 'admin/admin-dashboard.html' },
                 { table: 'teachers', column: 'username', role: 'teachers', redirect: 'teacher/teacher-dashboard.html' },
@@ -121,44 +150,97 @@
             ];
  
             try {
-                // Loop through each table to find the user
-                for (let role of userRoles) {
-                    const { data: user, error } = await supabase
-                        .from(role.table)
-                        .select('*')
-                        .eq(role.column, username)
-                        .eq('password', password)
-                        .eq('is_active', true)
-                        .single();
+                // First, test if we can even connect to Supabase
+                logDebug("Testing Supabase connection...");
+                const { data: testData, error: testError } = await supabase.from('admins').select('count', { count: 'exact', head: true });
+                if (testError) {
+                    logDebug("Supabase connection test FAILED:", testError);
+                    throw new Error(`Database connection error: ${testError.message}. Check your Supabase URL and API key.`);
+                }
+                logDebug("Supabase connection successful");
 
-                    // If we found a match!
-                    if (user) {
-                        // Add role to user object
-                        user.role = role.role;
+                // Loop through each table to find the user
+                let userFound = false;
+                
+                for (let role of userRoles) {
+                    logDebug(`Checking table: ${role.table} with username: ${username}`);
+                    
+                    try {
+                        // Try with is_active filter first
+                        let query = supabase
+                            .from(role.table)
+                            .select('*')
+                            .eq(role.column, username)
+                            .eq('password', password);
                         
-                        // Save session to localStorage or sessionStorage
-                        const storage = rememberMe ? localStorage : sessionStorage;
-                        storage.setItem('educare_user', JSON.stringify(user));
+                        // Check if is_active column exists (some tables might not have it)
+                        // We'll try with is_active, if fails, retry without
+                        let { data: user, error } = await query.eq('is_active', true).maybeSingle();
                         
-                        // Redirect to dashboard
-                        window.location.href = role.redirect;
-                        return;
+                        // If error indicates column doesn't exist, retry without is_active
+                        if (error && error.message && error.message.includes('is_active')) {
+                            logDebug(`is_active column not found in ${role.table}, retrying without it`);
+                            const { data: userNoActive, error: errorNoActive } = await supabase
+                                .from(role.table)
+                                .select('*')
+                                .eq(role.column, username)
+                                .eq('password', password)
+                                .maybeSingle();
+                            user = userNoActive;
+                            error = errorNoActive;
+                        }
+                        
+                        if (error) {
+                            logDebug(`Error querying ${role.table}:`, error.message);
+                            continue;
+                        }
+
+                        if (user) {
+                            logDebug(`✅ User found in ${role.table}:`, user);
+                            // Add role to user object
+                            user.role = role.role;
+                            
+                            // Save session
+                            const storage = rememberMe ? localStorage : sessionStorage;
+                            storage.setItem('educare_user', JSON.stringify(user));
+                            
+                            logDebug(`Login successful! Redirecting to ${role.redirect}`);
+                            window.location.href = role.redirect;
+                            userFound = true;
+                            return;
+                        } else {
+                            logDebug(`No match in ${role.table} for username: ${username}`);
+                        }
+                    } catch (tableErr) {
+                        logDebug(`Error checking ${role.table}:`, tableErr.message);
                     }
                 }
 
-                // If loop finishes and no match found
-                throw new Error("Invalid credentials or inactive account.");
+                if (!userFound) {
+                    // Additional debug: Check if username exists at all (without password)
+                    logDebug("No user found with matching credentials. Checking if username exists...");
+                    for (let role of userRoles) {
+                        const { data: userExists, error } = await supabase
+                            .from(role.table)
+                            .select('username')
+                            .eq(role.column, username)
+                            .maybeSingle();
+                        if (userExists) {
+                            logDebug(`Username "${username}" EXISTS in ${role.table} but password doesn't match`);
+                            throw new Error("Incorrect password. Please try again.");
+                        }
+                    }
+                    throw new Error("Username not found in any user table.");
+                }
  
             } catch (err) {
-                errorMsg.innerText = err.message;
+                logDebug("Login error:", err);
+                errorMsg.innerText = err.message || "Invalid credentials or inactive account.";
                 errorMsg.classList.remove('hidden');
             }
         }
 
-        // --- PASSWORD RESET LOGIC (Database-based) ---
-        // Uses password_resets table in Supabase
-        // Admin can view/manage requests in admin-settings.html
-
+        // --- PASSWORD RESET FUNCTIONS (simplified, kept working) ---
         function handleForgotPassword() {
             document.getElementById('reset-modal').classList.remove('hidden');
             showResetStep(1);
@@ -186,7 +268,6 @@
             btn.innerText = "Verifying...";
 
             try {
-                // 1. Find user across all tables - use username for all
                 const roles = [
                     { table: 'admins', column: 'username' },
                     { table: 'teachers', column: 'username' },
@@ -196,35 +277,36 @@
                 ];
                 
                 let foundRole = null;
+                let foundUser = null;
                 
                 for (const r of roles) {
-                    const { data } = await supabase.from(r.table).select('id').eq(r.column, username).maybeSingle();
-                    if (data) { foundRole = r.table; break; }
+                    const { data, error } = await supabase.from(r.table).select('id, username').eq(r.column, username).maybeSingle();
+                    if (data) { 
+                        foundRole = r.table; 
+                        foundUser = data;
+                        break; 
+                    }
                 }
 
                 if (!foundRole) throw new Error("Username not found.");
 
-                // 2. Generate Token
                 const token = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const expiresAt = new Date(Date.now() + 3600000).toISOString();
                 
-                // 3. Store token in database (for admin tracking)
-                const expiresAt = new Date(Date.now() + 3600000).toISOString(); // 1 hour
-                const { error: insertError } = await supabase.from('password_resets').insert({
-                    username: username,
-                    user_role: foundRole,
-                    token: token,
-                    status: 'pending',
-                    expires_at: expiresAt
-                });
-
-                if (insertError) {
-                    console.error('Failed to record reset request:', insertError);
-                    // Continue anyway - the token is still valid for the user
+                // Try to insert into password_resets table (if exists)
+                try {
+                    await supabase.from('password_resets').insert({
+                        username: username,
+                        user_role: foundRole,
+                        token: token,
+                        status: 'pending',
+                        expires_at: expiresAt
+                    });
+                } catch (insertErr) {
+                    logDebug("Password resets table may not exist:", insertErr.message);
                 }
 
-                // 4. Show token to user
-                alert(`Your reset token is: ${token}\n\n(In production, this would be sent to your email)\n\nAn admin will review your request.`);
-                
+                alert(`Your reset token is: ${token}\n\n(In production, this would be sent to your email)`);
                 showResetStep(2);
 
             } catch (err) {
@@ -248,7 +330,6 @@
             btn.innerText = "Updating...";
 
             try {
-                // 1. Verify Token from database
                 const { data: resetRecord, error: fetchError } = await supabase
                     .from('password_resets')
                     .select('*')
@@ -258,11 +339,10 @@
                     .gte('expires_at', new Date().toISOString())
                     .order('created_at', { ascending: false })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
 
                 if (fetchError || !resetRecord) throw new Error("Invalid or expired token. Please start over.");
 
-                // 2. Update User Password
                 const { error: updateError } = await supabase
                     .from(resetRecord.user_role)
                     .update({ password: newPass })
@@ -270,17 +350,10 @@
 
                 if (updateError) throw updateError;
 
-                // 3. Mark reset request as completed
-                const { error: completeError } = await supabase
+                await supabase
                     .from('password_resets')
-                    .update({ 
-                        status: 'completed',
-                        new_password: newPass,
-                        resolved_at: new Date().toISOString()
-                    })
+                    .update({ status: 'completed', resolved_at: new Date().toISOString() })
                     .eq('id', resetRecord.id);
-
-                if (completeError) console.error('Failed to update reset status:', completeError);
 
                 alert("Password updated successfully! You can now login.");
                 closeResetModal();
@@ -311,4 +384,3 @@
     </script>
 </body>
 </html>
-

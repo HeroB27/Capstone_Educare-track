@@ -240,7 +240,16 @@ function normalizeGradeCode(grade) {
 }
 
 // FIX: Centralized Notification System to ensure UI consistency.
+// FIXED: Added guard against document.body being null
 function showNotification(msg, type = 'info', callback = null) {
+    // FIX: Prevent error when called before DOM is ready
+    if (!document.body) {
+        console.warn('showNotification called before DOM ready:', msg);
+        // Queue for later or just return
+        setTimeout(() => showNotification(msg, type, callback), 100);
+        return;
+    }
+    
     const existing = document.getElementById('notification-modal');
     if (existing) existing.remove();
 
@@ -256,8 +265,10 @@ function showNotification(msg, type = 'info', callback = null) {
     const dndEnabled = localStorage.getItem('educare_dnd_enabled') === 'true';
     if (!dndEnabled) {
         // Feedback: Vibrate (Mobile) & Sound (Desktop)
-        if (navigator.vibrate) navigator.vibrate(type === 'error' ? [100, 50, 100] : 100);
+        // FIX: Check if document has focus before vibrating
+        if (navigator.vibrate && document.hasFocus()) navigator.vibrate(type === 'error' ? [100, 50, 100] : 100);
         try {
+            // AudioContext requires user interaction; wrap in try-catch
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
@@ -282,7 +293,10 @@ function showNotification(msg, type = 'info', callback = null) {
         </div></div>`;
 
     document.body.appendChild(modal);
-    document.getElementById('notif-btn').onclick = () => { modal.remove(); if (callback) callback(); };
+    const notifBtn = document.getElementById('notif-btn');
+    if (notifBtn) {
+        notifBtn.onclick = () => { modal.remove(); if (callback) callback(); };
+    }
     if (window.lucide) window.lucide.createIcons();
 }
 
@@ -579,8 +593,19 @@ window.evaluateGateStatus = async function() {
     }
 };
 
+// 54. Teacher Action Audit Stub (Fix #8 - also in general-core.js)
+window.logTeacherAction = async function(actionType, details, targetId, targetTable) {
+    if (window.DEBUG) console.log('[Audit]', actionType, details);
+    // For capstone, skip actual logging to keep simple
+    return;
+};
+
 // Export functions to window for global access
 window.formatDate = formatDate;
 window.formatTime = formatTime;
+// Also export showNotification for modules that might need it
+window.showNotification = showNotification;
+window.showConfirm = window.showConfirm;
+window.showModal = window.showModal;
 
-console.log('[GeneralCore] Phase 1 utilities loaded: formatDate, formatTime, getSettings, showConfirm, showModal');
+console.log('[GeneralCore] Phase 1 utilities loaded + logTeacherAction stub: formatDate, formatTime, getSettings, showConfirm, showModal');

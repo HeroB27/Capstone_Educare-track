@@ -1,304 +1,194 @@
-// parent/parent-calendar.js
-// School Calendar logic for parents
+// parent-calendar.js – School Calendar for Parents
+// Fetches holidays created by admin and displays them
 
-// Current calendar state
 let currentCalendarDate = new Date();
-let calendarData = {
-    holidays: [],
-    events: []
-};
+let holidaysMap = new Map(); // date string -> holiday object
 
-/**
- * Initialize calendar page
- */
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadCalendarData();
-    renderCalendar();
-    renderUpcomingEvents();
+    // Wait for parent-core to set currentUser if needed, but calendar works without login
+    await renderCalendar();
+    await loadUpcomingEvents();
+    setupCalendarNavigation();
 });
 
-/**
- * Load holidays and events for current month
- */
-async function loadCalendarData() {
-    try {
-        const year = currentCalendarDate.getFullYear();
-        const month = currentCalendarDate.getMonth();
-        
-        // Get first and last day of month
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        
-        const firstDayStr = firstDay.toISOString().split('T')[0];
-        const lastDayStr = lastDay.toISOString().split('T')[0];
-        
-        // Fetch holidays
-        const { data: holidays, error: holidayError } = await supabase
-            .from('holidays')
-            .select('*')
-            .gte('holiday_date', firstDayStr)
-            .lte('holiday_date', lastDayStr);
-        
-        if (holidayError) {
-            console.error('Error fetching holidays:', holidayError);
-        }
-        
-        // Fetch events from announcements (where scheduled_at is set and in the future)
-        const { data: events, error: eventError } = await supabase
-            .from('announcements')
-            .select('id, title, content, scheduled_at, priority')
-            .not('scheduled_at', 'is', null)
-            .gte('scheduled_at', firstDayStr)
-            .lte('scheduled_at', lastDayStr)
-            .order('scheduled_at');
-        
-        if (eventError) {
-            console.error('Error fetching events:', eventError);
-        }
-        
-        calendarData.holidays = holidays || [];
-        calendarData.events = events || [];
-        
-    } catch (err) {
-        console.error('Error loading calendar data:', err);
-    }
+// Setup month navigation buttons
+function setupCalendarNavigation() {
+    const prevBtn = document.querySelector('button[onclick="prevMonth()"]');
+    const nextBtn = document.querySelector('button[onclick="nextMonth()"]');
+    if (prevBtn) prevBtn.onclick = () => changeMonth(-1);
+    if (nextBtn) nextBtn.onclick = () => changeMonth(1);
 }
 
-/**
- * Render the calendar grid
- */
-function renderCalendar() {
+async function changeMonth(delta) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+    await renderCalendar();
+    await loadUpcomingEvents();
+}
+
+async function renderCalendar() {
     const year = currentCalendarDate.getFullYear();
     const month = currentCalendarDate.getMonth();
     
-    // Update header
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                        'July', 'August', 'September', 'October', 'November', 'December'];
-    document.getElementById('current-month-year').textContent = `${monthNames[month]} ${year}`;
-    
-    const container = document.getElementById('calendar-grid');
-    
-    // Get first day of month and number of days
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    
-    // Get day of week for first day (0 = Sunday, convert to Monday-based)
-    let startDayOfWeek = firstDay.getDay() - 1;
-    if (startDayOfWeek < 0) startDayOfWeek = 6; // Sunday becomes 6
-    
-    // Today's date for comparison
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
-    // Build calendar HTML
-    let html = '';
-    
-    // Empty cells for days before first of month
-    for (let i = 0; i < startDayOfWeek; i++) {
-        html += '<div class="calendar-day empty"></div>';
+    // Update month header
+    const monthYearElem = document.getElementById('current-month-year');
+    if (monthYearElem) {
+        monthYearElem.textContent = currentCalendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     }
     
-    // Days of month
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        // Determine day status
-        const dayStatus = getDayStatus(dateStr);
+    // Get first day of month and days in month
+    const firstDayOfMonth = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Get day of week for first day (0 = Sunday)
+    const firstDayWeekIndex = firstDayOfMonth.getDay();
+    // Empty cells before 1st day (Monday first)
+    const emptyCells = (firstDayWeekIndex + 6) % 7;
+    
+    // Fetch holidays for this month
+    const { start, end } = getMonthBounds(year, month);
+    const holidays = await fetchHolidays(start, end);
+    holidaysMap.clear();
+    holidays.forEach(h => {
+        holidaysMap.set(h.holiday_date, h);
+    });
+    
+    // Build calendar grid
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    
+    // Add empty cells for alignment
+    for (let i = 0; i < emptyCells; i++) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'calendar-day empty bg-gray-50 p-2 text-center';
+        emptyDiv.style.minHeight = '80px';
+        grid.appendChild(emptyDiv);
+    }
+    
+    const todayStr = getLocalDateString();
+    
+    // Add day cells
+    for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dateStr = getLocalDateString(date);
         const isToday = dateStr === todayStr;
+        const holiday = holidaysMap.get(dateStr);
         
-        let classes = 'calendar-day';
-        if (isToday) {
-            classes += ' today';
-        } else if (dayStatus.type === 'holiday') {
-            classes += ' holiday';
-        } else if (dayStatus.type === 'event') {
-            classes += ' event';
-        } else if (dayStatus.type === 'school-day') {
-            classes += ' school-day';
-        }
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day p-2 text-center border border-gray-100';
+        dayDiv.style.minHeight = '80px';
         
-        // Icon based on status
-        let icon = '';
-        if (dayStatus.type === 'holiday') {
-            icon = '<span class="text-xs">🎄</span>';
-        } else if (dayStatus.type === 'event') {
-            icon = '<span class="text-xs">🎉</span>';
-        } else if (dayStatus.isWeekend) {
-            icon = '';
+        // Apply background based on holiday type
+        if (holiday) {
+            if (holiday.is_suspended) {
+                dayDiv.classList.add('bg-red-50', 'border-red-200');
+            } else {
+                dayDiv.classList.add('bg-yellow-50', 'border-yellow-200');
+            }
         } else {
-            icon = '<span class="text-xs opacity-30">📚</span>';
+            dayDiv.classList.add('bg-white');
         }
         
-        html += `
-            <div class="${classes}">
-                <span class="font-medium ${isToday ? 'text-green-700' : 'text-gray-700'}">${day}</span>
-                ${icon}
+        if (isToday) {
+            dayDiv.classList.add('ring-2', 'ring-green-400', 'ring-inset');
+        }
+        
+        // Day number
+        const dayNumber = document.createElement('div');
+        dayNumber.className = `text-sm font-bold mb-1 ${isToday ? 'text-green-700' : 'text-gray-700'}`;
+        dayNumber.textContent = d;
+        dayDiv.appendChild(dayNumber);
+        
+        // Holiday / suspension info
+        if (holiday) {
+            const badge = document.createElement('div');
+            badge.className = 'text-[10px] font-black uppercase tracking-wide p-1 rounded mt-1 break-words';
+            if (holiday.is_suspended) {
+                badge.className += ' bg-red-200 text-red-800';
+                badge.innerHTML = `<i data-lucide="ban" class="w-3 h-3 inline mr-1"></i> Suspension`;
+            } else {
+                badge.className += ' bg-yellow-200 text-yellow-800';
+                badge.innerHTML = `<i data-lucide="cake" class="w-3 h-3 inline mr-1"></i> Holiday`;
+            }
+            dayDiv.appendChild(badge);
+            
+            const desc = document.createElement('div');
+            desc.className = 'text-[10px] text-gray-600 mt-1 truncate';
+            desc.title = holiday.description;
+            desc.textContent = holiday.description.length > 20 ? holiday.description.slice(0,18)+'...' : holiday.description;
+            dayDiv.appendChild(desc);
+            
+            if (holiday.is_suspended && holiday.time_coverage && holiday.time_coverage !== 'Full Day') {
+                const coverage = document.createElement('div');
+                coverage.className = 'text-[9px] text-red-600 font-bold mt-0.5';
+                coverage.textContent = holiday.time_coverage;
+                dayDiv.appendChild(coverage);
+            }
+        }
+        
+        grid.appendChild(dayDiv);
+    }
+    
+    // Refresh lucide icons if any
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function loadUpcomingEvents() {
+    const container = document.getElementById('upcoming-events');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="flex justify-center py-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div></div>';
+    
+    const today = getLocalDateString();
+    const nextYear = new Date();
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+    const endDate = getLocalDateString(nextYear);
+    
+    const holidays = await fetchHolidays(today, endDate);
+    // Sort by date
+    holidays.sort((a,b) => a.holiday_date.localeCompare(b.holiday_date));
+    const upcoming = holidays.slice(0, 5);
+    
+    if (upcoming.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">No upcoming holidays or suspensions.</p>';
+        return;
+    }
+    
+    container.innerHTML = upcoming.map(h => {
+        const dateObj = new Date(h.holiday_date);
+        const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const typeLabel = h.is_suspended ? 'Suspension' : 'Holiday';
+        const typeColor = h.is_suspended ? 'text-red-600 bg-red-50' : 'text-yellow-600 bg-yellow-50';
+        return `
+            <div class="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div class="min-w-[50px] text-center">
+                    <div class="font-black text-gray-800">${dateObj.getDate()}</div>
+                    <div class="text-[10px] font-bold text-gray-400 uppercase">${dateObj.toLocaleDateString('en-US', { month: 'short' })}</div>
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-black px-2 py-0.5 rounded-full ${typeColor}">${typeLabel}</span>
+                        ${h.is_suspended && h.time_coverage !== 'Full Day' ? `<span class="text-xs font-bold text-orange-600">${h.time_coverage}</span>` : ''}
+                    </div>
+                    <p class="font-bold text-gray-800 text-sm mt-1">${escapeHtml(h.description) || 'Event'}</p>
+                    ${h.target_grades && h.target_grades !== 'All Levels' ? `<p class="text-[10px] text-gray-500 mt-0.5">Affects: ${h.target_grades}</p>` : ''}
+                </div>
             </div>
         `;
-    }
-    
-    // Fill remaining cells to complete the grid
-    const totalCells = startDayOfWeek + daysInMonth;
-    const remainingCells = (7 - (totalCells % 7)) % 7;
-    for (let i = 0; i < remainingCells; i++) {
-        html += '<div class="calendar-day empty"></div>';
-    }
-    
-    container.innerHTML = html;
+    }).join('');
 }
 
-/**
- * Get the status of a specific day
- * @param {string} dateStr - Date in YYYY-MM-DD format
- * @returns {object} - { type: 'school-day'|'holiday'|'event'|'weekend', isWeekend: boolean, data: object }
- */
-function getDayStatus(dateStr) {
-    const date = new Date(dateStr);
-    const dayOfWeek = date.getDay();
-    
-    // Check if weekend
-    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    
-    // Check holidays
-    const holiday = calendarData.holidays.find(h => {
-        const holidayDate = new Date(h.holiday_date);
-        return holidayDate.toISOString().split('T')[0] === dateStr;
+// Helper (already in parent-utils but ensure it's available)
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
     });
-    
-    if (holiday) {
-        return { type: 'holiday', isWeekend, data: holiday };
-    }
-    
-    // Check events
-    const event = calendarData.events.find(e => {
-        if (!e.scheduled_at) return false;
-        const eventDate = new Date(e.scheduled_at);
-        return eventDate.toISOString().split('T')[0] === dateStr;
-    });
-    
-    if (event) {
-        return { type: 'event', isWeekend, data: event };
-    }
-    
-    // Regular school day
-    if (isWeekend) {
-        return { type: 'weekend', isWeekend: true, data: null };
-    }
-    
-    return { type: 'school-day', isWeekend: false, data: null };
 }
 
-/**
- * Render upcoming events list
- */
-async function renderUpcomingEvents() {
-    const container = document.getElementById('upcoming-events');
-    
-    try {
-        const today = new Date();
-        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
-        
-        // Fetch upcoming events and holidays
-        const [{ data: holidays }, { data: events }] = await Promise.all([
-            supabase
-                .from('holidays')
-                .select('*')
-                .gte('holiday_date', today.toISOString().split('T')[0])
-                .lte('holiday_date', nextMonth.toISOString().split('T')[0])
-                .order('holiday_date')
-                .limit(5),
-            supabase
-                .from('announcements')
-                .select('id, title, content, scheduled_at, priority')
-                .not('scheduled_at', 'is', null)
-                .gte('scheduled_at', today.toISOString().split('T')[0])
-                .lte('scheduled_at', nextMonth.toISOString().split('T')[0])
-                .order('scheduled_at')
-                .limit(5)
-        ]);
-        
-        // Combine and sort
-        const items = [];
-        
-        (holidays || []).forEach(h => {
-            items.push({
-                date: h.holiday_date,
-                title: h.description,
-                type: 'holiday',
-                icon: '🎄'
-            });
-        });
-        
-        (events || []).forEach(e => {
-            items.push({
-                date: e.scheduled_at,
-                title: e.title,
-                type: 'event',
-                icon: '🎉'
-            });
-        });
-        
-        // Sort by date
-        items.sort((a, b) => new Date(a.date) - new Date(b.date));
-        
-        // Take top 5
-        const topItems = items.slice(0, 5);
-        
-        if (topItems.length === 0) {
-            container.innerHTML = `
-                <p class="text-center text-gray-500 py-4 text-sm">No upcoming events</p>
-            `;
-            return;
-        }
-        
-        container.innerHTML = topItems.map(item => {
-            const date = new Date(item.date);
-            const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            
-            const bgClass = item.type === 'holiday' 
-                ? 'bg-red-50 border-red-100' 
-                : 'bg-yellow-50 border-yellow-100';
-            
-            return `
-                <div class="flex items-center gap-3 p-3 ${bgClass} rounded-xl border">
-                    <span class="text-xl">${item.icon}</span>
-                    <div class="flex-1 min-w-0">
-                        <p class="font-medium text-gray-800 text-sm truncate">${item.title}</p>
-                        <p class="text-xs text-gray-500">${dateStr}</p>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-    } catch (err) {
-        console.error('Error loading upcoming events:', err);
-        container.innerHTML = `
-            <p class="text-center text-gray-500 py-4 text-sm">Unable to load events</p>
-        `;
-    }
-}
-
-/**
- * Navigate to previous month
- */
-async function prevMonth() {
-    currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
-    await loadCalendarData();
-    renderCalendar();
-    renderUpcomingEvents();
-}
-
-/**
- * Navigate to next month
- */
-async function nextMonth() {
-    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
-    await loadCalendarData();
-    renderCalendar();
-    renderUpcomingEvents();
-}
-
-// Make functions available globally
-window.prevMonth = prevMonth;
-window.nextMonth = nextMonth;
+// Make navigation functions global for inline onclick
+window.prevMonth = () => changeMonth(-1);
+window.nextMonth = () => changeMonth(1);

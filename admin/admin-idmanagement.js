@@ -291,12 +291,12 @@ function closeViewIdModal() {
     closeViewIdDrawer();
 }
 
-// FIXED: Helper function for consistent ID generation across all files
+// FIXED: Helper function for consistent ID generation across all files (4-character suffix)
 function generateOfficialID(prefix, year, identifierSource) {
     const cleanSource = String(identifierSource).replace(/\D/g, '');
     const last4 = cleanSource.slice(-4).padStart(4, '0');
-    // Use 3-char suffix as per requirements (EDU-YYYY-1234-ABCD format)
-    const suffix = (Date.now().toString(36).slice(-3) + Math.random().toString(36).substring(2, 5)).toUpperCase();
+    // Generate exactly 4 alphanumeric characters
+    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `${prefix}-${year}-${last4}-${suffix}`;
 }
 
@@ -331,7 +331,7 @@ async function reissueID(dbId) {
         async () => {
             const year = new Date().getFullYear();
             
-            // FIXED: Use standardized generateOfficialID format (EDU-YYYY-XXXX-ABC)
+            // FIXED: Use standardized generateOfficialID format (4-character suffix)
             const newID = generateOfficialID('EDU', year, student.lrn);
 
             const { error } = await supabase.from('students').update({ student_id_text: newID, qr_code_data: newID }).eq('id', dbId);

@@ -1,3 +1,4 @@
+<!-- teacher/teacher-data-analytics.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,39 +32,35 @@
         </div>
         
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
             </a>
-            <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="users" class="w-5 h-5"></i> Homeroom Class
-            </a>
-            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
-            </a>
-            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
+            <a href="teacher-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Attendance
             </a>
             <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
+                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Passes
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
             <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
             </a>
-            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Analytics
-            </a>
-            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
-            </a>
             <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
+            </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
             <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings
             </a>
         </nav>
        
-        
         <!-- Gatekeeper Toggle -->
         <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
             <label class="flex items-center cursor-pointer">
@@ -92,11 +89,6 @@
             <h2 class="text-3xl font-black text-gray-900 tracking-tight" id="page-title">Class Analytics</h2>
             <div class="flex items-center gap-4">
                 <span id="teacher-name" class="font-medium text-gray-600">Loading...</span>
-                <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30" id="user-avatar">T</div>
-            </div>
-        </header>
-                    <div class="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-2xl flex items-center justify-center text-white font-semibold shadow-lg shadow-blue-500/30">T</div>
-                </div>
             </div>
         </header>
 
@@ -204,15 +196,29 @@
                     <p class="text-center text-gray-400 py-4 italic">Loading...</p>
                 </div>
             </div>
+
+            <!-- Predictive Risk Alert -->
+            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mt-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">Predictive Risk Analysis</h3>
+                        <p class="text-sm text-gray-500">Students at risk of chronic absence or tardiness (last 30 days)</p>
+                    </div>
+                </div>
+                <div id="predictive-risk-list" class="space-y-2">
+                    <p class="text-center text-gray-400 py-4 italic">Loading...</p>
+                </div>
+            </div>
         </div>
     </main>
 
-    <script src="teacher-data-analytics.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
 </body>
 </html>
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-    });
-</script>

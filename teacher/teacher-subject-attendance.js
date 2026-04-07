@@ -1,762 +1,253 @@
-// teacher-subject-attendance.js
-// Subject Attendance with Status Protection Logic
-
-// FIX: Add currentUser reference to prevent ReferenceError
-var currentUser = typeof checkSession !== 'undefined' ? checkSession('teachers') : null;
-
-// Redirect if not logged in
-if (!currentUser) {
-    window.location.href = '../index.html';
-}
-
-// Global State for Subject Cards - DECLARED FIRST to prevent TDZ
-let currentSubjectLoadId = null;
-let currentSubjectName = null;
+// teacher-subject-attendance.js - Colored squares, batch save, no auto-save
+let currentSubjectId = null;
+let currentClassId = null;
+let currentSubjectName = '';
+let subjectStudents = [];
+let subjectAttendance = {};      // { student_id: { id, status, hasGateScan } }
+let pendingUpdates = {};         // { student_id: newStatus }
+let selectedDate = new Date().toISOString().split('T')[0];
+let homeroomTeacherId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // UPDATED: Initialize date picker with Asia/Manila timezone - Phase 2 Task 2.1
-    initializeDatePicker();
-    
-    // Load subject cards on page load
-    await loadSubjectLoads();
+    if (!window.currentUser) {
+        window.location.href = '../index.html';
+        return;
+    }
+    document.getElementById('teacher-name').innerText = `Hi, ${window.currentUser.full_name?.split(' ')[0] || 'Teacher'}`;
+    await loadSubjectList();
+    setupEvents();
 });
 
-// UPDATED: Initialize date picker - Phase 2 Task 2.1
-function initializeDatePicker() {
-    const dateInput = document.getElementById('attendance-date');
-    if (dateInput) {
-        // Get current date in Asia/Manila timezone
-        const now = new Date();
-        const manilaOffset = 8 * 60; // UTC+8
-        const localTime = new Date(now.getTime() + (manilaOffset - now.getTimezoneOffset()) * 60000);
-        const todayStr = localTime.toISOString().split('T')[0];
-        
-        // PHASE 3 ENHANCEMENT: Set max to today's date (cannot select future dates)
-        dateInput.max = todayStr;
-        dateInput.value = todayStr;
-        
-        // Set min to cover full school year (July previous year to June next year)
-        const currentYear = localTime.getFullYear();
-        const schoolYearStart = currentYear - 1; // July of previous year
-        const schoolYearEnd = currentYear + 1;   // June of next year
-        dateInput.min = `${schoolYearStart}-07-01`;
-        
-        // Add onchange to reload subject cards when date changes
-        dateInput.onchange = async () => {
-            await loadSubjectLoads();
-        };
-    }
+async function loadSubjectList() {
+    const { data: loads } = await supabase
+        .from('subject_loads')
+        .select('id, subject_name, class_id, classes(adviser_id)')
+        .eq('teacher_id', window.currentUser.id);
+
+    const select = document.getElementById('subject-select');
+    select.innerHTML = '<option value="">-- Select Subject --</option>';
+    loads?.forEach(load => {
+        const option = document.createElement('option');
+        option.value = load.id;
+        option.textContent = `${load.subject_name} (Class ${load.class_id})`;
+        select.appendChild(option);
+        if (load.classes) homeroomTeacherId = load.classes.adviser_id;
+    });
 }
 
-// PHASE 3: Load attendance for selected date
-async function loadAttendanceForDate() {
-    const dateInput = document.getElementById('attendance-date');
-    const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
-    
-    // Fetch attendance logs for the selected date
-    if (currentSubjectLoadId) {
-        await loadSubjectStudents(currentSubjectLoadId);
-    }
-}
+function setupEvents() {
+    document.getElementById('load-subject').addEventListener('click', async () => {
+        currentSubjectId = document.getElementById('subject-select').value;
+        if (!currentSubjectId) return;
 
-// UPDATED: Handle date change - Phase 2 Task 2.1 & 2.2
-function handleDateChange() {
-    const dateInput = document.getElementById('attendance-date');
-    if (dateInput) {
-        // Reload subjects based on the new date
-        loadSubjectLoads();
-        
-        // Clear student list when date changes
-        const studentList = document.getElementById('subject-student-list');
-        const emptyState = document.getElementById('empty-state');
-        if (studentList) studentList.classList.add('hidden');
-        if (emptyState) emptyState.classList.remove('hidden');
-        
-        // Reset stats
-        document.getElementById('total-students').textContent = '--';
-        document.getElementById('present-count').textContent = '--';
-        document.getElementById('absent-count').textContent = '--';
-        document.getElementById('late-count').textContent = '--';
-    }
-}
-
-/**
- * Get day code from date for schedule matching
- * Monday = M, Tuesday = T, Wednesday = W, Thursday = Th, Friday = F, Saturday = S
- */
-function getDayCode(dateStr) {
-    const date = new Date(dateStr + 'T00:00:00');
-    const day = date.getDay();
-    const dayCodes = ['Su', 'M', 'T', 'W', 'Th', 'F', 'Sa']; // Fixed to match admin/dashboard schema
-    return dayCodes[day];
-}
-
-// DEBUG: Add diagnostic logging for subject attendance
-if (window.DEBUG) {
-    console.log('=== SUBJECT ATTENDANCE DEBUG ===');
-    console.log('currentUser:', currentUser);
-}
-
-// ==========================================
-// CUP THEORY IMPLEMENTATION
-// ==========================================
-
-/**
- * Determine if current subject is the first one of the day for a class
- * Used for Rule 1: 1st Subject Spillover
- * @param {string} classId - The class ID
- * @param {string} subjectLoadId - Current subject load ID
- * @param {string} dateStr - Date in YYYY-MM-DD format
- * @returns {Promise<boolean>} - True if this is the first subject
- */
-async function isFirstSubjectOfDay(classId, subjectLoadId, dateStr) {
-    try {
-        const dayCode = getDayCode(dateStr);
-        
-        // Fetch all subject loads for this class on this day
-        const { data: subjects } = await supabase
+        const { data: subj } = await supabase
             .from('subject_loads')
-            .select('id, subject_name, schedule_time_start')
-            .eq('class_id', classId)
-            .like('schedule_days', `%${dayCode}%`);
-        
-        if (!subjects || subjects.length === 0) return false;
-        
-        // Sort by schedule_time_start to find the first subject
-        subjects.sort((a, b) => {
-            if (!a.schedule_time_start) return 1;
-            if (!b.schedule_time_start) return -1;
-            return a.schedule_time_start.localeCompare(b.schedule_time_start);
-        });
-        
-        // Return true if current subject is the first one
-        return subjects[0]?.id === subjectLoadId;
-    } catch (err) {
-        console.error('Error determining first subject:', err);
-        return false;
-    }
-}
-
-/**
- * Get Homeroom status for a student from attendance_logs
- * Used for Rule 1: 1st Subject Spillover
- * @param {string} studentId - Student ID
- * @param {string} dateStr - Date in YYYY-MM-DD format
- * @returns {Promise<string>} - Homeroom status
- */
-async function getHomeroomStatus(studentId, dateStr) {
-    try {
-        const { data: log } = await supabase
-            .from('attendance_logs')
-            .select('status')
-            .eq('student_id', studentId)
-            .eq('log_date', dateStr)
+            .select('subject_name, class_id')
+            .eq('id', currentSubjectId)
             .single();
-        
-        return log?.status || 'Absent';
-    } catch (err) {
-        return 'Absent';
+
+        currentSubjectName = subj.subject_name;
+        currentClassId = subj.class_id;
+        document.getElementById('subject-name-display').innerText = currentSubjectName;
+
+        await loadSubjectStudents();
+        await loadSubjectAttendance();
+        pendingUpdates = {};
+        renderSubjectChecklist();
+    });
+
+    const dateInput = document.getElementById('attendance-date');
+    if (dateInput) {
+        dateInput.value = selectedDate;
+        dateInput.addEventListener('change', async () => {
+            selectedDate = dateInput.value;
+            if (currentSubjectId) {
+                await loadSubjectAttendance();
+                pendingUpdates = {};
+                renderSubjectChecklist();
+            }
+        });
+    }
+
+    const saveBtn = document.getElementById('save-subject-attendance-btn');
+    if (saveBtn) saveBtn.addEventListener('click', saveAllPending);
+
+    const viewTableBtn = document.getElementById('view-subject-table-btn');
+    if (viewTableBtn) {
+        viewTableBtn.addEventListener('click', () => {
+            window.location.href = 'teacher-subject-attendance-table.html';
+        });
     }
 }
 
-/**
- * Load Subject Loads as Cards - UPDATED: Card Grid Layout
- */
-async function loadSubjectLoads() {
-    const container = document.getElementById('subject-cards-container');
-    if (!container) return;
+async function loadSubjectStudents() {
+    const { data } = await supabase
+        .from('students')
+        .select('id, full_name, parent_id')
+        .eq('class_id', currentClassId)
+        .eq('status', 'Enrolled')
+        .order('full_name');
+    subjectStudents = data || [];
+}
 
-    container.innerHTML = '<div class="col-span-full text-center py-8 text-blue-400 font-bold animate-pulse">Loading your classes...</div>';
+async function loadSubjectAttendance() {
+    if (!subjectStudents.length) return;
+    const { data: logs } = await supabase
+        .from('attendance_logs')
+        .select('id, student_id, status, time_in')
+        .eq('log_date', selectedDate)
+        .in('student_id', subjectStudents.map(s => s.id));
+
+    subjectAttendance = {};
+    logs?.forEach(log => {
+        subjectAttendance[log.student_id] = {
+            id: log.id,
+            status: log.status || 'Absent',
+            hasGateScan: !!log.time_in
+        };
+    });
+}
+
+function renderSubjectChecklist() {
+    const tbody = document.getElementById('subject-checklist-tbody');
+    if (!subjectStudents.length) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center py-8">No students in this class</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = subjectStudents.map(student => {
+        const original = subjectAttendance[student.id] || { status: 'Absent', hasGateScan: false };
+        const isLocked = original.hasGateScan === true;
+        const status = pendingUpdates[student.id] !== undefined ? pendingUpdates[student.id] : original.status;
+        let bgColor = '', displayText = '';
+        switch (status) {
+            case 'On Time': bgColor = 'bg-green-500'; displayText = 'Present'; break;
+            case 'Late': bgColor = 'bg-orange-500'; displayText = 'Late'; break;
+            case 'Absent': bgColor = 'bg-red-500'; displayText = 'Absent'; break;
+            case 'Excused': bgColor = 'bg-blue-500'; displayText = 'Excused'; break;
+            default: bgColor = 'bg-gray-300'; displayText = '—';
+        }
+        const lockClass = isLocked ? 'locked-square opacity-60' : '';
+        const lockIcon = isLocked ? '🔒 ' : '';
+        return `
+            <tr class="border-b">
+                <td class="px-4 py-3 font-medium sticky left-0 bg-white">${lockIcon}${escapeHtml(student.full_name)}</td>
+                <td class="px-4 py-3">
+                    <div class="status-square ${bgColor} ${lockClass} text-white"
+                         data-student="${student.id}" data-locked="${isLocked}">
+                        ${displayText}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Attach click handlers (only if not locked)
+    document.querySelectorAll('.status-square').forEach(square => {
+        const isLocked = square.dataset.locked === 'true';
+        if (isLocked) return;
+        square.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const studentId = square.dataset.student;
+            const original = subjectAttendance[studentId] || { status: 'Absent', hasGateScan: false };
+            const currentStatus = pendingUpdates[studentId] !== undefined ? pendingUpdates[studentId] : original.status;
+            const nextStatus = getNextStatus(currentStatus);
+            pendingUpdates[studentId] = nextStatus;
+            renderSubjectChecklist();
+        });
+    });
+}
+
+function getNextStatus(current) {
+    const order = ['On Time', 'Late', 'Absent', 'Excused'];
+    let idx = order.indexOf(current);
+    if (idx === -1) idx = 0;
+    return order[(idx + 1) % order.length];
+}
+
+async function saveAllPending() {
+    if (Object.keys(pendingUpdates).length === 0) {
+        showNotification('No changes to save', 'info');
+        return;
+    }
+
+    const upserts = [];
+    for (const [studentId, newStatus] of Object.entries(pendingUpdates)) {
+        const original = subjectAttendance[studentId] || {};
+        if (original.hasGateScan) continue;
+        const payload = {
+            student_id: parseInt(studentId),
+            log_date: selectedDate,
+            status: newStatus,
+            time_in: original.time_in || null,
+            remarks: `[${currentSubjectName}: ${newStatus}]`
+        };
+        if (original.id) payload.id = original.id;
+        upserts.push(payload);
+    }
+
+    if (upserts.length === 0) {
+        showNotification('No editable changes to save', 'info');
+        return;
+    }
 
     try {
-        // DEBUG: Log the query parameters
-        if (window.DEBUG) {
-            console.log('Loading subject loads for teacher ID:', currentUser.id);
-        }
-        
-        const { data: subjectLoads, error } = await supabase
-            .from('subject_loads')
-            .select('*, classes(grade_level, department)')
-            .eq('teacher_id', currentUser.id);
-
-        // DEBUG: Log raw database response
-        if (window.DEBUG) {
-            console.log('Raw subject loads from DB:', subjectLoads);
-            console.log('Query error (if any):', error);
-        }
+        const { error } = await supabase
+            .from('attendance_logs')
+            .upsert(upserts, { onConflict: 'student_id, log_date' });
 
         if (error) throw error;
 
-        // UPDATED: Show ALL subjects regardless of the day
-        // Teachers should be able to view their classes anytime
-        const todaysSubjects = subjectLoads || [];
+        await loadSubjectAttendance();
+        pendingUpdates = {};
+        renderSubjectChecklist();
+        showNotification(`Saved ${upserts.length} attendance record(s) for ${currentSubjectName}`, 'success');
 
-        // DEBUG: Log filtered results (now showing all)
-        if (window.DEBUG) {
-            console.log('All subjects (day filter removed):', todaysSubjects);
-            console.log('Schedule days in DB:', subjectLoads.map(s => s.schedule_days));
-        }
-
-        if (todaysSubjects.length === 0) {
-            container.innerHTML = `<div class="col-span-full bg-white rounded-2xl p-8 text-center border border-dashed border-gray-200"><p class="text-gray-500 font-medium">No classes scheduled for this date.</p></div>`;
-            document.getElementById('subject-student-list').classList.add('hidden');
-            document.getElementById('empty-state').classList.remove('hidden');
-            return;
-        }
-
-        // Render Cards
-        container.innerHTML = todaysSubjects.map(load => `
-            <div onclick="selectSubjectCard('${load.id}', '${load.subject_name}')" 
-                 id="card-${load.id}"
-                 class="subject-card cursor-pointer bg-white p-5 rounded-2xl border-2 border-transparent shadow-sm hover:shadow-md hover:border-blue-200 transition-all group relative">
-                <div class="absolute top-4 right-4 w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i data-lucide="clipboard-check" class="w-4 h-4"></i>
-                </div>
-                <h4 class="font-black text-gray-800 text-lg leading-tight pr-10 mb-1 truncate">${load.subject_name}</h4>
-                <p class="text-xs font-bold text-blue-600 uppercase tracking-wide truncate">
-                    ${load.classes?.grade_level || 'Grade'} - ${load.classes?.department || 'Section'}
-                </p>
-            </div>
-        `).join('');
-        
-        if (window.lucide) lucide.createIcons();
-
-        // Auto-select the first card to save the teacher a click!
-        selectSubjectCard(todaysSubjects[0].id, todaysSubjects[0].subject_name);
-
-    } catch (err) {
-        console.error('Error loading subjects:', err);
-        // DEBUG: Show actual error message
-        const errorMessage = window.DEBUG ? err.message : 'Failed to load subjects.';
-        container.innerHTML = `<div class="col-span-full text-center text-red-500 font-bold py-4">${errorMessage}</div>`;
-        if (window.DEBUG) {
-            alert('Subject Attendance Error: ' + err.message);
-        }
-    }
-}
-
-window.selectSubjectCard = function(subjectId, subjectName) {
-    currentSubjectLoadId = subjectId;
-    currentSubjectName = subjectName;
-
-    // Visual selection update
-    document.querySelectorAll('.subject-card').forEach(card => {
-        card.classList.remove('border-blue-500', 'ring-4', 'ring-blue-500/20');
-        card.classList.add('border-transparent');
-    });
-    const activeCard = document.getElementById(`card-${subjectId}`);
-    if (activeCard) {
-        activeCard.classList.remove('border-transparent');
-        activeCard.classList.add('border-blue-500', 'ring-4', 'ring-blue-500/20');
-    }
-
-    // FORCE UI TOGGLE: Hide Empty State, Show Table
-    const emptyState = document.getElementById('empty-state');
-    const studentListContainer = document.getElementById('subject-student-list');
-    
-    if (emptyState) emptyState.classList.add('hidden');
-    if (studentListContainer) studentListContainer.classList.remove('hidden');
-
-    // Load the students
-    loadSubjectStudents(subjectId);
-}
-
-/**
- * Get day name from date string
- */
-function getDayName(dateStr) {
-    const date = new Date(dateStr + 'T00:00:00');
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[date.getDay()];
-}
-
-/**
- * Load Students for Selected Subject - UPDATED: Use selected date instead of today - Phase 2 Task 2.2 & 2.3
- * Shows current gate status for each student
- */
-async function loadSubjectStudents(subjectLoadId) {
-    const studentList = document.getElementById('subject-student-list');
-    const emptyState = document.getElementById('empty-state');
-    const studentTableBody = document.getElementById('student-table-body');
-    
-    if (!subjectLoadId) {
-        if (studentList) studentList.classList.add('hidden');
-        if (emptyState) emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    try {
-        // UPDATED: Get the selected date from the date picker - Phase 2 Task 2.2
-        const dateInput = document.getElementById('attendance-date');
-        const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
-        const isToday = selectedDate === new Date().toISOString().split('T')[0];
-        
-        // Use global state from Card engine
-        let subjectName = currentSubjectName || 'Subject';
-        
-        const { data: subjectLoad } = await supabase
-            .from('subject_loads')
-            .select('class_id, subject_name')
-            .eq('id', subjectLoadId)
-            .single();
-        
-        if (!subjectLoad) return;
-        
-        // Use the subject name from the database - use different variable name to avoid TDZ
-        const dbSubjectName = subjectLoad.subject_name || subjectName;
-        
-        // UPDATED: Use selected date for status lookup - Phase 2 Task 2.2
-        const lookupDate = selectedDate;
-        
-        // Fetch all students in the class
-        const { data: allStudents, error: studentsError } = await supabase
-            .from('students')
-            .select('id, student_id_text, full_name')
-            .eq('class_id', subjectLoad.class_id)
-            .order('full_name');
-        
-        if (studentsError) throw studentsError;
-        
-        // UPDATED: Fetch attendance logs for the SELECTED DATE - Phase 2 Task 2.2
-        const studentIds = allStudents.map(s => s.id);
-        let dateLogs = [];
-        if (studentIds.length > 0) {
-            const { data: logs } = await supabase
-                .from('attendance_logs')
-                .select('student_id, status, time_in, remarks')
-                .eq('log_date', lookupDate)
-                .in('student_id', studentIds);
-            dateLogs = logs || [];
-        }
-        
-        // UPDATED: Fetch clinic visits for the SELECTED DATE - Phase 2 Task 2.3
-        // Only show clinic status if viewing today (can't track clinic for past dates)
-        let todayClinicVisits = {};
-        if (isToday && studentIds.length > 0) {
-            const { data: visits } = await supabase
-                .from('clinic_visits')
-                .select('student_id, status')
-                .eq('status', 'In Clinic')
-                .is('time_out', null)
-                .in('student_id', studentIds);
-            (visits || []).forEach(v => todayClinicVisits[v.student_id] = v);
-        }
-
-        // Build lookup map
-        const logsMap = {};
-        dateLogs.forEach(log => {
-            logsMap[log.student_id] = log;
-        });
-        
-        // Show student list, hide empty state
-        if (studentList) studentList.classList.remove('hidden');
-        if (emptyState) emptyState.classList.add('hidden');
-        
-        if (!allStudents || allStudents.length === 0) {
-            if (studentTableBody) {
-                studentTableBody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-500">No students found in this class</td></tr>';
+        // Notify parent and homeroom for Late/Absent
+        for (const upd of upserts) {
+            if (upd.status === 'Late' || upd.status === 'Absent') {
+                await notifyParentAndHomeroom(upd.student_id, upd.status);
             }
-            return;
-        }
-        
-        // Calculate stats
-        let presentCount = 0, absentCount = 0, lateCount = 0;
-        
-        // CUP THEORY: Check if this is the first subject of the day BEFORE rendering
-        // FIX: Use subjectLoad.class_id directly (already fetched above) instead of undefined currentClassId
-        const classId = subjectLoad.class_id;
-        let isFirstSubject = false;
-        if (classId && currentSubjectLoadId) {
-            isFirstSubject = await isFirstSubjectOfDay(classId, currentSubjectLoadId, lookupDate);
-        }
-        
-        // Render students
-        if (studentTableBody) {
-            studentTableBody.innerHTML = allStudents.map(student => {
-                const log = logsMap[student.id];
-                const gateStatus = log?.status || 'No Scan';
-                const isInClinic = isToday && !!todayClinicVisits[student.id];
-                
-                const remarks = log?.remarks || '';
-                
-                // Determine subject-specific status from remarks (Rule 2: Already Checked)
-                const currentSubjectStatus = getSubjectStatusFromRemarks(remarks, currentSubjectName);
-                const isAlreadyChecked = !!currentSubjectStatus;
-                
-                // CUP THEORY: Rule 1 - First subject inherits Homeroom status
-                let displayStatus;
-                let isInherited = false;
-                
-                if (currentSubjectStatus) {
-                    // Already has subject-specific status
-                    displayStatus = currentSubjectStatus;
-                } else if (isFirstSubject) {
-                    // Rule 1: First subject inherits Homeroom status
-                    displayStatus = gateStatus === 'No Scan' ? 'Absent' : gateStatus;
-                    isInherited = true;
-                } else {
-                    // Not first subject and no status yet - leave blank (awaiting teacher input)
-                    displayStatus = isInClinic ? 'In Clinic' : '';
-                }
-                
-                // Status badge for gate status
-                const statusBadge = getStatusBadge(gateStatus);
-                
-                // ==========================================
-                // GATE VERIFIED BADGE & LOCK LOGIC (SUBJECT)
-                // ==========================================
-                const hasGateScan = !!log?.time_in;
-                const gateVerifiedBadge = hasGateScan 
-                    ? `<span class="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-md"><i data-lucide="shield-check" class="w-3 h-3 inline mr-1"></i>Gate</span>` 
-                    : '';
-                
-                // Track stats (use displayStatus)
-                if (displayStatus === 'On Time' || displayStatus === 'Present') presentCount++;
-                else if (displayStatus === 'Absent') absentCount++;
-                else if (displayStatus === 'Late') lateCount++;
-                
-                return `
-                    <tr class="hover:bg-blue-50/50 transition-colors">
-                        <td class="px-6 py-4">
-                            <div class="flex items-center gap-3">
-                                <div class="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
-                                    <img src="${student.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover ${student.profile_photo_url ? 'object-top' : ''}">
-                                    ${isAlreadyChecked ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border border-white rounded-full" title="Attendance already recorded for this subject today"></div>' : ''}
-                                </div>
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <p class="font-bold text-gray-800">${student.full_name}</p>
-                                        ${gateVerifiedBadge}
-                                        ${isAlreadyChecked ? '<span class="bg-emerald-50 text-emerald-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-emerald-200">Checked</span>' : ''}
-                                        ${isInherited ? '<span class="bg-blue-50 text-blue-600 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-widest border border-blue-200">Inherited</span>' : ''}
-                                        <button onclick="viewSubjectStudentDetails('${student.id}', '${escapeHtml(student.full_name)}', '${student.profile_photo_url || ''}', '${student.student_id_text || ''}')" class="text-blue-400 hover:text-blue-600 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg p-1.5" title="View Subject Stats"><i data-lucide="eye" class="w-3 h-3"></i></button>
-                                    </div>
-                                    <p class="text-xs text-gray-500 font-mono">${student.student_id_text || 'No ID'}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-6 py-4">
-                            <div class="flex items-center gap-2">
-                                <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Present')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Present' || displayStatus === 'On Time' ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-emerald-100 hover:text-emerald-700'}">
-                                    Present
-                                </button>
-                                <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Late')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Late' ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-700'}">
-                                    Late
-                                </button>
-                                <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${escapeHtml(currentSubjectName)}', 'Absent')" 
-                                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${displayStatus === 'Absent' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300 ring-offset-1' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-700'}">
-                                    Absent
-                                </button>
-                                ${displayStatus === 'Excused' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-500 text-white shadow-md ring-2 ring-blue-300 ring-offset-1">Excused</span>` : ''}
-                                ${displayStatus === 'In Clinic' ? `<span class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-amber-500 text-white shadow-md ring-2 ring-amber-300 ring-offset-1">In Clinic</span>` : ''}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        // Update stats cards
-        document.getElementById('total-students').textContent = allStudents.length;
-        document.getElementById('present-count').textContent = presentCount;
-        document.getElementById('absent-count').textContent = absentCount;
-        document.getElementById('late-count').textContent = lateCount;
-        
-    } catch (err) {
-        console.error('Error in loadSubjectStudents:', err);
-        showNotification('Error loading students', 'error');
-    }
-}
-
-/**
- * Get subject-specific status from remarks field
- */
-function getSubjectStatusFromRemarks(remarks, subjectName) {
-    // FIX: Read from JSONB object instead of parsing a string.
-    if (remarks && typeof remarks === 'object' && subjectName) {
-        return remarks[subjectName] || null;
-    }
-    return null;
-}
-
-/**
- * Escape regex special characters
- */
-function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-/**
- * Get status badge styling
- */
-function getStatusBadge(status) {
-    switch (status) {
-        case 'In Clinic':
-            return 'bg-blue-100 text-blue-800';
-        case 'On Time':
-        case 'Present':
-            return 'bg-green-100 text-green-800';
-        case 'Late':
-            return 'bg-yellow-100 text-yellow-800';
-        case 'Absent':
-            return 'bg-red-100 text-red-800';
-        case 'Excused':
-            return 'bg-purple-100 text-purple-800';
-        default:
-            return 'bg-gray-100 text-gray-600';
-    }
-}
-
-/**
- * View Subject Student Details - Privacy Restricted Modal
- */
-window.viewSubjectStudentDetails = async function(studentId, name, photo, idText) {
-    document.getElementById('subject-student-modal').classList.remove('hidden');
-    document.getElementById('sub-modal-name').innerText = name;
-    document.getElementById('sub-modal-id').innerText = idText || 'N/A';
-    document.getElementById('sub-modal-img').innerHTML = `<img src="${photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover">`;
-    document.getElementById('sub-modal-rate').innerText = '...';
-    
-    if (window.lucide) lucide.createIcons();
-
-    try {
-        // Look up only this subject's records within the JSONB remarks column
-        const { data } = await supabase.from('attendance_logs').select('remarks').eq('student_id', studentId).not('remarks', 'is', null);
-        let present = 0, total = 0;
-        if (data) {
-            data.forEach(log => {
-                if (log.remarks && log.remarks[currentSubjectName]) {
-                    total++;
-                    if (['Present', 'Late'].includes(log.remarks[currentSubjectName])) present++;
-                }
-            });
-        }
-        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
-        document.getElementById('sub-modal-rate').innerText = total > 0 ? `${rate}%` : 'N/A';
-    } catch (e) {
-        document.getElementById('sub-modal-rate').innerText = 'Err';
-    }
-}
-window.closeSubjectModal = () => document.getElementById('subject-student-modal').classList.add('hidden');
-
-/**
- * Mark Subject Attendance with Status Protection
- * PROTECTS: Late and Excused statuses from being overwritten
- * PRESERVES: Gate time_in data when updating
- * UPDATED: Bulletproof upsert - includes existing ID to prevent duplicates
- */
-async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus, skipReload = false) {
-    // UPDATED: Add double-submit prevention
-    const studentRow = document.querySelector(`button[onclick*="'${studentId}'"]`)?.closest('tr');
-    const buttons = studentRow?.querySelectorAll('button') || [];
-    
-    try {
-        // Disable buttons to prevent double-submission
-        buttons.forEach(btn => btn.disabled = true);
-
-        // UPDATED: Use selected date from date picker - Phase 2 Task 2.4
-        const dateInput = document.getElementById('attendance-date');
-        const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
-        
-        // 1. Fetch existing daily log to preserve gate data AND get ID for upsert
-        const { data: existingLog } = await supabase
-            .from('attendance_logs')
-            .select('id, status, time_in, remarks')
-            .eq('student_id', studentId)
-            .eq('log_date', selectedDate)
-            .maybeSingle();
-
-        // 2. PROTECT specific statuses
-        // If student is already Late or Excused, subject teacher cannot override
-        if (existingLog && (existingLog.status === 'Late' || existingLog.status === 'Excused') && newStatus !== 'Excused') {
-            showNotification(`Cannot change status: Student is marked as ${existingLog.status} at the gate`, 'error');
-            return;
-        }
-
-        // 3. FIX: Work with JSONB remarks for atomic updates.
-        const existingRemarks = (existingLog?.remarks && typeof existingLog.remarks === 'object') ? existingLog.remarks : {};
-        const newRemarks = { ...existingRemarks, [subjectName]: newStatus };
-
-        // 4. Auto-calculate overall status from all subject statuses in the new remarks
-        const allSubjectStatuses = Object.values(newRemarks);
-        let overallStatus = 'On Time'; // Default if all are present
-        if (allSubjectStatuses.includes('Excused')) {
-            overallStatus = 'Excused';
-        } else if (allSubjectStatuses.includes('Absent')) {
-            overallStatus = 'Absent';
-        } else if (allSubjectStatuses.includes('Late')) {
-            overallStatus = 'Late';
-        }
-
-        // If the gate status was 'Late', the overall status must remain 'Late' unless a subject is 'Absent' or 'Excused'.
-        if (existingLog?.status === 'Late' && overallStatus === 'On Time') {
-            overallStatus = 'Late';
-        }
-
-        // 5. Perform the Upsert - PRESERVE existing time_in from gate.
-        // The `onConflict` constraint handles the "Double Identity" bug by ensuring only one record per day.
-        // Using JSONB remarks makes this single record reliable.
-        // UPDATED: Use selectedDate instead of today - Phase 2 Task 2.4
-        // RETROACTIVE TIME-IN PROTECTION: If no gate scan exists, we must safely handle the fallback time_in
-        let fallbackTimeIn = null;
-        if (overallStatus === 'On Time' || overallStatus === 'Late') {
-            // If marked present retroactively, generate a fake 8:00 AM timestamp for the SELECTED date, NOT today.
-            fallbackTimeIn = new Date(`${selectedDate}T08:00:00`).toISOString();
-        }
-
-        // BULLETPROOF: Include existing ID if available to UPDATE instead of INSERT
-        const payload = {
-            student_id: studentId,
-            log_date: selectedDate,
-            time_in: existingLog?.time_in || fallbackTimeIn,
-            status: overallStatus,
-            remarks: newRemarks
-        };
-        
-        // If existing record found, include its ID to UPDATE (prevents duplicate inserts)
-        if (existingLog && existingLog.id) {
-            payload.id = existingLog.id;
-        }
-
-        const { error } = await supabase.from('attendance_logs').upsert(payload, {
-            onConflict: 'student_id, log_date'
-        });
-        
-        if (error) {
-            console.error('Error marking attendance:', error);
-            showNotification('Error marking attendance', 'error');
-            return;
-        }
-        
-        // NEW: Log the successful action
-        if (typeof logTeacherAction === 'function') {
-            logTeacherAction('SUBJECT_ATTENDANCE_MARK', 
-                { subject_name: subjectName, new_status: newStatus, overall_status: overallStatus }, 
-                studentId, 'student');
-        }
-
-        // INSTANT UI UPDATE: Immediately update button styles before reload
-        const statusConfig = {
-            'Present': { bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-300' },
-            'Late': { bg: 'bg-amber-500', text: 'text-white', ring: 'ring-amber-300' },
-            'Absent': { bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-300' },
-            'Excused': { bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-300' }
-        };
-        
-        const config = statusConfig[newStatus] || statusConfig['Present'];
-        buttons.forEach(btn => {
-            // Reset all buttons to inactive state
-            btn.className = `px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-gray-100 text-gray-500`;
-            // Add hover effect
-            btn.classList.add(newStatus === 'Present' ? 'hover:bg-emerald-100 hover:text-emerald-700' : 
-                             newStatus === 'Late' ? 'hover:bg-amber-100 hover:text-amber-700' :
-                             newStatus === 'Absent' ? 'hover:bg-red-100 hover:text-red-700' :
-                             'hover:bg-blue-100 hover:text-blue-700');
-            // Make the selected button active
-            if (btn.textContent.trim() === newStatus || 
-                (newStatus === 'Present' && btn.textContent.trim() === 'PRESENT') ||
-                (newStatus === 'Late' && btn.textContent.trim() === 'LATE') ||
-                (newStatus === 'Absent' && btn.textContent.trim() === 'ABSENT') ||
-                (newStatus === 'Excused' && btn.textContent.trim() === 'EXCUSED')) {
-                btn.className = `px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${config.bg} ${config.text} shadow-md ring-2 ${config.ring} ring-offset-1`;
-            }
-        });
-        
-        showNotification(`Student marked as ${newStatus}`, 'success');
-        
-        // Refresh the list (unless bulk processing)
-        if (!skipReload && currentSubjectLoadId) {
-            await loadSubjectStudents(currentSubjectLoadId);
-        }
-        
-    } catch (err) {
-        console.error('Error marking subject attendance:', err);
-        showNotification('Error marking attendance', 'error');
-    } finally {
-        // Re-enable buttons
-        buttons.forEach(btn => btn.disabled = false);
-    }
-}
-
-/**
- * Handle subject dropdown change
- */
-function handleSubjectChange() {
-    const subjectId = document.getElementById('subject-select').value;
-    loadSubjectStudents(subjectId);
-}
-
-/**
- * Bulk Mark All Present
- * Finds all un-marked students and marks them present concurrently.
- */
-async function markAllPresent() {
-    const subjectLoadId = currentSubjectLoadId;
-    const subjectName = currentSubjectName;
-
-    if (!subjectLoadId) return showNotification('Please select a subject first', 'error');
-
-    const dateInput = document.getElementById('attendance-date');
-    const selectedDate = dateInput?.value || new Date().toISOString().split('T')[0];
-
-    if (!confirm(`Mark all empty records as 'Present' for ${subjectName}? (Will not overwrite Late or Excused)`)) return;
-
-    const studentRows = document.querySelectorAll('#student-table-body tr');
-    if (studentRows.length === 0 || studentRows[0].textContent.includes('No students')) return;
-
-    const btn = document.querySelector('button[onclick="markAllPresent()"]');
-    const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline-block mr-1 animate-spin"></i> Saving...';
-    btn.disabled = true;
-
-    try {
-        const promises = [];
-        
-        studentRows.forEach(row => {
-            const presentBtn = row.querySelector('button.bg-green-500');
-            if (presentBtn) {
-                const onclickStr = presentBtn.getAttribute('onclick');
-                const match = onclickStr.match(/'([^']+)'/); // Extract studentId
-                if (match && match[1]) {
-                    const studentId = match[1];
-                    // If they don't already have 'Present' visually selected (ring-2 is the active class)
-                    // and their button isn't disabled (protected status)
-                    if (!presentBtn.classList.contains('ring-2') && !presentBtn.disabled) {
-                        promises.push(markSubjectAttendance(studentId, subjectLoadId, subjectName, 'Present', true));
-                    }
-                }
-            }
-        });
-
-        if (promises.length > 0) {
-            await Promise.all(promises);
-            showNotification(`${promises.length} students marked as Present`, 'success');
-            await loadSubjectStudents(subjectLoadId); // Reload UI once at the end
-        } else {
-            showNotification('No applicable students to mark.', 'info');
         }
     } catch (err) {
         console.error(err);
-        showNotification('Error in bulk update', 'error');
-    } finally {
-        btn.innerHTML = originalHTML;
-        btn.disabled = false;
-        if (window.lucide) lucide.createIcons();
+        showNotification('Error saving subject attendance', 'error');
     }
 }
 
-// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
-window.markAllPresent = markAllPresent;
-window.loadAttendanceForDate = loadAttendanceForDate;
+async function notifyParentAndHomeroom(studentId, status) {
+    const student = subjectStudents.find(s => s.id == studentId);
+    if (!student) return;
+
+    if (student.parent_id) {
+        await supabase.from('notifications').insert({
+            recipient_id: student.parent_id,
+            recipient_role: 'parent',
+            title: `Subject Alert: ${status} in ${currentSubjectName}`,
+            message: `Your child ${student.full_name} was marked ${status} in ${currentSubjectName} on ${selectedDate}.`,
+            type: 'attendance_alert',
+            created_at: new Date().toISOString()
+        });
+    }
+
+    if (homeroomTeacherId) {
+        await supabase.from('notifications').insert({
+            recipient_id: homeroomTeacherId,
+            recipient_role: 'teachers',
+            title: `Subject Alert: ${status}`,
+            message: `Student ${student.full_name} was marked ${status} in ${currentSubjectName} on ${selectedDate}.`,
+            type: 'attendance_alert',
+            created_at: new Date().toISOString()
+        });
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+}
+
+function showNotification(msg, type) {
+    if (typeof window.showToast === 'function') window.showToast(msg, type);
+    else alert(msg);
+}

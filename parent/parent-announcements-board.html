@@ -3,178 +3,544 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent Portal - Announcements - Educare</title>
+    <title>Parent Portal - Announcements | Educare</title>
     <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: {
-                        primary: { 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' }
-                    }
-                }
-            }
-        }
-    </script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; }
+        .announcement-card {
+            transition: all 0.2s ease;
+        }
+        .announcement-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px -12px rgba(0, 0, 0, 0.15);
+        }
+        .urgent-pulse {
+            animation: subtlePulse 1.2s infinite;
+        }
+        @keyframes subtlePulse {
+            0% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.02); }
+            100% { opacity: 0.7; transform: scale(1); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .read-badge { background: #e2e8f0; color: #475569; }
+        .unread-badge { background: #3b82f6; color: white; box-shadow: 0 2px 6px rgba(59,130,246,0.3); }
+        .nav-item { color: #6b7280; background: transparent; transition: all 0.2s; }
+        .nav-item.active { color: #16a34a; background: #dcfce7; }
+        .nav-item:hover:not(.active) { background: #f1f5f9; color: #334155; }
+    </style>
 </head>
-<body class="bg-gray-50 font-sans flex flex-col h-screen">
+<body class="flex flex-col h-screen bg-gray-50">
 
-    <!-- Header with Top Navigation -->
-    <header class="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-        <!-- Main Header Row -->
-        <div class="flex items-center justify-between px-4 py-3">
+    <!-- Header -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
+        <div class="flex items-center justify-between px-4 py-3 max-w-md mx-auto">
             <div class="flex items-center gap-3">
-                <button onclick="navigateTo('dashboard')" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <button onclick="navigateToDashboard()" class="p-2 hover:bg-gray-100 rounded-xl transition-colors">
                     <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                     </svg>
                 </button>
                 <h1 class="font-bold text-lg text-gray-800">Announcements</h1>
             </div>
-            <button onclick="logout()" class="p-2 bg-red-50 hover:bg-red-100 rounded-xl transition-colors">
-                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                </svg>
-            </button>
-        </div>
-        
-        <!-- Top Navigation Bar -->
-        <nav class="flex items-center gap-1 px-4 pb-3 overflow-x-auto scrollbar-hide">
-            <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Home
-            </button>
-            <button onclick="navigateTo('children')" id="nav-children" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                My Children
-            </button>
-            <button onclick="navigateTo('announcements')" id="nav-announcements" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Announcements
-            </button>
-            <button onclick="navigateTo('excuse')" id="nav-excuse" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Excuse Letters
-            </button>
-            <button onclick="navigateTo('schedule')" id="nav-schedule" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Schedule
-            </button>
-        </nav>
-    </header>
-    
-    <style>
-        .nav-item { color: #6b7280; background: transparent; }
-        .nav-item:hover { color: #16a34a; background: #f0fdf4; }
-        .nav-item.active { color: #16a34a; background: #dcfce7; }
-    </style>
-
-    <main class="flex-1 overflow-auto p-4 max-w-md mx-auto w-full">
-        
-        <!-- Welcome Section -->
-        <div class="mb-6">
-            <h2 id="parent-name" class="text-xl font-bold text-gray-800">Welcome Parent</h2>
-            <p class="text-sm text-gray-500">Stay updated with school announcements</p>
-        </div>
-
-        <!-- Loading State -->
-        <div id="loading-indicator" class="flex justify-center py-12">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
-        </div>
-
-        <!-- Announcements List -->
-        <div id="announcements-list" class="space-y-4 hidden">
-            <!-- Announcements populated by JS -->
-        </div>
-
-        <!-- Empty State -->
-        <div id="empty-state" class="hidden">
-            <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-8 border border-gray-200/50 text-center">
-                <div class="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+            <div class="flex items-center gap-2">
+                <span id="unread-badge" class="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full hidden">0</span>
+                <button onclick="logoutParent()" class="p-2 bg-red-50 hover:bg-red-100 rounded-xl transition-colors">
+                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                     </svg>
-                </div>
-                <h3 class="text-lg font-bold text-gray-800 mb-2">No Announcements</h3>
-                <p class="text-sm text-gray-500">Check back later for updates from the school.</p>
+                </button>
             </div>
         </div>
+    </header>
 
+    <main class="flex-1 overflow-auto p-4 max-w-md mx-auto w-full pb-20">
+        <!-- Welcome & Filter Tabs -->
+        <div class="mb-5">
+            <h2 id="parent-name" class="text-xl font-bold text-gray-800">Welcome, Parent</h2>
+            <p class="text-sm text-gray-500">School updates & teacher messages</p>
+        </div>
+
+        <!-- Filter Buttons -->
+        <div class="flex gap-2 bg-white p-1 rounded-2xl shadow-sm mb-5">
+            <button id="filter-all" onclick="setFilter('all')" class="flex-1 py-2 text-sm font-bold rounded-xl transition-all bg-emerald-600 text-white shadow-sm">All</button>
+            <button id="filter-unread" onclick="setFilter('unread')" class="flex-1 py-2 text-sm font-bold rounded-xl text-gray-600 hover:bg-gray-100">Unread</button>
+            <button id="filter-urgent" onclick="setFilter('urgent')" class="flex-1 py-2 text-sm font-bold rounded-xl text-gray-600 hover:bg-gray-100">Urgent</button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+        </div>
+
+        <!-- Announcements List Container -->
+        <div id="announcements-container" class="space-y-4 hidden"></div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden bg-white/80 rounded-2xl p-8 border border-gray-200 text-center">
+            <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                </svg>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">No announcements</h3>
+            <p class="text-sm text-gray-500">Check back later for updates.</p>
+        </div>
     </main>
 
     <!-- Bottom Navigation -->
-    <nav class="h-16 bg-white/80 backdrop-blur-xl border-t border-gray-200 flex justify-around items-center text-xs fixed bottom-0 w-full max-w-md z-20">
-        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <nav class="h-16 bg-white/80 backdrop-blur-xl border-t border-gray-200 fixed bottom-0 w-full max-w-md z-20 flex justify-around items-center text-xs">
+        <button onclick="navigateTo('dashboard')" class="nav-item flex flex-col items-center justify-center py-2 rounded-xl w-16 gap-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
             </svg>
-            <span class="text-xs font-medium">Home</span>
+            <span>Home</span>
         </button>
-        <button onclick="navigateTo('attendance')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button onclick="navigateTo('attendance')" class="nav-item flex flex-col items-center justify-center py-2 rounded-xl w-16 gap-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
-            <span class="text-xs font-medium">Attendance</span>
+            <span>Attendance</span>
         </button>
-        <button onclick="navigateTo('excuse')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button onclick="navigateTo('excuse')" class="nav-item flex flex-col items-center justify-center py-2 rounded-xl w-16 gap-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
-            <span class="text-xs font-medium">Excuse</span>
+            <span>Excuse</span>
         </button>
-        <button onclick="navigateTo('children')" class="flex flex-col items-center justify-center py-2 text-gray-400 hover:text-primary-500 transition-colors gap-1">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button onclick="navigateTo('children')" class="nav-item flex flex-col items-center justify-center py-2 rounded-xl w-16 gap-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
             </svg>
-            <span class="text-xs font-medium">Children</span>
+            <span>Children</span>
         </button>
     </nav>
 
     <!-- Announcement Detail Modal -->
     <div id="announcement-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
-                <div class="flex items-center gap-3">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-5 flex justify-between items-center text-white shrink-0">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
                     </svg>
                     <h3 id="modal-title" class="font-black text-xl uppercase tracking-tight">Announcement</h3>
                 </div>
-                <button onclick="closeModal()" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all hover:rotate-90">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
-            
-            <div class="p-8 overflow-y-auto flex-1">
+            <div class="p-6 overflow-y-auto flex-1">
                 <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
                     <span id="modal-date">--</span>
                     <span class="text-gray-300">|</span>
-                    <span id="modal-posted-by">--</span>
+                    <span id="modal-sender">--</span>
                 </div>
-
-                <div id="modal-content" class="text-gray-700 whitespace-pre-wrap">
-                    <!-- Content -->
-                </div>
+                <div id="modal-content" class="text-gray-700 whitespace-pre-wrap"></div>
             </div>
-
             <div class="px-6 py-4 bg-gray-50 border-t shrink-0">
                 <button onclick="closeModal()" class="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors">Got It</button>
             </div>
         </div>
     </div>
 
-    <script src="parent-core.js"></script>
-    <script src="parent-announcements-board.js"></script>
+    <script>
+        // Global variables
+        let supabaseClient = null;
+        let currentParent = null;
+        let allItems = [];           // combined list of { id, source, title, content, createdAt, sender, isUrgent, read }
+        let currentFilter = 'all';
+        let readNotificationIds = new Set();   // IDs from notifications table marked as read in DB
+        let readAnnouncementIds = new Set();   // IDs from announcements table (stored locally)
+
+        // Helper: escape HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        // Format relative time
+        function formatRelativeTime(dateStr) {
+            if (!dateStr) return 'Unknown';
+            try {
+                const date = new Date(dateStr);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins} min ago`;
+                if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+                if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+                return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+            } catch(e) { return 'Recent'; }
+        }
+
+        // Load read status from DB (notifications) and localStorage (announcements)
+        async function loadReadStatuses() {
+            if (!currentParent) return;
+            try {
+                // 1. Read notifications already marked as read in DB
+                const { data: readNotifs } = await supabaseClient
+                    .from('notifications')
+                    .select('id')
+                    .eq('recipient_id', currentParent.id)
+                    .eq('recipient_role', 'parent')
+                    .eq('is_read', true);
+                if (readNotifs) {
+                    readNotificationIds.clear();
+                    readNotifs.forEach(n => readNotificationIds.add(n.id));
+                }
+                // 2. Read announcements read status from localStorage (per parent)
+                const storageKey = `parent_read_announcements_${currentParent.id}`;
+                const stored = localStorage.getItem(storageKey);
+                if (stored) {
+                    readAnnouncementIds.clear();
+                    JSON.parse(stored).forEach(id => readAnnouncementIds.add(id));
+                } else {
+                    readAnnouncementIds.clear();
+                }
+            } catch (err) {
+                console.warn('Could not load read statuses:', err);
+            }
+        }
+
+        // Persist read announcement IDs to localStorage
+        function persistReadAnnouncements() {
+            if (!currentParent) return;
+            const storageKey = `parent_read_announcements_${currentParent.id}`;
+            localStorage.setItem(storageKey, JSON.stringify([...readAnnouncementIds]));
+        }
+
+        // Mark an item as read
+        async function markAsRead(itemId, source) {
+            if (!currentParent) return;
+            const key = `${source}_${itemId}`;
+            if (source === 'notification') {
+                if (readNotificationIds.has(itemId)) return;
+                // Update DB
+                const { error } = await supabaseClient
+                    .from('notifications')
+                    .update({ is_read: true })
+                    .eq('id', itemId)
+                    .eq('recipient_id', currentParent.id);
+                if (error) {
+                    console.error('Error marking notification read:', error);
+                    return;
+                }
+                readNotificationIds.add(itemId);
+            } else if (source === 'announcement') {
+                if (readAnnouncementIds.has(itemId)) return;
+                readAnnouncementIds.add(itemId);
+                persistReadAnnouncements();
+            }
+            // Refresh UI
+            await refreshAnnouncements();
+        }
+
+        // Fetch all announcements (admin + teacher notifications)
+        async function fetchAllAnnouncements() {
+            if (!supabaseClient || !currentParent) return [];
+
+            const now = new Date().toISOString();
+            
+            // 1. Admin announcements targeting parents (no scheduled or already sent)
+            const { data: adminAnn, error: adminErr } = await supabaseClient
+                .from('announcements')
+                .select('id, title, content, created_at, scheduled_at, type, is_urgent, priority')
+                .eq('target_parents', true)
+                .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+                .order('created_at', { ascending: false });
+            if (adminErr) console.error('Admin announcements error:', adminErr);
+            
+            const formattedAdmin = (adminAnn || []).map(ann => ({
+                id: ann.id,
+                source: 'announcement',
+                title: ann.title || 'Announcement',
+                content: ann.content || '',
+                createdAt: ann.created_at,
+                type: ann.type || 'General',
+                isUrgent: ann.is_urgent === true || ann.priority === 'High',
+                sender: 'School Administration',
+                read: readAnnouncementIds.has(ann.id)
+            }));
+            
+            // 2. Teacher notifications sent to this parent
+            const { data: teacherNotifs, error: notifErr } = await supabaseClient
+                .from('notifications')
+                .select('id, title, message, created_at, scheduled_at, type, is_urgent, sender_id')
+                .eq('recipient_id', currentParent.id)
+                .eq('recipient_role', 'parent')
+                .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+                .order('created_at', { ascending: false });
+            if (notifErr) console.error('Teacher notifications error:', notifErr);
+            
+            // Fetch teacher names for sender_id
+            let teacherNames = new Map();
+            if (teacherNotifs && teacherNotifs.length) {
+                const teacherIds = [...new Set(teacherNotifs.map(n => n.sender_id).filter(id => id))];
+                if (teacherIds.length) {
+                    const { data: teachers } = await supabaseClient
+                        .from('teachers')
+                        .select('id, full_name')
+                        .in('id', teacherIds);
+                    if (teachers) {
+                        teachers.forEach(t => teacherNames.set(t.id, t.full_name));
+                    }
+                }
+            }
+            
+            const formattedNotifs = (teacherNotifs || []).map(notif => ({
+                id: notif.id,
+                source: 'notification',
+                title: notif.title || 'Teacher Message',
+                content: notif.message || '',
+                createdAt: notif.created_at,
+                type: notif.type === 'announcement' ? 'Teacher Note' : (notif.type || 'Message'),
+                isUrgent: notif.is_urgent === true,
+                sender: teacherNames.get(notif.sender_id) || 'Teacher',
+                read: readNotificationIds.has(notif.id)
+            }));
+            
+            // Combine and sort by date desc
+            let combined = [...formattedAdmin, ...formattedNotifs];
+            combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            return combined;
+        }
+        
+        // Render announcements based on current filter
+        function renderAnnouncements(items) {
+            const container = document.getElementById('announcements-container');
+            const emptyDiv = document.getElementById('empty-state');
+            const loadingDiv = document.getElementById('loading-indicator');
+            
+            let filtered = items;
+            if (currentFilter === 'unread') {
+                filtered = items.filter(item => !item.read);
+            } else if (currentFilter === 'urgent') {
+                filtered = items.filter(item => item.isUrgent === true);
+            }
+            
+            if (filtered.length === 0) {
+                container.classList.add('hidden');
+                emptyDiv.classList.remove('hidden');
+                loadingDiv.classList.add('hidden');
+                return;
+            }
+            
+            container.classList.remove('hidden');
+            emptyDiv.classList.add('hidden');
+            loadingDiv.classList.add('hidden');
+            
+            container.innerHTML = filtered.map(item => {
+                const unreadClass = !item.read ? 'border-l-4 border-l-blue-500 bg-white' : 'border-l-4 border-l-gray-200 bg-gray-50/40';
+                const urgentBadge = item.isUrgent ? '<span class="urgent-pulse ml-2 bg-red-100 text-red-700 text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-wider">⚠️ URGENT</span>' : '';
+                const readStatusHtml = !item.read 
+                    ? '<span class="bg-blue-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">New</span>'
+                    : '<span class="bg-gray-200 text-gray-600 text-[9px] font-bold px-2 py-0.5 rounded-full">✓ Read</span>';
+                
+                return `
+                    <div class="announcement-card ${unreadClass} rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer" onclick="showDetail('${item.source}', ${item.id})">
+                        <div class="p-4">
+                            <div class="flex justify-between items-start gap-2 mb-2">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full ${item.type === 'Emergency' ? 'bg-red-100 text-red-700' : item.type === 'Event' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}">${escapeHtml(item.type)}</span>
+                                    ${urgentBadge}
+                                    ${readStatusHtml}
+                                </div>
+                                <span class="text-[10px] text-gray-400">${formatRelativeTime(item.createdAt)}</span>
+                            </div>
+                            <h3 class="font-bold text-gray-800 text-base mb-1">${escapeHtml(item.title)}</h3>
+                            <p class="text-gray-600 text-xs line-clamp-2">${escapeHtml(item.content.substring(0, 120))}${item.content.length > 120 ? '...' : ''}</p>
+                            <div class="flex items-center gap-1 mt-3 text-[10px] text-gray-400">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                <span>${escapeHtml(item.sender)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            if (window.lucide) lucide.createIcons();
+        }
+        
+        // Update unread badge in header
+        function updateUnreadBadge(items) {
+            const unreadCount = items.filter(i => !i.read).length;
+            const badge = document.getElementById('unread-badge');
+            if (badge) {
+                if (unreadCount > 0) {
+                    badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        }
+        
+        // Refresh data: fetch, update read statuses, render
+        async function refreshAnnouncements() {
+            if (!currentParent) return;
+            try {
+                document.getElementById('loading-indicator')?.classList.remove('hidden');
+                document.getElementById('announcements-container')?.classList.add('hidden');
+                document.getElementById('empty-state')?.classList.add('hidden');
+                
+                await loadReadStatuses();
+                const items = await fetchAllAnnouncements();
+                allItems = items;
+                renderAnnouncements(allItems);
+                updateUnreadBadge(allItems);
+            } catch (err) {
+                console.error('Refresh error:', err);
+                document.getElementById('empty-state')?.classList.remove('hidden');
+                document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Error loading announcements. Please refresh.</p>';
+            } finally {
+                document.getElementById('loading-indicator')?.classList.add('hidden');
+            }
+        }
+        
+        // Show modal with full announcement details
+        async function showDetail(source, id) {
+            let item;
+            if (source === 'announcement') {
+                item = allItems.find(i => i.source === 'announcement' && i.id === id);
+            } else {
+                item = allItems.find(i => i.source === 'notification' && i.id === id);
+            }
+            if (!item) return;
+            
+            // Mark as read if not already
+            if (!item.read) {
+                await markAsRead(id, source);
+                item.read = true;
+                renderAnnouncements(allItems);
+                updateUnreadBadge(allItems);
+            }
+            
+            // Fill modal
+            document.getElementById('modal-title').innerText = item.title;
+            document.getElementById('modal-date').innerText = new Date(item.createdAt).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('modal-sender').innerText = item.sender;
+            document.getElementById('modal-content').innerHTML = escapeHtml(item.content).replace(/\n/g, '<br>');
+            document.getElementById('announcement-modal').classList.remove('hidden');
+        }
+        
+        function closeModal() {
+            document.getElementById('announcement-modal').classList.add('hidden');
+        }
+        
+        // Filter handling
+        function setFilter(filter) {
+            currentFilter = filter;
+            // Update button styles
+            const allBtn = document.getElementById('filter-all');
+            const unreadBtn = document.getElementById('filter-unread');
+            const urgentBtn = document.getElementById('filter-urgent');
+            [allBtn, unreadBtn, urgentBtn].forEach(btn => {
+                btn.classList.remove('bg-emerald-600', 'text-white', 'shadow-sm');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+            });
+            if (filter === 'all') allBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            else if (filter === 'unread') unreadBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            else if (filter === 'urgent') urgentBtn.classList.add('bg-emerald-600', 'text-white', 'shadow-sm');
+            renderAnnouncements(allItems);
+        }
+        
+        // Navigation helpers
+        function navigateTo(page) {
+            if (page === 'dashboard') window.location.href = 'parent-dashboard.html';
+            else if (page === 'attendance') window.location.href = 'parent-attendance.html';
+            else if (page === 'excuse') window.location.href = 'parent-excuse.html';
+            else if (page === 'children') window.location.href = 'parent-children.html';
+        }
+        
+        function navigateToDashboard() {
+            window.location.href = 'parent-dashboard.html';
+        }
+        
+        async function logoutParent() {
+            if (supabaseClient) await supabaseClient.auth.signOut();
+            localStorage.removeItem('parentUser');
+            sessionStorage.clear();
+            window.location.href = '../index.html';
+        }
+        
+        // Initialize
+        async function init() {
+            try {
+                // Get Supabase client
+                if (typeof window.supabase !== 'undefined') supabaseClient = window.supabase;
+                else if (typeof supabase !== 'undefined') supabaseClient = supabase;
+                
+                // Get current parent via checkSession (from general-core)
+                let parent = null;
+                if (typeof checkSession === 'function') {
+                    parent = checkSession('parents');
+                } else {
+                    const cached = localStorage.getItem('parentUser');
+                    if (cached) parent = JSON.parse(cached);
+                }
+                
+                if (!parent && supabaseClient) {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session?.user) {
+                        const { data: p } = await supabaseClient
+                            .from('parents')
+                            .select('id, full_name')
+                            .eq('email', session.user.email)
+                            .single();
+                        if (p) parent = p;
+                    }
+                }
+                
+                if (!parent) {
+                    window.location.href = '../index.html';
+                    return;
+                }
+                
+                currentParent = parent;
+                document.getElementById('parent-name').innerText = `Welcome, ${parent.full_name?.split(' ')[0] || 'Parent'}`;
+                
+                await refreshAnnouncements();
+                
+                // Auto-refresh every 45 seconds
+                setInterval(refreshAnnouncements, 45000);
+                if (window.lucide) lucide.createIcons();
+                
+            } catch (err) {
+                console.error('Init error:', err);
+                document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Failed to load. Please refresh.</p>';
+                document.getElementById('empty-state').classList.remove('hidden');
+            }
+        }
+        
+        // Expose globals
+        window.showDetail = showDetail;
+        window.closeModal = closeModal;
+        window.setFilter = setFilter;
+        window.navigateTo = navigateTo;
+        window.navigateToDashboard = navigateToDashboard;
+        window.logoutParent = logoutParent;
+        window.markAsRead = markAsRead;
+        
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
 </body>
 </html>
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-    });
-</script>

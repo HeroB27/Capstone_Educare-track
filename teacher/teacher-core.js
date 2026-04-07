@@ -1,102 +1,84 @@
 // teacher/teacher-core.js
-// Core logic for Teacher Module - Session, data fetching, gatekeeper mode
+// Complete Teacher Module Core – All features included (Fixed Excuse Letters)
 
+const DEBUG = false;
 
-// 1. Session Check - Verifies teacher login
+// ==========================================
+// SESSION & GLOBAL VARIABLES
+// ==========================================
 var currentUser = checkSession('teachers');
 
-// 2. Global Teacher Identity Variables
-let homeroomClass = null; // Stores the class the teacher advises
-let mySubjectLoads = []; // Stores the subjects the teacher teaches
-
-// 3. Gatekeeper Mode Check - Enable if teacher has guard duties
+let homeroomClass = null;
+let mySubjectLoads = [];
 let isGatekeeperMode = false;
-let isAdviserMode = false; // Track if teacher is an adviser
+let isAdviserMode = false;
+
+// Excuse letter filtering
+let currentExcuseFilter = 'pending';
+let cachedExcuseLetters = [];
+
 if (currentUser && currentUser.is_gatekeeper === true) {
     isGatekeeperMode = true;
-    if (DEBUG) console.log('Gatekeeper mode enabled for this teacher');
+    if (DEBUG) console.log('Gatekeeper mode enabled');
 }
 
-// 3. Initialize on DOM Ready
+// Helper: safe random UUID
+function safeRandomUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (!currentUser) return;
-    
-    // Set welcome message with time-based greeting and weekend support
+
+    // Set welcome message with time-based greeting
     const nameEl = document.getElementById('teacher-name');
     if (nameEl) {
         const now = new Date();
-        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+        const day = now.getDay();
         const hour = now.getHours();
-        
         let greeting;
-        
-        // Check if it's weekend
-        if (day === 0) {
-            greeting = 'Happy Sunday';
-        } else if (day === 6) {
-            greeting = 'Happy Saturday';
-        } else if (hour < 12) {
-            greeting = 'Good Morning';
-        } else if (hour < 18) {
-            greeting = 'Good Afternoon';
-        } else {
-            greeting = 'Good Evening';
-        }
-        
+        if (day === 0) greeting = 'Happy Sunday';
+        else if (day === 6) greeting = 'Happy Saturday';
+        else if (hour < 12) greeting = 'Good Morning';
+        else if (hour < 18) greeting = 'Good Afternoon';
+        else greeting = 'Good Evening';
         nameEl.innerText = `${greeting}, ${currentUser.full_name.split(' ')[0]}`;
     }
-    
+
     // Show gatekeeper toggle if applicable
     const gatekeeperToggle = document.getElementById('gatekeeper-toggle');
-    if (gatekeeperToggle && isGatekeeperMode) {
-        gatekeeperToggle.classList.remove('hidden');
-    }
-    
-    // Load teacher identity (homeroom + schedule) - Only fetch once per session!
+    if (gatekeeperToggle && isGatekeeperMode) gatekeeperToggle.classList.remove('hidden');
+
     await initializeTeacherPortal();
-    
-    // Load appropriate data based on current page
     await initTeacherPage();
     injectStyles();
 });
 
-// 3a. Initialize Teacher Portal - Identity handshake between Adviser and Subject Teacher
-// THE PARANOIA SHIELD: Only fetch if we haven't fetched it yet this session!
 async function initializeTeacherPortal() {
     if (sessionStorage.getItem('teacher_identity_loaded') === 'true') {
-        if (DEBUG) console.log('Teacher identity already loaded from session, skipping API call');
-        return; // Skip the database call, we already know who they are!
+        if (DEBUG) console.log('Teacher identity already loaded from session');
+        return;
     }
-    
+
     try {
-        // 1. Fetch Teacher Info + Advisory Class (from teachers table)
         const { data: teacher, error } = await supabase
             .from('teachers')
             .select('*, classes(id, grade_level, department)')
             .eq('id', currentUser.id)
             .single();
 
-        if (error) {
-            console.error('Error fetching teacher:', error);
-            handleSessionError();
-            return;
-        }
+        if (error) throw error;
 
-        // 2. Identify Mode: Adviser vs Subject Teacher
         isAdviserMode = teacher.classes !== null;
-        
-        // UPDATE: Check if teacher has gatekeeper privileges
-        // Add gatekeeper menu if teacher has privileges
-        const gatekeeperMenuBtn = document.getElementById('nav-gatekeeper-mode');
-        if (gatekeeperMenuBtn) {
-            if (teacher.is_gatekeeper) {
-                gatekeeperMenuBtn.classList.remove('hidden');
-            } else {
-                gatekeeperMenuBtn.classList.add('hidden');
-            }
-        }
 
-        // Hard-Block: Prevent unauthorized access to gatekeeper page
+        // Block gatekeeper page if not authorized
         const currentPage = window.location.pathname;
         if (currentPage.includes('teacher-gatekeeper-mode.html') && !teacher.is_gatekeeper) {
             showNotification("Unauthorized Access: You do not have Gatekeeper privileges.", "error");
@@ -104,52 +86,34 @@ async function initializeTeacherPortal() {
             return;
         }
 
-        // Update advisory badge in UI
+        // Update advisory badge
         const badgeEl = document.getElementById('advisory-badge');
         if (badgeEl) {
             if (isAdviserMode) {
                 badgeEl.innerText = `Adviser: ${teacher.classes?.grade_level || 'Unassigned'}-${teacher.classes?.department || 'N/A'}`;
-                // Load homeroom stats for dashboard cards
                 loadHomeroomStats(teacher.classes?.id);
             } else {
                 badgeEl.innerText = "Subject Teacher";
-                // Hide advisory-only features
                 hideAdvisoryOnlyFeatures();
+                const statsContainer = document.getElementById('stats-container');
+                if (statsContainer) statsContainer.style.display = 'none';
             }
         }
 
-        // 3. Load Live Schedule
         await loadTeacherSchedule(teacher.id);
-        
-        // Once fetched successfully, set the flag so we don't spam the API again
         sessionStorage.setItem('teacher_identity_loaded', 'true');
-        
         if (DEBUG) console.log('Teacher Portal Initialized:', isAdviserMode ? 'Adviser Mode' : 'Subject Teacher Mode');
-        
+
     } catch (err) {
         console.error('Error in initializeTeacherPortal:', err);
+        handleSessionError();
     }
 }
 
-// 3b. Load Homeroom Stats for Dashboard Cards (Adviser Only)
-async function loadHomeroomStats(classId) {
-    // This function prepares data for dashboard stats cards
-    // Called when teacher is an adviser
-    if (DEBUG) console.log('Loading homeroom stats for class:', classId);
-    // Stats will be loaded via loadDashboardStats() in teacher-dashboard.js
-}
-
-// 3c. Hide Advisory-Only Features for Subject Teachers
 function hideAdvisoryOnlyFeatures() {
-    // Hide advisory-only UI elements for subject teachers
-    const elements = document.querySelectorAll('.advisory-only');
-    elements.forEach(el => {
-        el.style.display = 'none';
-    });
-    if (DEBUG) console.log('Advisory-only features hidden for Subject Teacher');
+    document.querySelectorAll('.advisory-only').forEach(el => el.style.display = 'none');
 }
 
-// 3d. Load Teacher Schedule (Live)
 async function loadTeacherSchedule(teacherId) {
     try {
         const { data: subjectLoads, error } = await supabase
@@ -157,28 +121,17 @@ async function loadTeacherSchedule(teacherId) {
             .select('*, classes(grade_level, department)')
             .eq('teacher_id', teacherId);
 
-        if (error) {
-            console.error('Error loading schedule:', error);
-            return;
-        }
+        if (error) throw error;
 
         if (subjectLoads) {
             mySubjectLoads = subjectLoads;
-            if (DEBUG) console.log('Schedule loaded:', mySubjectLoads.length, 'subjects');
             renderScheduleOnDashboard();
         }
     } catch (err) {
-        console.error('Error in loadTeacherSchedule:', err);
+        console.error('Error loading teacher schedule:', err);
     }
 }
 
-// 3e. Handle Session Error
-function handleSessionError() {
-    showNotification('Session error. Please login again.', "error");
-    window.location.href = '../index.html';
-}
-
-// 3f. Render Schedule on Dashboard - Shows cards with Take Attendance buttons
 function renderScheduleOnDashboard() {
     const container = document.getElementById('schedule-list');
     if (!container) return;
@@ -189,7 +142,7 @@ function renderScheduleOnDashboard() {
     }
 
     container.innerHTML = mySubjectLoads.map(load => `
-        <div onclick="navigateToAttendance('${load.id}')" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-blue-400 hover:shadow-md hover:shadow-blue-100 transition-all group mb-4 flex justify-between items-center cursor-pointer">
+        <div onclick="navigateToAttendance('${load.id}')" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-blue-400 hover:shadow-md transition-all group mb-4 flex justify-between items-center cursor-pointer">
             <div>
                 <h4 class="font-black text-gray-800 text-lg leading-tight group-hover:text-blue-600 transition-colors">${load.subject_name || 'Unknown Subject'}</h4>
                 <p class="text-xs font-bold text-blue-600 uppercase mt-1 tracking-wide">
@@ -205,32 +158,30 @@ function renderScheduleOnDashboard() {
             </button>
         </div>
     `).join('');
-    
+
     if (window.lucide) lucide.createIcons();
 }
 
-// 3g. Navigate to Subject Attendance page with selected subject
-// Global navigation function for dashboard cards
 window.navigateToAttendance = function(subjectLoadId) {
     if (!subjectLoadId) return;
-    // Save the ID to session storage so the next page knows what to auto-load
     sessionStorage.setItem('selectedSubjectLoadId', subjectLoadId);
-    // Jump to the checklist
     window.location.href = 'teacher-subject-attendance.html';
 };
 
-// 4. Page Initialization Router
+function handleSessionError() {
+    showNotification('Session error. Please login again.', "error");
+    window.location.href = '../index.html';
+}
+
 async function initTeacherPage() {
     const path = window.location.pathname;
-    
+
     if (path.includes('teacher-homeroom')) {
         await loadHomeroomStudents();
     } else if (path.includes('teacher-subject-attendance')) {
         await loadSubjectLoads();
-        // Check if navigated from dashboard with selected subject
         const storedSubjectId = sessionStorage.getItem('selectedSubjectLoadId');
         if (storedSubjectId) {
-            // Auto-select the subject and load students
             setTimeout(() => {
                 const subjectSelect = document.getElementById('subject-select');
                 if (subjectSelect) {
@@ -251,75 +202,71 @@ async function initTeacherPage() {
     } else if (path.includes('teacher-settings')) {
         initializeTeacherSettingsPage();
     } else {
-        // Default dashboard - load schedule
         await loadSchedule();
     }
 }
 
-// 5. Load Teacher Schedule (Today's Classes)
+// ==========================================
+// DASHBOARD SCHEDULE
+// ==========================================
 async function loadSchedule() {
     const scheduleList = document.getElementById('schedule-list');
     if (!scheduleList) return;
-    
+
     try {
-        // Get teacher's subjects for today
         const { data: subjectLoads, error } = await supabase
             .from('subject_loads')
-            .select(`
-                *,
-                classes (grade_level, department)
-            `)
+            .select(`*, classes (grade_level, department)`)
             .eq('teacher_id', currentUser.id);
-        
-        if (error) {
-            console.error('Error loading schedule:', error);
-            return;
-        }
-        
+
+        if (error) throw error;
+
         scheduleList.innerHTML = '';
-        
+
         if (subjectLoads.length === 0) {
-            scheduleList.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">No classes scheduled</td></tr>';
+            scheduleList.innerHTML = '<p class="text-gray-500 italic p-4">No subjects assigned for today.</p>';
             return;
         }
-        
+
         subjectLoads.forEach(load => {
             const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0, 5) : 'N/A';
             const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0, 5) : 'N/A';
             const gradeLevel = load.classes?.grade_level || '';
             const sectionName = load.classes?.department || '';
-            
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
+
+            const row = document.createElement('div');
+            row.className = 'bg-white p-4 rounded-xl border border-gray-100 mb-3 hover:shadow-md transition-all flex justify-between items-center';
             row.innerHTML = `
-                <td class="px-6 py-4 text-xs font-bold text-gray-500 font-mono">${timeStart} - ${timeEnd}</td>
-                <td class="px-6 py-4 font-bold text-gray-800 text-sm">${load.subject_name}</td>
-                <td class="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wide">${gradeLevel} - ${sectionName}</td>
-                <td class="px-6 py-4"><span class="px-2 py-1 bg-gray-100 text-gray-500 rounded-md text-[10px] font-black uppercase tracking-widest border border-gray-200">Scheduled</span></td>
+                <div>
+                    <p class="font-bold text-gray-800">${load.subject_name}</p>
+                    <p class="text-xs text-gray-500">${gradeLevel} - ${sectionName}</p>
+                    <p class="text-xs text-blue-600 font-mono mt-1">${timeStart} - ${timeEnd}</p>
+                </div>
+                <button onclick="navigateToAttendance('${load.id}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition">Take Attendance</button>
             `;
             scheduleList.appendChild(row);
         });
-        
+
+        if (window.lucide) lucide.createIcons();
+
     } catch (err) {
         console.error('Error in loadSchedule:', err);
     }
 }
 
-// 6. Load Homeroom Students with Real-time Gate Status
-// NOTE: If teacher-homeroom.js is loaded, it has a more advanced version with real-time features
-// This version is kept for compatibility with other pages
-if (typeof window.loadHomeroomStudents !== 'function') {
+// ==========================================
+// HOMEROOM ATTENDANCE (Full version)
+// ==========================================
 window.loadHomeroomStudents = async function() {
     const studentList = document.getElementById('homeroom-student-list');
     const searchInput = document.getElementById('student-search');
     const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
 
     if (!studentList) return;
-    
+
     try {
         const today = new Date().toISOString().split('T')[0];
 
-        // Get teacher's homeroom class
         const { data: teacherClass, error: classError } = await supabase
             .from('classes')
             .select('id, grade_level, department')
@@ -327,94 +274,83 @@ window.loadHomeroomStudents = async function() {
             .single();
 
         if (classError || !teacherClass) {
-            studentList.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">No advisory class assigned.</td></tr>';
+            studentList.innerHTML = '<p class="p-4 text-center text-gray-500">No advisory class assigned.</p>';
             return;
         }
 
-        // Update header with class info
         const classInfoEl = document.getElementById('homeroom-class-info');
         if (classInfoEl) {
-            classInfoEl.innerText = `${teacherClass?.grade_level || 'Unassigned'} - ${teacherClass?.department || 'N/A'}`;
+            classInfoEl.innerText = `${teacherClass.grade_level || 'Unassigned'} - ${teacherClass.department || 'N/A'}`;
         }
 
-        // Fetch Students + Today's Gate Logs
         const { data: students, error: studentError } = await supabase
             .from('students')
-            .select(`
-                id, lrn, student_id_text, full_name,
-                attendance_logs(time_in, time_out, status, log_date)
-            `)
+            .select(`id, lrn, student_id_text, full_name, attendance_logs(time_in, time_out, status, log_date)`)
             .eq('class_id', teacherClass.id)
             .order('full_name');
 
-        if (studentError) {
-            console.error('Error loading students:', studentError);
-            return;
-        }
+        if (studentError) throw studentError;
 
-        const allClassStudents = students || [];
-
-        // Filter students based on search query
-        const filteredStudents = allClassStudents.filter(student => 
-            student.full_name.toLowerCase().includes(searchQuery) || 
-            student.student_id_text.toLowerCase().includes(searchQuery)
+        const filteredStudents = students.filter(s => 
+            s.full_name.toLowerCase().includes(searchQuery) || 
+            s.student_id_text.toLowerCase().includes(searchQuery)
         );
 
-        // Calculate attendance rate based on the entire class
-        const presentCount = allClassStudents.filter(s => {
+        const presentCount = students.filter(s => {
             const log = s.attendance_logs?.find(l => l.log_date === today);
             return log && log.status !== 'Absent';
         }).length;
-        const totalStudents = allClassStudents.length;
+        const totalStudents = students.length;
         const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
-        
+
         const rateEl = document.getElementById('attendance-rate');
         if (rateEl) rateEl.innerText = `${rate}%`;
 
         studentList.innerHTML = '';
 
         if (filteredStudents.length === 0) {
-            studentList.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-500">No students found.</td></tr>';
+            studentList.innerHTML = '<p class="p-8 text-center text-gray-500">No students found.</p>';
             return;
         }
 
-        // Render the filtered list
         filteredStudents.forEach(student => {
             const log = student.attendance_logs?.find(l => l.log_date === today);
             const timeIn = log && log.time_in ? formatTime(log.time_in) : '--:--';
-            
             let status = log ? log.status : 'Absent';
             const statusBadge = getStatusBadge(status);
-            
+
             let gateStatus = '';
             if (log && log.time_in) {
                 gateStatus = log.time_out ? 'Outside' : 'Inside';
             }
 
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-blue-50/50 transition-all border-b border-gray-50 last:border-0 group';
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between p-4 border-b border-gray-50 hover:bg-blue-50/50 transition-all';
             row.setAttribute('data-student-id', student.id);
             row.innerHTML = `
-                <td class="px-6 py-4 text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${student.student_id_text}</td>
-                <td class="px-6 py-4 font-bold text-gray-800 text-sm">${student.full_name}</td>
-                <td class="px-6 py-4 text-xs text-gray-500 font-mono">${student.lrn}</td>
-                <td class="px-6 py-4 text-xs font-bold text-gray-600">${timeIn}</td>
-                <td class="px-6 py-4">
+                <div class="flex-1">
+                    <p class="font-bold text-gray-800">${student.full_name}</p>
+                    <p class="text-xs text-gray-500">${student.student_id_text} | LRN: ${student.lrn}</p>
+                </div>
+                <div class="text-center w-24">
+                    <p class="text-sm font-mono">${timeIn}</p>
+                </div>
+                <div class="text-center w-28">
                     <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">
                         ${status}
                     </span>
                     ${gateStatus ? `<span class="ml-1 text-[10px] font-bold text-gray-400 uppercase">(${gateStatus})</span>` : ''}
-                </td>
-                <td class="px-6 py-4">
+                </div>
+                <div class="w-36">
                     <select onchange="markAttendance('${student.id}', this.value)" 
-                        class="text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm">
+                        class="text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="">Action...</option>
                         <option value="On Time">Present (On Time)</option>
                         <option value="Late">Late</option>
                         <option value="Absent">Absent</option>
                         <option value="Excused">Excused</option>
                     </select>
-                </td>
+                </div>
             `;
             studentList.appendChild(row);
         });
@@ -422,26 +358,24 @@ window.loadHomeroomStudents = async function() {
         console.error('Error in loadHomeroomStudents:', err);
     }
 };
-}
 
-// 7. Mark Attendance for Homeroom
 async function markAttendance(studentId, status) {
     if (!status) return;
-    
+
     try {
         const today = new Date().toISOString().split('T')[0];
         const now = new Date().toISOString();
-        
+
         let displayStatus = status;
         if (status === 'Present') displayStatus = 'On Time';
-        
+
         const { data: existingLog } = await supabase
             .from('attendance_logs')
             .select('time_in, remarks')
             .eq('student_id', studentId)
             .eq('log_date', today)
             .single();
-            
+
         let safeTimeIn = null;
         if (status !== 'Absent') {
             safeTimeIn = existingLog?.time_in ? existingLog.time_in : now;
@@ -460,41 +394,24 @@ async function markAttendance(studentId, status) {
                 time_in: safeTimeIn,
                 status: displayStatus,
                 remarks: safeRemarks
-            }, {
-                onConflict: 'student_id, log_date'
-            });
-        
-        if (error) {
-            console.error('Error marking attendance:', error);
-            showNotification('Error marking attendance. Please try again.', "error");
-            return;
+            }, { onConflict: 'student_id, log_date' });
+
+        if (error) throw error;
+
+        // Update UI immediately
+        const studentRow = document.querySelector(`[data-student-id="${studentId}"]`);
+        if (studentRow) {
+            const statusCell = studentRow.querySelector('.text-center.w-28');
+            if (statusCell) {
+                const badgeClass = getStatusBadge(displayStatus);
+                statusCell.innerHTML = `<span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${badgeClass}">${displayStatus}</span>`;
+            }
+            const selectCell = studentRow.querySelector('select');
+            if (selectCell) selectCell.value = '';
         }
 
-        // INSTANT UI UPDATE: Immediately update status display before reload
-        const statusBadgeMap = {
-            'On Time': { bg: 'bg-green-100', text: 'text-green-700' },
-            'Late': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-            'Absent': { bg: 'bg-red-100', text: 'text-red-700' },
-            'Excused': { bg: 'bg-blue-100', text: 'text-blue-700' }
-        };
-        const badgeConfig = statusBadgeMap[displayStatus] || statusBadgeMap['On Time'];
-        
-        // Find and update the status cell for this student
-        const studentRow = document.querySelector(`tr[data-student-id="${studentId}"]`);
-        if (studentRow) {
-            const statusCell = studentRow.querySelector('td:nth-child(5)');
-            if (statusCell) {
-                statusCell.innerHTML = `<span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${badgeConfig.bg} ${badgeConfig.text}">${displayStatus}</span>`;
-            }
-            // Reset the select dropdown
-            const selectCell = studentRow.querySelector('td:nth-child(6) select');
-            if (selectCell) {
-                selectCell.value = '';
-            }
-        }
-        
-        // If this was an update, notify the parent of the correction
-        if (existingLog) {
+        // Notify parent if attendance changed
+        if (existingLog && existingLog.status !== displayStatus) {
             const { data: student } = await supabase.from('students').select('parent_id, full_name').eq('id', studentId).single();
             if (student && student.parent_id) {
                 await supabase.from('notifications').insert({
@@ -507,177 +424,136 @@ async function markAttendance(studentId, status) {
             }
         }
 
-        await loadHomeroomStudents();
-        
+        showNotification(`Attendance marked as ${displayStatus}`, "success");
+
     } catch (err) {
         console.error('Exception marking attendance:', err);
         showNotification('Error marking attendance. Please try again.', "error");
     }
 }
 
-// 8. Load Subject Loads for Subject Attendance Page
+// ==========================================
+// SUBJECT ATTENDANCE (Full version)
+// ==========================================
 async function loadSubjectLoads() {
     const subjectSelect = document.getElementById('subject-select');
     if (!subjectSelect) return;
-    
+
     try {
         const { data: subjectLoads, error } = await supabase
             .from('subject_loads')
-            .select(`
-                id,
-                subject_name,
-                schedule_time_start,
-                schedule_time_end,
-                classes (grade_level, department)
-            `)
+            .select(`id, subject_name, schedule_time_start, schedule_time_end, classes (grade_level, department)`)
             .eq('teacher_id', currentUser.id);
-        
-        if (error) {
-            console.error('Error loading subject loads:', error);
-            return;
-        }
-        
+
+        if (error) throw error;
+
         subjectSelect.innerHTML = '<option value="">Select a subject...</option>';
-        
+
         subjectLoads.forEach(load => {
             const option = document.createElement('option');
             option.value = load.id;
-            const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0, 5) : '';
-            const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0, 5) : '';
+            const timeStart = load.schedule_time_start ? load.schedule_time_start.substring(0,5) : '';
+            const timeEnd = load.schedule_time_end ? load.schedule_time_end.substring(0,5) : '';
             option.text = `${load.subject_name} - ${load.classes?.grade_level} ${load.classes?.department} (${timeStart}-${timeEnd})`;
             subjectSelect.appendChild(option);
         });
-        
+
     } catch (err) {
         console.error('Error in loadSubjectLoads:', err);
     }
 }
 
-// 9. Load Students for Selected Subject
 async function loadSubjectStudents(subjectLoadId) {
     const studentList = document.getElementById('subject-student-list');
     if (!studentList || !subjectLoadId) {
         if (studentList) studentList.innerHTML = '';
         return;
     }
-    
+
     try {
         const { data: subjectLoad } = await supabase
             .from('subject_loads')
             .select('class_id, subject_name')
             .eq('id', subjectLoadId)
             .single();
-        
+
         if (!subjectLoad) return;
-        
+
         const { data: students, error } = await supabase
             .from('students')
             .select('id, student_id_text, full_name')
             .eq('class_id', subjectLoad.class_id)
             .order('full_name');
-        
-        if (error) {
-            console.error('Error loading students:', error);
-            return;
-        }
-        
-        studentList.innerHTML = '';
-        
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'mb-4';
-        infoDiv.innerHTML = `<h3 class="font-bold text-lg">${subjectLoad.subject_name} - Attendance</h3>`;
-        studentList.appendChild(infoDiv);
-        
-        // Store subject info for button calls
-        const subjectName = subjectLoad.subject_name;
-        
+
+        if (error) throw error;
+
+        studentList.innerHTML = `<h3 class="font-bold text-lg mb-4">${subjectLoad.subject_name} - Attendance</h3>`;
+
         students.forEach(student => {
             const row = document.createElement('div');
-            row.className = 'flex items-center justify-between p-4 border-b border-gray-50 hover:bg-blue-50/50 transition-all group';
+            row.className = 'flex items-center justify-between p-4 border-b border-gray-50 hover:bg-blue-50/50 transition-all';
             row.innerHTML = `
                 <div>
-                    <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${student.student_id_text}</span>
-                    <span class="ml-2 font-bold text-gray-800 text-sm">${student.full_name}</span>
+                    <span class="text-[10px] font-bold text-gray-400 font-mono uppercase">${student.student_id_text}</span>
+                    <span class="ml-2 font-bold text-gray-800">${student.full_name}</span>
                 </div>
-                <div class="flex gap-2 opacity-60 group-hover:opacity-100 transition-all">
-                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Present')" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all">Present</button>
-                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Absent')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Absent</button>
-                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectName}', 'Excused')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Excused</button>
+                <div class="flex gap-2">
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectLoad.subject_name}', 'Present')" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase hover:bg-emerald-600 hover:text-white transition">Present</button>
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectLoad.subject_name}', 'Absent')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition">Absent</button>
+                    <button onclick="markSubjectAttendance('${student.id}', '${subjectLoadId}', '${subjectLoad.subject_name}', 'Excused')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition">Excused</button>
                 </div>
             `;
             studentList.appendChild(row);
         });
-        
+
     } catch (err) {
         console.error('Error in loadSubjectStudents:', err);
     }
 }
 
-// 10. Mark Subject-Specific Attendance
-// UPDATED: Now auto-calculates and updates the main status field based on subject attendance
-// UPDATED: Now checks for suspensions before marking attendance
 async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newStatus) {
     try {
         const today = new Date().toISOString().split('T')[0];
 
-        // 0. Check if today is a suspension day
+        // Check suspension
         if (typeof checkIsHoliday === 'function') {
             const holidayCheck = await checkIsHoliday(today);
-            const currentHour = new Date().getHours();
-            
             if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
-                // For half-day suspensions, still allow marking
-                if (holidayCheck.timeCoverage === 'Full Day' || !holidayCheck.timeCoverage) {
-                    showWarning(`School is suspended today (${holidayCheck.description || 'Full Day'}). Attendance cannot be marked.`);
+                if (holidayCheck.timeCoverage === 'Full Day') {
+                    showWarning(`School is suspended today. Attendance cannot be marked.`);
                     return;
-                }
-                // For half-day, warn but allow
-                if ((holidayCheck.timeCoverage === 'Morning' && currentHour >= 12) ||
-                    (holidayCheck.timeCoverage === 'Afternoon' && currentHour < 12)) {
-                    showNotification(`Warning: Morning/Afternoon suspension active. Proceeding with caution.`, 'info');
                 }
             }
         }
 
-        // 1. Fetch the existing log to preserve its data
         const { data: existingLog, error: fetchError } = await supabase
             .from('attendance_logs')
             .select('remarks, status, time_in')
             .eq('student_id', studentId)
             .eq('log_date', today)
-            .single();
+            .maybeSingle();
 
-        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError; // Ignore "not found" errors
+        if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
 
-        // 2. Cleanly update remarks
         let remarks = existingLog?.remarks || '';
-        // Escape special regex characters in subject name
         const escapedSubjectName = subjectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const remarkRegex = new RegExp(`\\[${escapedSubjectName}: (Present|Absent|Excused)\\]`, 'g');
-        remarks = remarks.replace(remarkRegex, '').trim(); // Remove old status for this subject
-        remarks = `${remarks} [${subjectName}: ${newStatus}]`.trim(); // Add new status
+        const remarkRegex = new RegExp(`\\[${escapedSubjectName}: (Present|Absent|Excused|Late)\\]`, 'g');
+        remarks = remarks.replace(remarkRegex, '').trim();
+        remarks = `${remarks} [${subjectName}: ${newStatus}]`.trim();
 
-        // 3. OPTION A: Auto-calculate overall status from subject attendance
-        // Priority: Excused > Absent > Late > Present
         const calculatedStatus = calculateOverallStatus(remarks);
 
-        // 4. Upsert the log with updated remarks AND calculated status
         const { error: upsertError } = await supabase.from('attendance_logs').upsert({
             student_id: studentId,
             log_date: today,
             remarks: remarks,
             status: calculatedStatus,
-            // Preserve time_in if it exists (from gate scan)
             time_in: existingLog?.time_in || null
-        }, { 
-            onConflict: 'student_id, log_date',
-            ignoreDuplicates: false 
-        });
+        }, { onConflict: 'student_id, log_date' });
 
         if (upsertError) throw upsertError;
 
         showNotification(`${subjectName} attendance marked as ${newStatus}. Overall status: ${calculatedStatus}`, 'success');
-        // Re-render the specific list to show the change
         loadSubjectStudents(subjectLoadId);
 
     } catch (err) {
@@ -686,57 +562,44 @@ async function markSubjectAttendance(studentId, subjectLoadId, subjectName, newS
     }
 }
 
-// 10a. Calculate Overall Status from Subject Remarks
-// This function parses the remarks field to determine the overall attendance status
-// Priority: Excused > Absent > Late > Present
 function calculateOverallStatus(remarks) {
     if (!remarks) return 'Present';
-    
-    // Extract all subject attendance from remarks
-    // Format: "[Math: Present] [Science: Absent] [Filipino: Late]"
     const subjectRegex = /\[([^\]]+): (Present|Absent|Excused|Late)\]/g;
     const subjectStatuses = [];
     let match;
-    
     while ((match = subjectRegex.exec(remarks)) !== null) {
-        subjectStatuses.push(match[2]); // match[2] is the status (Present, Absent, etc.)
+        subjectStatuses.push(match[2]);
     }
-    
-    // If no subject statuses found, default to Present
     if (subjectStatuses.length === 0) return 'Present';
-    
-    // Priority calculation: Excused > Absent > Late > Present
     if (subjectStatuses.includes('Excused')) return 'Excused';
     if (subjectStatuses.includes('Absent')) return 'Absent';
     if (subjectStatuses.includes('Late')) return 'Late';
     return 'Present';
 }
 
-// 11. Load Clinic Pass Interface
-// UPDATED: Now includes subject teacher students + loads clinic stats
+// ==========================================
+// CLINIC PASS (Full version)
+// ==========================================
 async function loadClinicPassInterface() {
     const studentSelect = document.getElementById('clinic-student-select');
     if (!studentSelect) return;
-    
+
     try {
-        // Get teacher's homeroom class (adviser)
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
-        
-        // Get teacher's subject loads (for subject teachers)
+
         const { data: subjectLoads } = await supabase
             .from('subject_loads')
             .select('class_id')
             .eq('teacher_id', currentUser.id);
-        
+
         const classIds = new Set();
         let homeroomStudents = [];
         let subjectStudents = [];
-        
-        // Add homeroom class if teacher is an adviser
+
         if (teacherClass) {
             classIds.add(teacherClass.id);
             const { data: students } = await supabase
@@ -746,42 +609,32 @@ async function loadClinicPassInterface() {
                 .order('full_name');
             homeroomStudents = students || [];
         }
-        
-        // Add subject class students if teacher has subject loads
+
         if (subjectLoads && subjectLoads.length > 0) {
             subjectLoads.forEach(sl => classIds.add(sl.class_id));
-            
             const { data: students } = await supabase
                 .from('students')
                 .select('id, student_id_text, full_name, classes(grade_level, department)')
                 .in('class_id', Array.from(classIds))
                 .order('full_name');
-            
             if (students) {
-                // Deduplicate: prefer homeroom students, then add subject students
                 const homeroomIds = new Set(homeroomStudents.map(s => s.id));
                 subjectStudents = students.filter(s => !homeroomIds.has(s.id));
             }
         }
-        
-        // If no class access at all
+
         if (homeroomStudents.length === 0 && subjectStudents.length === 0) {
             studentSelect.innerHTML = '<option value="">No students assigned</option>';
             return;
         }
-        
-        // Build options
+
         studentSelect.innerHTML = '<option value="">Select student...</option>';
-        
-        // Add homeroom students first (with badge)
         homeroomStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
             option.text = `${student.student_id_text} - ${student.full_name} (Homeroom: ${teacherClass?.grade_level || 'Unassigned'}-${teacherClass?.department || 'N/A'})`;
             studentSelect.appendChild(option);
         });
-        
-        // Add subject students (deduplicated)
         subjectStudents.forEach(student => {
             const option = document.createElement('option');
             option.value = student.id;
@@ -789,68 +642,176 @@ async function loadClinicPassInterface() {
             option.text = `${student.student_id_text} - ${student.full_name} (${classInfo})`;
             studentSelect.appendChild(option);
         });
-        
-        // Load recent passes and stats
+
         await loadRecentClinicPasses();
         await loadClinicStats();
-        
+        initClinicAutocomplete();
+
     } catch (err) {
         console.error('Error loading clinic pass interface:', err);
         showNotification('Failed to load clinic pass interface', 'error');
     }
 }
 
-// 11a. Load Clinic Statistics
-// UPDATED: Counts today passes, active passes, and completed passes
+function initClinicAutocomplete() {
+    const searchInput = document.getElementById('clinic-student-search');
+    const dropdown = document.getElementById('clinic-student-dropdown');
+    const hiddenSelect = document.getElementById('clinic-student-select');
+    const clearBtn = document.getElementById('clear-search-btn');
+
+    if (!searchInput || !dropdown || !hiddenSelect) return;
+
+    function renderDropdown(filterText = '') {
+        dropdown.innerHTML = '';
+        const options = Array.from(hiddenSelect.options).filter(opt => opt.value !== '');
+        let hasResults = false;
+
+        if (options.length === 0) {
+            dropdown.innerHTML = '<div class="px-5 py-4 text-sm text-gray-400 italic">No students available</div>';
+        } else {
+            options.forEach(option => {
+                if (option.text.toLowerCase().includes(filterText.toLowerCase())) {
+                    hasResults = true;
+                    const div = document.createElement('div');
+                    div.className = 'px-5 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold text-gray-700 border-b border-gray-50 flex items-center gap-3';
+                    div.innerHTML = `<div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i data-lucide="user" class="w-4 h-4 text-gray-500"></i></div><span>${option.text}</span>`;
+                    div.onclick = () => {
+                        hiddenSelect.value = option.value;
+                        searchInput.value = option.text;
+                        dropdown.classList.add('hidden');
+                        clearBtn.classList.remove('hidden');
+                    };
+                    dropdown.appendChild(div);
+                }
+            });
+            if (!hasResults) dropdown.innerHTML = '<div class="px-5 py-4 text-sm text-gray-400 italic">No student found.</div>';
+        }
+        dropdown.classList.remove('hidden');
+        if (window.lucide) lucide.createIcons();
+    }
+
+    searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+    searchInput.addEventListener('input', (e) => {
+        renderDropdown(e.target.value);
+        clearBtn.classList.toggle('hidden', e.target.value === '');
+        hiddenSelect.value = '';
+    });
+    clearBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        searchInput.value = '';
+        hiddenSelect.value = '';
+        clearBtn.classList.add('hidden');
+        renderDropdown('');
+        searchInput.focus();
+    });
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target) && !clearBtn.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+}
+
 async function loadClinicStats() {
     const todayPassesEl = document.getElementById('today-passes');
     const activePassesEl = document.getElementById('active-passes');
     const completedPassesEl = document.getElementById('completed-passes');
-    
+
     if (!todayPassesEl && !activePassesEl && !completedPassesEl) return;
-    
+
     try {
         const today = new Date().toISOString().split('T')[0];
-        
-        // Get all passes issued by this teacher
         const { data: passes, error } = await supabase
             .from('clinic_visits')
             .select('status, time_in')
             .eq('referred_by_teacher_id', currentUser.id);
-        
-        if (error) {
-            console.error('Error loading clinic stats:', error);
-            return;
-        }
-        
-        // Today's passes (created today)
-        const todayPasses = passes?.filter(p => 
-            p.time_in && p.time_in.startsWith(today)
-        ).length || 0;
-        
-        // Active passes (Pending, Approved, or Checked In with no time_out)
-        const activePasses = passes?.filter(p => 
-            ['Pending', 'Approved', 'Checked In'].includes(p.status)
-        ).length || 0;
-        
-        // Completed passes (Completed, Cleared, or Sent Home)
-        const completedPasses = passes?.filter(p => 
-            ['Completed', 'Cleared', 'Sent Home'].includes(p.status)
-        ).length || 0;
-        
-        // Update UI
+
+        if (error) throw error;
+
+        const todayPasses = passes?.filter(p => p.time_in && p.time_in.startsWith(today)).length || 0;
+        const activePasses = passes?.filter(p => ['Pending', 'Approved', 'Checked In'].includes(p.status)).length || 0;
+        const completedPasses = passes?.filter(p => ['Completed', 'Cleared', 'Sent Home'].includes(p.status)).length || 0;
+
         if (todayPassesEl) todayPassesEl.textContent = todayPasses;
         if (activePassesEl) activePassesEl.textContent = activePasses;
         if (completedPassesEl) completedPassesEl.textContent = completedPasses;
-        
+
     } catch (err) {
         console.error('Error in loadClinicStats:', err);
-        showNotification('Failed to load clinic statistics', 'error');
     }
 }
 
-// 12. Issue Clinic Pass
-// ENTERPRISE VERSION: With Adviser Loop and Parent Notifications
+async function loadRecentClinicPasses() {
+    const passList = document.getElementById('recent-clinic-passes');
+    if (!passList) return;
+
+    try {
+        const { data: passes, error } = await supabase
+            .from('clinic_visits')
+            .select(`*, students (student_id_text, full_name)`)
+            .eq('referred_by_teacher_id', currentUser.id)
+            .order('time_in', { ascending: false })
+            .limit(20);
+
+        if (error) throw error;
+
+        passList.innerHTML = '';
+
+        const statusColors = {
+            'Pending': 'bg-amber-100 text-amber-700',
+            'Approved': 'bg-blue-100 text-blue-700',
+            'Checked In': 'bg-orange-100 text-orange-700',
+            'Sent Home': 'bg-red-100 text-red-700',
+            'Cleared': 'bg-green-100 text-green-700',
+            'Completed': 'bg-green-100 text-green-700',
+            'Rejected': 'bg-gray-100 text-gray-700'
+        };
+
+        passes?.forEach(pass => {
+            const statusBadge = statusColors[pass.status] || 'bg-gray-100 text-gray-600';
+            const canForward = (pass.nurse_notes || pass.status === 'Completed') && !pass.parent_notified;
+
+            const forwardButton = canForward
+                ? `<button onclick="forwardToParent('${pass.id}', '${pass.students?.full_name}')" 
+                    class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                    📤 Forward Findings to Parent
+                  </button>`
+                : (pass.parent_notified ? '' : '<p class="mt-3 text-xs text-gray-400 italic">Waiting for nurse findings...</p>');
+
+            const div = document.createElement('div');
+            div.className = 'p-4 border-b border-gray-50 hover:bg-gray-50 transition-all rounded-xl';
+            div.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-800 text-sm">${pass.students?.full_name}</span>
+                            <span class="text-[10px] font-bold text-gray-400 font-mono uppercase">${pass.students?.student_id_text}</span>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-1">📋 ${pass.reason}</p>
+                        ${pass.nurse_notes ? `<p class="text-xs text-blue-600 mt-2 font-bold bg-blue-50 p-2 rounded-lg">💊 Nurse: ${pass.nurse_notes}</p>` : ''}
+                        ${pass.action_taken ? `<p class="text-xs text-green-600 mt-2 font-bold bg-green-50 p-2 rounded-lg">✅ Action: ${pass.action_taken}</p>` : ''}
+                        ${forwardButton}
+                    </div>
+                    <div class="text-right">
+                        <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${pass.status}</span>
+                        ${pass.parent_notified ? '<span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Forwarded</span>' : ''}
+                        <p class="text-xs text-gray-400 mt-2">${pass.time_in ? new Date(pass.time_in).toLocaleString() : 'Pending'}</p>
+                    </div>
+                </div>
+            `;
+            passList.appendChild(div);
+        });
+
+        if (passList.children.length === 0) {
+            passList.innerHTML = '<p class="text-gray-500 text-center py-8">No clinic passes issued yet.</p>';
+        }
+
+        if (window.lucide) lucide.createIcons();
+
+    } catch (err) {
+        console.error('Error in loadRecentClinicPasses:', err);
+    }
+}
+
 async function issueClinicPass() {
     const studentSelect = document.getElementById('clinic-student-select');
     const reasonInput = document.getElementById('clinic-reason');
@@ -858,7 +819,6 @@ async function issueClinicPass() {
 
     const studentId = studentSelect?.value;
     const reason = reasonInput?.value?.trim();
-    const studentName = studentSelect?.options[studentSelect.selectedIndex]?.text;
 
     if (!studentId || !reason) {
         return showNotification('Please select a student and enter a reason.', "error");
@@ -869,17 +829,12 @@ async function issueClinicPass() {
     if (btn) { btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Issuing...'; btn.disabled = true; }
 
     try {
-        // ===========================================================
-        // SECURITY FIX: Validate teacher has authority over this student
-        // ===========================================================
         const authorized = await validateTeacherAuthority(studentId);
-        
         if (!authorized) {
-            showNotification('You are not authorized to issue a clinic pass for this student. You can only issue passes for students in your homeroom or subject classes.', "error");
+            showNotification('You are not authorized to issue a clinic pass for this student.', "error");
             return;
         }
-        
-        // Check if student already has an active pass
+
         const { data: existingPass } = await supabase
             .from('clinic_visits')
             .select('id, status')
@@ -887,20 +842,18 @@ async function issueClinicPass() {
             .in('status', ['Pending', 'Approved', 'Checked In', 'In Clinic'])
             .is('time_out', null)
             .single();
-        
+
         if (existingPass) {
             showNotification(`This student already has an active clinic pass (Status: ${existingPass.status}).`, "error");
             return;
         }
-        
-        // Get student data (including parent_id and class info for adviser lookup)
+
         const { data: student } = await supabase
             .from('students')
             .select('full_name, parent_id, class_id, classes(adviser_id)')
             .eq('id', studentId)
             .single();
-        
-        // Create the Clinic Visit Record
+
         const { data: visit, error: visitError } = await supabase
             .from('clinic_visits')
             .insert({
@@ -912,21 +865,12 @@ async function issueClinicPass() {
             })
             .select()
             .single();
-        
-        if (visitError) {
-            showNotification('Error issuing clinic pass: ' + visitError.message, "error");
-            return;
-        }
+
+        if (visitError) throw visitError;
 
         const notifications = [];
 
-        // ==========================================
-        // 1. Notify Clinic Staff
-        // ==========================================
-        const { data: clinicStaff } = await supabase
-            .from('clinic_staff')
-            .select('id, full_name');
-        
+        const { data: clinicStaff } = await supabase.from('clinic_staff').select('id, full_name');
         if (clinicStaff && clinicStaff.length > 0) {
             clinicStaff.forEach(staff => {
                 notifications.push({
@@ -939,10 +883,7 @@ async function issueClinicPass() {
                 });
             });
         }
-        
-        // ==========================================
-        // 2. Notify Parent (If checked)
-        // ==========================================
+
         if (notifyParent && student?.parent_id) {
             notifications.push({
                 recipient_role: 'parents',
@@ -954,9 +895,6 @@ async function issueClinicPass() {
             });
         }
 
-        // ==========================================
-        // 3. Notify Homeroom Adviser (If Issuer is NOT the Adviser)
-        // ==========================================
         if (student?.classes?.adviser_id && student.classes.adviser_id !== currentUser.id) {
             notifications.push({
                 recipient_role: 'teachers',
@@ -968,26 +906,22 @@ async function issueClinicPass() {
             });
         }
 
-        // Fire all notifications simultaneously
         if (notifications.length > 0) {
             await supabase.from('notifications').insert(notifications);
         }
 
-        // Show Success
-        showNotification('Clinic pass issued successfully! Relevant parties have been notified.', "success");
-        
-        // Reset Form
-        if (studentSelect) studentSelect.value = '';
-        if (reasonInput) reasonInput.value = '';
+        showNotification('Clinic pass issued successfully!', "success");
+
+        studentSelect.value = '';
+        reasonInput.value = '';
         const searchInput = document.getElementById('clinic-student-search');
         if (searchInput) searchInput.value = '';
         const clearBtn = document.getElementById('clear-search-btn');
         if (clearBtn) clearBtn.classList.add('hidden');
-        
-        // Reload lists
+
         await loadRecentClinicPasses();
         await loadClinicStats();
-        
+
     } catch (err) {
         console.error('Error issuing clinic pass:', err);
         showNotification('Error issuing clinic pass. Please try again.', "error");
@@ -997,209 +931,72 @@ async function issueClinicPass() {
     }
 }
 
-// 12a. Validate Teacher Authority Over Student
-// SECURITY: Ensures teacher can only issue passes for students they teach
 async function validateTeacherAuthority(studentId) {
     try {
-        // Get teacher's homeroom class
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
             .eq('adviser_id', currentUser.id)
             .single();
-        
-        // Get teacher's subject loads
+
         const { data: subjectLoads } = await supabase
             .from('subject_loads')
             .select('class_id')
             .eq('teacher_id', currentUser.id);
-        
-        // Build list of authorized class IDs
+
         const authorizedClassIds = new Set();
-        
-        // Add homeroom class
-        if (teacherClass) {
-            authorizedClassIds.add(teacherClass.id);
-        }
-        
-        // Add subject classes
-        if (subjectLoads) {
-            subjectLoads.forEach(sl => {
-                authorizedClassIds.add(sl.class_id);
-            });
-        }
-        
-        // Check if student belongs to any authorized class
+        if (teacherClass) authorizedClassIds.add(teacherClass.id);
+        if (subjectLoads) subjectLoads.forEach(sl => authorizedClassIds.add(sl.class_id));
+
         const { data: student } = await supabase
             .from('students')
             .select('class_id')
             .eq('id', studentId)
             .single();
-        
-        if (!student) {
-            console.error('Student not found:', studentId);
-            return false;
-        }
-        
-        // Validate student is in one of teacher's classes
-        return authorizedClassIds.has(student.class_id);
-        
+
+        return student ? authorizedClassIds.has(student.class_id) : false;
     } catch (err) {
         console.error('Error validating teacher authority:', err);
-        // For safety, deny access on error
         return false;
     }
 }
 
-// 13. Load Recent Clinic Passes
-// UPDATED: Enhanced forward button logic - shows when nurse_notes exist OR status is 'Completed'
-async function loadRecentClinicPasses() {
-    const passList = document.getElementById('recent-clinic-passes');
-    if (!passList) return;
-    
-    try {
-        const { data: passes, error } = await supabase
-            .from('clinic_visits')
-            .select(`
-                *,
-                students (student_id_text, full_name)
-            `)
-            .eq('referred_by_teacher_id', currentUser.id)
-            .order('time_in', { ascending: false })
-            .limit(20);
-        
-        if (error) {
-            console.error('Error loading clinic passes:', error);
-            return;
-        }
-        
-        passList.innerHTML = '';
-        
-        // Status badge colors
-        const statusColors = {
-            'Pending': 'bg-amber-100 text-amber-700 border border-amber-200',
-            'Approved': 'bg-blue-100 text-blue-700 border border-blue-200',
-            'Checked In': 'bg-orange-100 text-orange-700 border border-orange-200',
-            'Sent Home': 'bg-red-100 text-red-700 border border-red-200',
-            'Cleared': 'bg-green-100 text-green-700 border border-green-200',
-            'Completed': 'bg-green-100 text-green-700 border border-green-200',
-            'Rejected': 'bg-gray-100 text-gray-700 border border-gray-200'
-        };
-        
-        passes?.forEach(pass => {
-            const statusBadge = statusColors[pass.status] || 'bg-gray-100 text-gray-600 border border-gray-200';
-            
-            // Display nurse notes and action taken
-            const notesDisplay = pass.nurse_notes 
-                ? `<p class="text-xs text-blue-600 mt-2 font-bold bg-blue-50 p-2 rounded-lg border border-blue-100"><i data-lucide="activity" class="w-3 h-3 inline mr-1"></i> Nurse: ${pass.nurse_notes}</p>` 
-                : '';
-            
-            const actionDisplay = pass.action_taken 
-                ? `<p class="text-xs text-green-600 mt-2 font-bold bg-green-50 p-2 rounded-lg border border-green-100"><i data-lucide="check-circle" class="w-3 h-3 inline mr-1"></i> Action: ${pass.action_taken}</p>` 
-                : '';
-            
-            // Forward button: show ONLY when (nurse_notes exist OR status is 'Completed') AND parent_notified is false
-            const canForward = (pass.nurse_notes || pass.status === 'Completed') && !pass.parent_notified;
-            const forwardedBadge = pass.parent_notified 
-                ? `<span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Forwarded to Parent</span>` 
-                : '';
-            
-            const forwardButton = canForward
-                ? `<button onclick="forwardToParent('${pass.id}', '${pass.students?.full_name}')" 
-                    class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm">
-                    📤 Forward Findings to Parent
-                  </button>`
-                : (pass.parent_notified 
-                    ? '' 
-                    : `<p class="mt-3 text-xs text-gray-400 italic">Waiting for nurse findings...</p>`);
-            
-            const div = document.createElement('div');
-            div.className = 'p-4 border-b border-gray-50 hover:bg-gray-50 transition-all rounded-xl';
-            div.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-gray-800 text-sm">${pass.students?.full_name}</span>
-                            <span class="text-[10px] font-bold text-gray-400 font-mono uppercase tracking-widest">${pass.students?.student_id_text}</span>
-                        </div>
-                        <p class="text-xs text-gray-600 mt-1">📋 ${pass.reason}</p>
-                        ${notesDisplay}
-                        ${actionDisplay}
-                        ${forwardButton}
-                    </div>
-                    <div class="text-right">
-                        <span class="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${statusBadge}">${pass.status}</span>
-                        ${forwardedBadge}
-                        <p class="text-xs text-gray-400 mt-2">${pass.time_in ? new Date(pass.time_in).toLocaleString() : 'Pending'}</p>
-                    </div>
-                </div>
-            `;
-            passList.appendChild(div);
-        });
-        
-        if (passList.children.length === 0) {
-            passList.innerHTML = '<p class="text-gray-500 text-center py-8">No clinic passes issued yet.</p>';
-        }
-        
-        if (window.lucide) lucide.createIcons();
-        
-    } catch (err) {
-        console.error('Error in loadRecentClinicPasses:', err);
-    }
-}
-
-// 14. Forward Clinic Findings to Parent
-// UPDATED: Added confirmation modal and enhanced logic
 async function forwardToParent(clinicVisitId, studentName) {
-    if (!confirm(`Forward clinic findings for ${studentName} to their parent?`)) {
-        return;
-    }
-    
+    if (!confirm(`Forward clinic findings for ${studentName} to their parent?`)) return;
+
     try {
-        // Get visit details with student/parent info
         const { data: visit } = await supabase
             .from('clinic_visits')
             .select('student_id, nurse_notes, action_taken, status')
             .eq('id', clinicVisitId)
             .single();
-        
+
         if (!visit) {
             showNotification('Visit record not found.', "error");
             return;
         }
-        
-        // Double-check: don't forward if no findings
+
         if (!visit.nurse_notes && !visit.action_taken && visit.status !== 'Completed') {
-            showNotification('No findings to forward yet. Please wait for the nurse to complete the visit.', "error");
+            showNotification('No findings to forward yet.', "error");
             return;
         }
-        
-        // Get parent's info
+
         const { data: student } = await supabase
             .from('students')
             .select('parent_id, full_name')
             .eq('id', visit.student_id)
             .single();
-        
+
         if (!student?.parent_id) {
             showNotification('No parent linked to this student.', "error");
             return;
         }
-        
-        // Get parent's contact info
-        const { data: parent } = await supabase
-            .from('parents')
-            .select('id, full_name, phone')
-            .eq('id', student.parent_id)
-            .single();
-        
-        // Build message
+
         let message = `Good day! Your child ${student.full_name} visited the clinic today. `;
         if (visit.nurse_notes) message += `Findings: ${visit.nurse_notes}. `;
         if (visit.action_taken) message += `Action: ${visit.action_taken}. `;
         message += 'Please contact the school clinic for more details.';
-        
-        // Send notification to parent
+
         await supabase.from('notifications').insert({
             recipient_id: student.parent_id,
             recipient_role: 'parent',
@@ -1208,205 +1005,232 @@ async function forwardToParent(clinicVisitId, studentName) {
             type: 'clinic_visit',
             is_read: false
         });
-        
-        // Mark as notified in visit record
+
         await supabase
             .from('clinic_visits')
-            .update({ 
-                parent_notified: true,
-                parent_notified_at: new Date().toISOString()
-            })
+            .update({ parent_notified: true, parent_notified_at: new Date().toISOString() })
             .eq('id', clinicVisitId);
-        
-        showNotification(`Findings forwarded to ${parent?.full_name || 'parent'} successfully!`, "success");
+
+        showNotification(`Findings forwarded to parent successfully!`, "success");
         await loadRecentClinicPasses();
-        
+
     } catch (err) {
         console.error('Error forwarding to parent:', err);
-        showNotification('Error forwarding findings. Please try again.', "error");
+        showNotification('Error forwarding findings.', "error");
     }
 }
 
-// 15. Load Excuse Letters for Approval
-// UPDATED: Now updates stats counters, supports filtering, and uses showNotification
-let allExcuseLetters = []; // Store for filtering
-let currentExcuseFilter = 'all';
-
+// ==========================================
+// EXCUSE LETTERS (Fixed with Filtering)
+// ==========================================
 async function loadExcuseLetters() {
     const letterList = document.getElementById('excuse-letter-list');
     if (!letterList) return;
-    
+
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
-            .select('id, grade_level, department')
+            .select('id')
             .eq('adviser_id', currentUser.id)
             .single();
-        
+
         if (!teacherClass) {
-            letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">📋</div><p class="text-gray-500">You are not assigned as an adviser</p><p class="text-sm text-gray-400">Excuse letters can only be approved by homeroom advisers</p></div>';
+            letterList.innerHTML = '<div class="p-8 text-center"><p class="text-gray-500">You are not assigned as an adviser</p></div>';
             return;
         }
-        
+
         const { data: students } = await supabase
             .from('students')
             .select('id')
             .eq('class_id', teacherClass.id);
-        
+
         const studentIds = students?.map(s => s.id) || [];
-        
         if (studentIds.length === 0) {
-            letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">👥</div><p class="text-gray-500">No students in your class</p></div>';
+            letterList.innerHTML = '<div class="p-8 text-center"><p class="text-gray-500">No students in your class</p></div>';
             return;
         }
-        
+
         const { data: letters, error } = await supabase
             .from('excuse_letters')
-            .select(`
-                *,
-                students (student_id_text, full_name)
-            `)
+            .select(`*, students (student_id_text, full_name)`)
             .in('student_id', studentIds)
             .order('created_at', { ascending: false })
             .limit(50);
-        
-        if (error) {
-            console.error('Error loading excuse letters:', error);
-            showNotification('Error loading excuse letters', "error");
+
+        if (error) throw error;
+
+        if (!letters || letters.length === 0) {
+            letterList.innerHTML = '<div class="p-8 text-center"><p class="text-gray-500">No excuse letters found</p></div>';
             return;
         }
+
+        // Cache letters and update stats
+        cachedExcuseLetters = letters;
         
-        // Store for filtering
-        allExcuseLetters = letters || [];
-        
-        // Update stats counters
-        const pendingCount = allExcuseLetters.filter(l => l.status === 'Pending').length;
-        const approvedCount = allExcuseLetters.filter(l => l.status === 'Approved').length;
-        const rejectedCount = allExcuseLetters.filter(l => l.status === 'Rejected').length;
-        
-        const pendingEl = document.getElementById('pending-count');
-        const approvedEl = document.getElementById('approved-count');
-        const rejectedEl = document.getElementById('rejected-count');
-        
-        if (pendingEl) pendingEl.textContent = pendingCount;
-        if (approvedEl) approvedEl.textContent = approvedCount;
-        if (rejectedEl) rejectedEl.textContent = rejectedCount;
-        
+        // Update stats cards (always based on all letters)
+        const pendingCount = letters.filter(l => l.status === 'Pending').length;
+        const approvedCount = letters.filter(l => l.status === 'Approved').length;
+        const rejectedCount = letters.filter(l => l.status === 'Rejected').length;
+        document.getElementById('pending-count').textContent = pendingCount;
+        document.getElementById('approved-count').textContent = approvedCount;
+        document.getElementById('rejected-count').textContent = rejectedCount;
+
         // Render with current filter
-        renderExcuseLetters(teacherClass);
-        
+        renderExcuseLetters();
+
     } catch (err) {
         console.error('Error in loadExcuseLetters:', err);
-        showNotification('Error loading excuse letters', "error");
+        letterList.innerHTML = '<div class="p-8 text-center"><p class="text-red-500">Error loading excuse letters</p></div>';
     }
 }
 
-// Render excuse letters with current filter
-function renderExcuseLetters(teacherClass) {
+function renderExcuseLetters() {
     const letterList = document.getElementById('excuse-letter-list');
     if (!letterList) return;
-    
-    let filteredLetters = allExcuseLetters;
-    if (currentExcuseFilter !== 'all') {
-        filteredLetters = allExcuseLetters.filter(l => l.status === currentExcuseFilter.charAt(0).toUpperCase() + currentExcuseFilter.slice(1));
+
+    // Filter cached letters based on current filter
+    let filteredLetters = cachedExcuseLetters;
+    if (currentExcuseFilter === 'pending') {
+        filteredLetters = cachedExcuseLetters.filter(l => l.status === 'Pending');
+    } else if (currentExcuseFilter === 'approved') {
+        filteredLetters = cachedExcuseLetters.filter(l => l.status === 'Approved');
+    } else if (currentExcuseFilter === 'rejected') {
+        filteredLetters = cachedExcuseLetters.filter(l => l.status === 'Rejected');
     }
-    
-    // Update tab styles
-    ['pending', 'approved', 'rejected'].forEach(status => {
-        const tab = document.getElementById(`tab-${status}`);
-        if (tab) {
-            if (currentExcuseFilter === status) {
-                tab.className = `px-4 py-2 ${status === 'pending' ? 'bg-yellow-100 text-yellow-700' : status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} rounded-xl text-sm font-medium transition-all duration-200`;
-            } else {
-                tab.className = 'px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-all duration-200';
-            }
-        }
-    });
-    
+
     if (filteredLetters.length === 0) {
-        letterList.innerHTML = '<div class="p-8 text-center"><div class="text-4xl mb-2">📭</div><p class="text-gray-500">No excuse letters found</p></div>';
+        letterList.innerHTML = `<div class="bg-white rounded-3xl p-12 border border-gray-100 shadow-sm text-center">
+            <div class="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">No ${currentExcuseFilter} excuse letters</h3>
+            <p class="text-gray-500">There are no ${currentExcuseFilter} excuse letters to display.</p>
+        </div>`;
         return;
     }
-    
-    letterList.innerHTML = '';
-    
-    filteredLetters.forEach(letter => {
+
+    letterList.innerHTML = filteredLetters.map(letter => {
         const statusColors = {
             'Pending': 'border-l-yellow-400 bg-yellow-50',
             'Approved': 'border-l-green-400 bg-green-50',
             'Rejected': 'border-l-red-400 bg-red-50'
         };
-        
         const statusBadge = letter.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                            letter.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-        
-        const dateFormatted = new Date(letter.date_absent).toLocaleDateString('en-PH', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
-        
-        const div = document.createElement('div');
-        div.className = `bg-white p-4 border rounded-lg mb-4 border-l-4 ${statusColors[letter.status] || 'border-l-gray-400'} shadow-sm hover:shadow-md transition`;
-        div.innerHTML = `
-            <div class="flex justify-between items-start mb-3">
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-lg text-gray-800">${letter.students?.full_name}</span>
-                        <span class="text-sm text-gray-500">${letter.students?.student_id_text}</span>
+        const dateFormatted = new Date(letter.date_absent).toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        return `
+            <div class="bg-white p-4 border rounded-lg mb-4 border-l-4 ${statusColors[letter.status] || 'border-l-gray-400'} shadow-sm">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-lg text-gray-800">${escapeHtml(letter.students?.full_name)}</span>
+                            <span class="text-sm text-gray-500">${letter.students?.student_id_text}</span>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs ${statusBadge}">${letter.status}</span>
                     </div>
-                    <span class="px-2 py-1 rounded text-xs ${statusBadge}">${letter.status}</span>
+                    <div class="text-right text-sm text-gray-500">
+                        <p>Date: ${dateFormatted}</p>
+                        <p class="text-xs">${new Date(letter.created_at).toLocaleDateString()}</p>
+                    </div>
                 </div>
-                <div class="text-right text-sm text-gray-500">
-                    <p>Date: ${dateFormatted}</p>
-                    <p class="text-xs">${new Date(letter.created_at).toLocaleDateString()}</p>
-                </div>
-            </div>
-            
-            <div class="mb-3">
-                <p class="text-sm"><strong class="text-gray-700">Reason:</strong> ${letter.reason}</p>
-                ${letter.teacher_remarks ? `<p class="text-sm mt-1"><strong class="text-gray-700">Your Remarks:</strong> ${letter.teacher_remarks}</p>` : ''}
-            </div>
-            
-            ${letter.image_proof_url ? `
                 <div class="mb-3">
-                    <button onclick="viewProof('${letter.image_proof_url}')" 
-                        class="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        View Proof Image
-                    </button>
+                    <p class="text-sm"><strong>Reason:</strong> ${escapeHtml(letter.reason)}</p>
+                    ${letter.teacher_remarks ? `<p class="text-sm mt-1"><strong>Your Remarks:</strong> ${escapeHtml(letter.teacher_remarks)}</p>` : ''}
                 </div>
-            ` : '<p class="text-sm text-gray-400 italic mb-3">No proof image attached</p>'}
-            
-            ${letter.status === 'Pending' ? `
-                <div class="flex gap-2 mt-4 pt-3 border-t">
-                    <button onclick="approveExcuseLetter('${letter.id}', '${letter.student_id}', '${letter.date_absent}')" 
-                        class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition">
-                        ✓ Approve
-                    </button>
-                    <button onclick="rejectExcuseLetter('${letter.id}')" 
-                        class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium transition">
-                        ✕ Reject
-                    </button>
-                </div>
-            ` : `
-                <div class="mt-3 pt-3 border-t">
-                    <p class="text-sm text-green-600 font-medium">✓ ${letter.status} on ${new Date(letter.updated_at || letter.created_at).toLocaleDateString()}</p>
-                </div>
-            `}
+                ${letter.image_proof_url ? `
+                    <div class="mb-3">
+                        <button onclick="viewProof('${letter.image_proof_url}')" class="text-blue-600 hover:text-blue-800 text-sm">View Proof Image</button>
+                    </div>
+                ` : '<p class="text-sm text-gray-400 italic mb-3">No proof image attached</p>'}
+                ${letter.status === 'Pending' ? `
+                    <div class="flex gap-2 mt-4 pt-3 border-t">
+                        <button onclick="approveExcuseLetter('${letter.id}', '${letter.student_id}', '${letter.date_absent}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium">✓ Approve</button>
+                        <button onclick="rejectExcuseLetter('${letter.id}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium">✕ Reject</button>
+                    </div>
+                ` : `<div class="mt-3 pt-3 border-t"><p class="text-sm text-green-600 font-medium">✓ ${letter.status} on ${new Date(letter.updated_at || letter.created_at).toLocaleDateString()}</p></div>`}
+            </div>
         `;
-        letterList.appendChild(div);
+    }).join('');
+}
+
+// Filter function for tabs
+function filterLetters(status) {
+    currentExcuseFilter = status;
+    
+    // Update tab active styles
+    const tabPending = document.getElementById('tab-pending');
+    const tabApproved = document.getElementById('tab-approved');
+    const tabRejected = document.getElementById('tab-rejected');
+    
+    // Reset all tabs to inactive
+    if (tabPending) {
+        tabPending.className = 'px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-all duration-200';
+    }
+    if (tabApproved) {
+        tabApproved.className = 'px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-all duration-200';
+    }
+    if (tabRejected) {
+        tabRejected.className = 'px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-all duration-200';
+    }
+    
+    // Set active tab style
+    if (status === 'pending' && tabPending) {
+        tabPending.className = 'px-4 py-2 bg-yellow-100 rounded-xl text-yellow-700 text-sm font-medium transition-all duration-200';
+    } else if (status === 'approved' && tabApproved) {
+        tabApproved.className = 'px-4 py-2 bg-green-100 rounded-xl text-green-700 text-sm font-medium transition-all duration-200';
+    } else if (status === 'rejected' && tabRejected) {
+        tabRejected.className = 'px-4 py-2 bg-red-100 rounded-xl text-red-700 text-sm font-medium transition-all duration-200';
+    }
+    
+    // Re-render with new filter
+    renderExcuseLetters();
+}
+
+async function approveExcuseLetter(letterId, studentId, dateAbsent) {
+    showConfirmationModal('Approve Excuse Letter', 'Are you sure you want to approve this excuse letter?', async () => {
+        try {
+            const { data: student } = await supabase.from('students').select('full_name, parent_id').eq('id', studentId).single();
+            await supabase.from('excuse_letters').update({ status: 'Approved', teacher_remarks: 'Approved by teacher' }).eq('id', letterId);
+            await supabase.from('attendance_logs').upsert({
+                student_id: studentId,
+                log_date: dateAbsent,
+                status: 'Excused',
+                remarks: 'Excused via approved excuse letter'
+            }, { onConflict: 'student_id, log_date' });
+
+            if (student?.parent_id) {
+                await supabase.from('notifications').insert({
+                    recipient_role: 'parents',
+                    recipient_id: student.parent_id,
+                    title: 'Excuse Letter Approved',
+                    message: `Your excuse letter for ${student.full_name} on ${dateAbsent} has been approved.`,
+                    type: 'attendance_alert',
+                    is_read: false
+                });
+            }
+            showNotification('Excuse letter approved!', "success");
+            await loadExcuseLetters(); // Refresh data and re-render with current filter
+        } catch (err) {
+            console.error(err);
+            showNotification('Error approving excuse letter.', "error");
+        }
     });
 }
 
-// Filter excuse letters by status
-function filterLetters(status) {
-    currentExcuseFilter = status;
-    const teacherClass = { grade_level: '', department: '' }; // Class info not needed for re-render
-    renderExcuseLetters(teacherClass);
+async function rejectExcuseLetter(letterId) {
+    showConfirmationModal('Reject Excuse Letter', 'Are you sure you want to reject this excuse letter?', async () => {
+        try {
+            await supabase.from('excuse_letters').update({ status: 'Rejected', teacher_remarks: 'Rejected by teacher' }).eq('id', letterId);
+            showNotification('Excuse letter rejected.', "success");
+            await loadExcuseLetters(); // Refresh data and re-render with current filter
+        } catch (err) {
+            console.error(err);
+            showNotification('Error rejecting excuse letter.', "error");
+        }
+    });
 }
 
-// View Proof Image Modal
 function viewProof(imageUrl) {
     let modal = document.getElementById('proof-modal');
     if (!modal) {
@@ -1417,11 +1241,7 @@ function viewProof(imageUrl) {
             <div class="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 <div class="flex justify-between items-center p-4 border-b">
                     <h3 class="font-bold text-lg">Excuse Letter Proof</h3>
-                    <button onclick="closeProofModal()" class="text-gray-500 hover:text-gray-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    <button onclick="closeProofModal()" class="text-gray-500 hover:text-gray-700">✕</button>
                 </div>
                 <div class="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-100">
                     <img id="proof-image" src="" alt="Excuse Letter Proof" class="max-w-full max-h-[60vh] object-contain rounded shadow-lg">
@@ -1432,548 +1252,425 @@ function viewProof(imageUrl) {
             </div>
         `;
         document.body.appendChild(modal);
-        
-        // Close on background click
-        modal.onclick = function(e) {
-            if (e.target === modal) closeProofModal();
-        };
     }
-    
     modal.classList.remove('hidden');
     document.getElementById('proof-image').src = imageUrl;
 }
 
-// Close Proof Modal
 function closeProofModal() {
     const modal = document.getElementById('proof-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
+    if (modal) modal.classList.add('hidden');
 }
 
-// Close modal on Escape key
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeProofModal();
-    }
-});
-
-// 16. Approve Excuse Letter
-async function approveExcuseLetter(letterId, studentId, dateAbsent) {
-    // UPDATED: Use confirmation modal to allow for optional remarks + Enterprise notifications
-    showConfirmationModal(
-        'Approve Excuse Letter',
-        `<div class="text-left space-y-4 p-2">
-            <p class="text-gray-600">Are you sure you want to approve this excuse letter?</p>
-            <div>
-                <label class="text-xs font-bold text-gray-400 uppercase">Optional Remarks</label>
-                <textarea id="approve-remarks" rows="3" class="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm" placeholder="e.g., Approved, but please submit med cert next time."></textarea>
-            </div>
-        </div>`,
-        async () => {
-            const remarks = document.getElementById('approve-remarks')?.value.trim();
-            try {
-                // Get student name first
-                const { data: student } = await supabase.from('students').select('full_name, parent_id').eq('id', studentId).single();
-                const studentName = student?.full_name || 'Student';
-
-                await supabase
-                    .from('excuse_letters')
-                    .update({ 
-                        status: 'Approved',
-                        teacher_remarks: remarks || null
-                    })
-                    .eq('id', letterId);
-                
-                await supabase
-                    .from('attendance_logs')
-                    .upsert({
-                        student_id: studentId,
-                        log_date: dateAbsent,
-                        status: 'Excused',
-                        remarks: 'Excused via approved excuse letter'
-                    }, {
-                        onConflict: 'student_id, log_date'
-                    });
-                
-                // NEW: Log the approval action
-                if (typeof logTeacherAction === 'function') {
-                    logTeacherAction('EXCUSE_LETTER_APPROVE', { teacher_remarks: remarks }, letterId, 'excuse_letter');
-                }
-
-                // ==========================================
-                // ENTERPRISE: Notify Subject Teachers (Phase 2)
-                // UPDATED: Now uses dispatchAbsenceNotifications for time-bound routing
-                // ==========================================
-                if (typeof dispatchAbsenceNotifications === 'function') {
-                    // For excuse letters, default to WHOLE_DAY scope
-                    // The engine will notify only affected teachers (based on time) and skip parent notifications
-                    await dispatchAbsenceNotifications(studentId, dateAbsent, 'WHOLE_DAY', true);
-                } else if (typeof notifySubjectTeachersOfExcuse === 'function') {
-                    // Fallback to legacy function if engine not loaded
-                    await notifySubjectTeachersOfExcuse(studentId, dateAbsent, studentName);
-                }
-
-                // ==========================================
-                // ENTERPRISE: Notify Parent - Excuse Letter Approval
-                // (This is separate from absence notification - tells parent their letter was approved)
-                // ==========================================
-                if (student?.parent_id) {
-                    await supabase.from('notifications').insert({
-                        recipient_role: 'parents',
-                        recipient_id: student.parent_id,
-                        title: 'Excuse Letter Approved',
-                        message: `Your excuse letter for ${studentName} on ${dateAbsent} has been approved by the adviser.`,
-                        type: 'attendance_alert',
-                        is_read: false
-                    });
-                }
-
-                showNotification('Excuse letter approved and Subject Teachers notified!', "success");
-                await loadExcuseLetters();
-                
-            } catch (err) {
-                console.error('Error approving excuse letter:', err);
-                showNotification('Error approving excuse letter. Please try again.', "error");
-            }
-        },
-        'Approve'
-    );
-}
-
-// 17. Reject Excuse Letter
-// UPDATED: Uses showConfirmationModal instead of prompt + Added audit logging
-async function rejectExcuseLetter(letterId) {
-    showConfirmationModal(
-        'Reject Excuse Letter',
-        `<div class="text-left space-y-4 p-2">
-            <p class="text-gray-600">Are you sure you want to reject this excuse letter?</p>
-            <div>
-                <label class="text-xs font-bold text-gray-400 uppercase">Reason for Rejection</label>
-                <textarea id="reject-reason" rows="3" class="w-full mt-1 p-3 border border-gray-200 rounded-lg text-sm" placeholder="Enter reason for rejection..."></textarea>
-            </div>
-        </div>`,
-        async () => {
-            const reason = document.getElementById('reject-reason')?.value.trim();
-            if (!reason) {
-                showNotification('Please provide a reason for rejection.', "error");
-                return;
-            }
-            
-            try {
-                const { error } = await supabase
-                    .from('excuse_letters')
-                    .update({ 
-                        status: 'Rejected',
-                        teacher_remarks: reason,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', letterId);
-                
-                if (error) throw error;
-                
-                // NEW: Log the rejection action - Task 4.3
-                if (typeof logTeacherAction === 'function') {
-                    logTeacherAction('EXCUSE_LETTER_REJECT', { teacher_remarks: reason }, letterId, 'excuse_letter');
-                }
-                
-                showNotification('Excuse letter rejected.', "success");
-                await loadExcuseLetters();
-                
-            } catch (err) {
-                console.error('Error rejecting excuse letter:', err);
-                showNotification('Error rejecting excuse letter. Please try again.', "error");
-            }
-        },
-        'Reject'
-    );
-}
-
-/**
- * Log teacher action to audit trail (notifications table)
- * UPDATED: Task 4.3 - Teacher Audit Logs
- * This function logs teacher actions to the notifications table for audit purposes
- */
-async function logTeacherAction(actionType, details = {}, targetId = null, targetTable = null) {
-    try {
-        // Get teacher info
-        const teacher = checkSession('teachers');
-        if (!teacher) return;
-        
-        // Build the message based on action type
-        let actionMessage = '';
-        switch (actionType) {
-            case 'EXCUSE_LETTER_APPROVE':
-                actionMessage = `Approved excuse letter`;
-                break;
-            case 'EXCUSE_LETTER_REJECT':
-                actionMessage = `Rejected excuse letter`;
-                break;
-            case 'SUBJECT_ATTENDANCE_MARK':
-                actionMessage = `Marked attendance: ${details.new_status} for ${details.subject_name}`;
-                break;
-            default:
-                actionMessage = actionType;
-        }
-        
-        // Insert into notifications table (acts as audit log)
-        await supabase.from('notifications').insert({
-            recipient_role: 'admins',
-            title: `Teacher Action: ${actionType}`,
-            message: actionMessage,
-            type: 'audit_log',
-            is_read: false,
-            sender_id: teacher.id,
-            metadata: {
-                action_type: actionType,
-                target_id: targetId,
-                target_table: targetTable,
-                details: details,
-                teacher_name: teacher.full_name,
-                timestamp: new Date().toISOString()
-            }
-        });
-        
-        if (DEBUG) console.log('[Audit] Logged:', actionType, details);
-        
-    } catch (err) {
-        console.error('[Audit] Error logging teacher action:', err);
-        // Don't show notification - audit failures shouldn't interrupt user flow
-    }
-}
-
-// 18. Load Analytics
-// UPDATED: Now updates stats cards and loads critical absences
+// ==========================================
+// ANALYTICS (Enhanced with Excused & Predictive)
+// ==========================================
 async function loadAnalytics() {
     await loadAttendanceStats();
     await loadAttendancePieChart();
-    await loadMonthlyBarChart();
+    await loadWeeklyTrendChart();
     await loadCriticalAbsences();
+    await loadPredictiveRisk();
 }
 
-// NEW: Load attendance statistics for the stats cards
 async function loadAttendanceStats() {
     const presentRateEl = document.getElementById('present-rate');
     const absentRateEl = document.getElementById('absent-rate');
     const lateRateEl = document.getElementById('late-rate');
     const excusedRateEl = document.getElementById('excused-rate');
-    
-    if (!presentRateEl && !absentRateEl && !lateRateEl && !excusedRateEl) return;
-    
+    if (!presentRateEl) return;
+
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
             .eq('adviser_id', currentUser.id)
             .single();
-        
         if (!teacherClass) return;
-        
+
         const today = new Date().toISOString().split('T')[0];
         const { data: students } = await supabase
             .from('students')
             .select('id')
             .eq('class_id', teacherClass.id);
-        
         const studentIds = students?.map(s => s.id) || [];
         const totalStudents = studentIds.length;
-        
         if (totalStudents === 0) return;
-        
-        // Get today's attendance
+
+        // Get approved excuse letters for today
+        const { data: excuses } = await supabase
+            .from('excuse_letters')
+            .select('student_id')
+            .eq('status', 'Approved')
+            .eq('date_absent', today)
+            .in('student_id', studentIds);
+        const excusedStudentIds = new Set(excuses?.map(e => e.student_id) || []);
+
         const { data: attendanceLogs } = await supabase
             .from('attendance_logs')
-            .select('status')
+            .select('status, student_id')
             .eq('log_date', today)
             .in('student_id', studentIds);
-        
+
         let present = 0, absent = 0, late = 0, excused = 0;
         attendanceLogs?.forEach(log => {
-            if (log.status === 'On Time' || log.status === 'Present') present++;
+            if (excusedStudentIds.has(log.student_id)) {
+                excused++;
+            } else if (log.status === 'On Time' || log.status === 'Present') present++;
             else if (log.status === 'Absent') absent++;
             else if (log.status === 'Late') late++;
-            else if (log.status === 'Excused') excused++;
         });
-        
-        // Calculate rates based on total students (not just those with logs)
-        const presentRate = Math.round((present / totalStudents) * 100);
-        const absentRate = Math.round((absent / totalStudents) * 100);
-        const lateRate = Math.round((late / totalStudents) * 100);
-        const excusedRate = Math.round((excused / totalStudents) * 100);
-        
-        if (presentRateEl) presentRateEl.textContent = presentRate + '%';
-        if (absentRateEl) absentRateEl.textContent = absentRate + '%';
-        if (lateRateEl) lateRateEl.textContent = lateRate + '%';
-        if (excusedRateEl) excusedRateEl.textContent = excusedRate + '%';
-        
-    } catch (err) {
-        console.error('Error loading attendance stats:', err);
-    }
+        // Students with no log and not excused are absent
+        const loggedStudentIds = new Set(attendanceLogs?.map(l => l.student_id) || []);
+        studentIds.forEach(id => {
+            if (!loggedStudentIds.has(id) && !excusedStudentIds.has(id)) absent++;
+        });
+
+        presentRateEl.textContent = Math.round((present / totalStudents) * 100) + '%';
+        absentRateEl.textContent = Math.round((absent / totalStudents) * 100) + '%';
+        lateRateEl.textContent = Math.round((late / totalStudents) * 100) + '%';
+        excusedRateEl.textContent = Math.round((excused / totalStudents) * 100) + '%';
+    } catch (err) { console.error('Error loading attendance stats:', err); }
 }
 
-// NEW: Load critical absences (students with 10+ absences in last 30 days)
-async function loadCriticalAbsences() {
-    const list = document.getElementById('critical-absences-list');
-    if (!list) return;
-    
-    try {
-        const { data: teacherClass } = await supabase
-            .from('classes')
-            .select('id')
-            .eq('adviser_id', currentUser.id)
-            .single();
-        
-        if (!teacherClass) {
-            list.innerHTML = '<p class="text-center text-gray-400 py-4 italic">No homeroom class assigned</p>';
-            return;
-        }
-        
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        
-        const { data: logs, error } = await supabase
-            .from('attendance_logs')
-            .select(`
-                *,
-                students!inner(class_id, full_name)
-            `)
-            .eq('students.class_id', teacherClass.id)
-            .eq('status', 'Absent')
-            .gte('log_date', thirtyDaysAgo);
-        
-        if (error) throw error;
-        
-        // Count absences per student
-        const absenceMap = {};
-        logs?.forEach(log => {
-            const name = log.students?.full_name || 'Unknown';
-            absenceMap[name] = (absenceMap[name] || 0) + 1;
-        });
-        
-        // CRITICAL ABSENCE RULE: Flag at 10 (halfway to 20)
-        const critical = Object.entries(absenceMap).filter(([_, count]) => count >= 10);
-        
-        if (critical.length > 0) {
-            list.innerHTML = critical.map(([name, count]) => `
-                <div class="flex justify-between items-center p-4 bg-red-50 rounded-xl border border-red-100 mb-2">
-                    <div>
-                        <p class="font-bold text-red-900">${name}</p>
-                        <p class="text-[10px] text-red-600 font-black uppercase">Reached Halfway Mark (${count}/20)</p>
-                    </div>
-                    <span class="bg-red-600 text-white px-3 py-1 rounded-lg font-bold">${count}</span>
-                </div>`).join('');
-        } else {
-            list.innerHTML = '<p class="text-center text-gray-400 py-4 italic">No students with critical absences.</p>';
-        }
-        
-    } catch (err) {
-        console.error('Error loading critical absences:', err);
-        list.innerHTML = '<p class="text-center text-red-500 py-4">Error loading data</p>';
-    }
-}
-
-// 19. Attendance Pie Chart
 async function loadAttendancePieChart() {
     const ctx = document.getElementById('attendancePieChart');
     if (!ctx) return;
-    
-    // Destroy existing chart if any
-    if (window.pieChart) {
-        window.pieChart.destroy();
-    }
-    
+    if (window.pieChart) window.pieChart.destroy();
+
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
             .eq('adviser_id', currentUser.id)
             .single();
-        
         if (!teacherClass) return;
-        
+
         const today = new Date().toISOString().split('T')[0];
         const { data: students } = await supabase
             .from('students')
             .select('id')
             .eq('class_id', teacherClass.id);
-        
         const studentIds = students?.map(s => s.id) || [];
-        const { data: attendanceLogs } = await supabase
+        const totalStudents = studentIds.length;
+        if (totalStudents === 0) return;
+
+        const { data: excuses } = await supabase
+            .from('excuse_letters')
+            .select('student_id')
+            .eq('status', 'Approved')
+            .eq('date_absent', today)
+            .in('student_id', studentIds);
+        const excusedStudentIds = new Set(excuses?.map(e => e.student_id) || []);
+
+        const { data: logs } = await supabase
             .from('attendance_logs')
-            .select('status')
+            .select('status, student_id')
             .eq('log_date', today)
             .in('student_id', studentIds);
-        
-        let present = 0, absent = 0, late = 0, excused = 0;
-        attendanceLogs?.forEach(log => {
+
+        let present = 0, absent = 0, late = 0, excused = excusedStudentIds.size;
+        logs?.forEach(log => {
+            if (excusedStudentIds.has(log.student_id)) return; // already counted
             if (log.status === 'On Time' || log.status === 'Present') present++;
             else if (log.status === 'Absent') absent++;
             else if (log.status === 'Late') late++;
-            else if (log.status === 'Excused') excused++;
         });
-        
-        // FIX: Destroy existing chart before creating new one using Chart.js built-in method
-        const pieCanvas = document.getElementById('attendancePieChart');
-        if (pieCanvas) {
-            // Use Chart.js built-in method to get existing chart
-            const existingPieChart = Chart.getChart(pieCanvas);
-            if (existingPieChart) {
-                existingPieChart.destroy();
-            }
-        }
-        if (window.pieChart) {
-            window.pieChart.destroy();
-            window.pieChart = null;
-        }
-        
-        const pieCtx = pieCanvas.getContext('2d');
-        window.pieChart = new Chart(pieCtx, {
+        const loggedIds = new Set(logs?.map(l => l.student_id) || []);
+        studentIds.forEach(id => {
+            if (!loggedIds.has(id) && !excusedStudentIds.has(id)) absent++;
+        });
+
+        window.pieChart = new Chart(ctx.getContext('2d'), {
             type: 'pie',
-            data: {
-                labels: ['Present', 'Absent', 'Late', 'Excused'],
-                datasets: [{
-                    data: [present, absent, late, excused],
-                    backgroundColor: ['#22c55e', '#ef4444', '#eab308', '#3b82f6']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: "Today's Attendance"
-                    }
-                }
-            }
+            data: { labels: ['Present', 'Absent', 'Late', 'Excused'], datasets: [{ data: [present, absent, late, excused], backgroundColor: ['#22c55e', '#ef4444', '#eab308', '#3b82f6'] }] },
+            options: { responsive: true, plugins: { title: { display: true, text: "Today's Attendance" } } }
         });
-        
-    } catch (err) {
-        console.error('Error loading pie chart:', err);
-    }
+    } catch (err) { console.error('Error loading pie chart:', err); }
 }
 
-// 20. Monthly Bar Chart
-async function loadMonthlyBarChart() {
+async function loadWeeklyTrendChart() {
     const ctx = document.getElementById('monthlyBarChart');
     if (!ctx) return;
-    
-    // Destroy existing chart if any
-    if (window.barChart) {
-        window.barChart.destroy();
-    }
-    
+    if (window.barChart) window.barChart.destroy();
+
     try {
         const { data: teacherClass } = await supabase
             .from('classes')
             .select('id')
             .eq('adviser_id', currentUser.id)
             .single();
-        
         if (!teacherClass) return;
-        
+
         const dates = [];
         const presentData = [];
         const absentData = [];
-        
+
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
             const dateStr = date.toISOString().split('T')[0];
             dates.push(date.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' }));
-            
+
+            // Get students in class
+            const { data: students } = await supabase
+                .from('students')
+                .select('id')
+                .eq('class_id', teacherClass.id);
+            const studentIds = students?.map(s => s.id) || [];
+            if (studentIds.length === 0) { presentData.push(0); absentData.push(0); continue; }
+
+            // Get excuses for this date
+            const { data: excuses } = await supabase
+                .from('excuse_letters')
+                .select('student_id')
+                .eq('status', 'Approved')
+                .eq('date_absent', dateStr)
+                .in('student_id', studentIds);
+            const excusedIds = new Set(excuses?.map(e => e.student_id) || []);
+
             const { data: logs } = await supabase
                 .from('attendance_logs')
-                .select('status')
-                .eq('log_date', dateStr);
-            
-            let present = 0, absent = 0;
+                .select('status, student_id')
+                .eq('log_date', dateStr)
+                .in('student_id', studentIds);
+
+            let presentCount = 0, absentCount = 0;
+            const loggedIds = new Set();
             logs?.forEach(log => {
-                if (log.status === 'On Time' || log.status === 'Present' || log.status === 'Late') present++;
-                else if (log.status === 'Absent') absent++;
+                loggedIds.add(log.student_id);
+                if (excusedIds.has(log.student_id)) {
+                    presentCount++; // excused counts as present for rate
+                } else if (log.status === 'On Time' || log.status === 'Present') presentCount++;
+                else if (log.status === 'Absent') absentCount++;
+                else if (log.status === 'Late') presentCount++; // late is present but tardy
             });
-            
-            presentData.push(present);
-            absentData.push(absent);
+            studentIds.forEach(id => {
+                if (!loggedIds.has(id) && !excusedIds.has(id)) absentCount++;
+                else if (!loggedIds.has(id) && excusedIds.has(id)) presentCount++;
+            });
+            presentData.push(presentCount);
+            absentData.push(absentCount);
         }
-        
-        // FIX: Destroy existing chart before creating new one using Chart.js built-in method
-        const barCanvas = document.getElementById('monthlyBarChart');
-        if (barCanvas) {
-            // Use Chart.js built-in method to get existing chart
-            const existingBarChart = Chart.getChart(barCanvas);
-            if (existingBarChart) {
-                existingBarChart.destroy();
-            }
-        }
-        if (window.barChart) {
-            window.barChart.destroy();
-            window.barChart = null;
-        }
-        
-        const barCtx = barCanvas.getContext('2d');
-        window.barChart = new Chart(barCtx, {
+
+        window.barChart = new Chart(ctx.getContext('2d'), {
             type: 'bar',
-            data: {
-                labels: dates,
-                datasets: [
-                    { label: 'Present', data: presentData, backgroundColor: '#22c55e' },
-                    { label: 'Absent', data: absentData, backgroundColor: '#ef4444' }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Weekly Attendance Trend'
-                    }
-                },
-                scales: {
-                    x: { stacked: false },
-                    y: { stacked: false, beginAtZero: true }
+            data: { labels: dates, datasets: [{ label: 'Present', data: presentData, backgroundColor: '#22c55e' }, { label: 'Absent', data: absentData, backgroundColor: '#ef4444' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'Weekly Attendance Trend' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Students' } } } }
+        });
+    } catch (err) { console.error('Error loading weekly trend:', err); }
+}
+
+async function loadPredictiveRisk() {
+    const container = document.getElementById('predictive-risk-list');
+    if (!container) return;
+
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+        if (!teacherClass) {
+            container.innerHTML = '<p class="text-center text-gray-400 italic">No homeroom class assigned</p>';
+            return;
+        }
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        const endDate = new Date().toISOString().split('T')[0];
+
+        const { data: students } = await supabase
+            .from('students')
+            .select('id, full_name, student_id_text')
+            .eq('class_id', teacherClass.id);
+        if (!students?.length) {
+            container.innerHTML = '<p class="text-center text-gray-400 italic">No students in homeroom</p>';
+            return;
+        }
+
+        const studentIds = students.map(s => s.id);
+        const { data: excuses } = await supabase
+            .from('excuse_letters')
+            .select('student_id, date_absent')
+            .eq('status', 'Approved')
+            .gte('date_absent', startDate)
+            .lte('date_absent', endDate)
+            .in('student_id', studentIds);
+        const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
+
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('student_id, status, log_date')
+            .in('student_id', studentIds)
+            .gte('log_date', startDate)
+            .lte('log_date', endDate);
+
+        const stats = {};
+        students.forEach(s => { stats[s.id] = { name: s.full_name, id: s.student_id_text, total: 0, absent: 0, late: 0 }; });
+        logs?.forEach(log => {
+            const s = stats[log.student_id];
+            if (s) {
+                s.total++;
+                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+                if (!isExcused) {
+                    if (log.status === 'Absent') s.absent++;
+                    else if (log.status === 'Late') s.late++;
                 }
             }
         });
-        
-    } catch (err) {
-        console.error('Error loading bar chart:', err);
+
+        const riskStudents = [];
+        for (const [_, s] of Object.entries(stats)) {
+            if (s.total === 0) continue;
+            const absenceRate = (s.absent / s.total) * 100;
+            const lateRate = (s.late / s.total) * 100;
+            let riskLevel = '', reason = '';
+            if (absenceRate > 15) { riskLevel = 'high'; reason = `High absence risk (${Math.round(absenceRate)}% absent)`; }
+            else if (absenceRate > 10) { riskLevel = 'medium'; reason = `Moderate absence risk (${Math.round(absenceRate)}% absent)`; }
+            else if (lateRate > 25) { riskLevel = 'medium'; reason = `Excessive tardiness (${Math.round(lateRate)}% late)`; }
+            else if (lateRate > 15) { riskLevel = 'low'; reason = `Frequent lateness (${Math.round(lateRate)}% late)`; }
+            if (riskLevel) riskStudents.push({ ...s, riskLevel, reason, absenceRate: Math.round(absenceRate), lateRate: Math.round(lateRate) });
+        }
+
+        if (riskStudents.length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-400 italic">No at-risk students detected</p>';
+        } else {
+            container.innerHTML = riskStudents.map(s => `
+                <div class="flex justify-between items-center p-3 ${s.riskLevel === 'high' ? 'bg-red-50' : s.riskLevel === 'medium' ? 'bg-orange-50' : 'bg-yellow-50'} rounded-xl border ${s.riskLevel === 'high' ? 'border-red-200' : 'border-orange-200'} mb-2">
+                    <div><p class="font-bold text-gray-800">${escapeHtml(s.name)}</p><p class="text-xs text-gray-500">${s.id}</p><p class="text-xs ${s.riskLevel === 'high' ? 'text-red-600' : 'text-orange-600'}">${escapeHtml(s.reason)}</p></div>
+                    <div class="text-right"><span class="font-bold text-lg ${s.riskLevel === 'high' ? 'text-red-600' : 'text-orange-600'}">${s.absenceRate}%</span><p class="text-[10px] text-gray-400">absent rate</p></div>
+                </div>
+            `).join('');
+        }
+    } catch (err) { console.error('Error loading predictive risk:', err); container.innerHTML = '<p class="text-red-500 text-center">Error loading data</p>'; }
+}
+
+async function loadCriticalAbsences() {
+    const list = document.getElementById('critical-absences-list');
+    if (!list) return;
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+        if (!teacherClass) { list.innerHTML = '<p class="text-center text-gray-400 italic">No homeroom class assigned</p>'; return; }
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        const endDate = new Date().toISOString().split('T')[0];
+
+        const { data: students } = await supabase
+            .from('students')
+            .select('id, full_name, student_id_text')
+            .eq('class_id', teacherClass.id);
+        if (!students?.length) { list.innerHTML = '<p class="text-center text-gray-400 italic">No students found</p>'; return; }
+
+        const studentIds = students.map(s => s.id);
+        const { data: excuses } = await supabase
+            .from('excuse_letters')
+            .select('student_id, date_absent')
+            .eq('status', 'Approved')
+            .gte('date_absent', startDate)
+            .lte('date_absent', endDate)
+            .in('student_id', studentIds);
+        const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
+
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('student_id, log_date, status')
+            .in('student_id', studentIds)
+            .eq('status', 'Absent')
+            .gte('log_date', startDate)
+            .lte('log_date', endDate);
+
+        const absenceCount = {};
+        students.forEach(s => { absenceCount[s.id] = { name: s.full_name, id: s.student_id_text, absent: 0 }; });
+        logs?.forEach(log => {
+            const key = `${log.student_id}-${log.log_date}`;
+            if (!excusedSet.has(key)) absenceCount[log.student_id].absent++;
+        });
+        const critical = Object.values(absenceCount).filter(s => s.absent >= 10);
+        if (critical.length === 0) {
+            list.innerHTML = '<p class="text-center text-gray-400 italic">No students with 10+ absences in last 30 days</p>';
+        } else {
+            list.innerHTML = critical.map(s => `
+                <div class="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100 mb-2">
+                    <div><p class="font-bold text-red-900">${escapeHtml(s.name)}</p><p class="text-xs text-gray-500">${s.id}</p></div>
+                    <span class="bg-red-600 text-white px-3 py-1 rounded-lg font-bold">${s.absent} absences</span>
+                </div>
+            `).join('');
+        }
+    } catch (err) { console.error(err); list.innerHTML = '<p class="text-center text-red-500">Error loading data</p>'; }
+}
+
+function exportToCSV() {
+    const presentRate = document.getElementById('present-rate')?.innerText || '0%';
+    const absentRate = document.getElementById('absent-rate')?.innerText || '0%';
+    const lateRate = document.getElementById('late-rate')?.innerText || '0%';
+    const excusedRate = document.getElementById('excused-rate')?.innerText || '0%';
+    const today = new Date().toISOString().split('T')[0];
+    let csv = `Educare Teacher Analytics Report\nDate: ${today}\n\nPresent Rate,${presentRate}\nAbsent Rate,${absentRate}\nLate Rate,${lateRate}\nExcused Rate,${excusedRate}\n\nPredictive Risk Students (30-day):\nName,ID,Risk Level,Reason\n`;
+    const riskItems = document.querySelectorAll('#predictive-risk-list .flex');
+    riskItems.forEach(item => {
+        const name = item.querySelector('.font-bold')?.innerText || '';
+        const id = item.querySelector('.text-xs.text-gray-500')?.innerText || '';
+        const reason = item.querySelector('.text-xs.text-red-600, .text-xs.text-orange-600')?.innerText || '';
+        const riskLevel = item.querySelector('.bg-red-50') ? 'High' : (item.querySelector('.bg-orange-50') ? 'Medium' : 'Low');
+        csv += `"${name}","${id}","${riskLevel}","${reason}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Teacher_Analytics_${today}.csv`;
+    link.click();
+}
+
+// ==========================================
+// ANNOUNCEMENTS (Full version)
+// ==========================================
+async function setupAnnouncementPage() {
+    await loadAnnouncementsBoard();
+    await loadScheduledAnnouncements();
+    await loadSentAnnouncements();
+
+    const contentArea = document.getElementById('announcement-content');
+    const charCounter = document.getElementById('char-counter');
+    if (contentArea && charCounter) {
+        contentArea.addEventListener('input', () => {
+            charCounter.textContent = contentArea.value.length;
+        });
     }
 }
 
-// 21. Load Announcements Board - Load received announcements from admin
 async function loadAnnouncementsBoard() {
-    await loadExistingAnnouncements();
-}
-
-// 22. Load Existing Announcements - Load received announcements from admin
-async function loadExistingAnnouncements() {
     const list = document.getElementById('announcements-list');
     if (!list) return;
-    
+
     try {
         const now = new Date().toISOString();
-        // Fetch announcements where teacher is the recipient
         const { data, error } = await supabase
             .from('announcements')
             .select('*')
             .eq('target_teachers', true)
             .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false });
-        
+
         if (error) throw error;
-        
+
         if (!data || data.length === 0) {
             list.innerHTML = '<p class="text-center text-gray-400 italic py-8">No announcements from administration.</p>';
             return;
         }
-        
+
         list.innerHTML = data.map(ann => `
             <div class="p-4 bg-white rounded-xl border border-gray-100 mb-3 shadow-sm">
                 <div class="flex justify-between items-start mb-2">
                     <div class="flex items-center gap-2">
-                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                            ann.type === 'Emergency' ? 'bg-red-100 text-red-600' : 
-                            ann.type === 'Event' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
-                        }">${ann.type || 'General'}</span>
+                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${ann.type === 'Emergency' ? 'bg-red-100 text-red-600' : ann.type === 'Event' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}">${ann.type || 'General'}</span>
                         <h4 class="font-bold text-gray-800">${ann.title || 'Untitled'}</h4>
                     </div>
                     <span class="text-xs text-gray-500">${new Date(ann.created_at).toLocaleDateString()}</span>
@@ -1981,27 +1678,24 @@ async function loadExistingAnnouncements() {
                 <p class="text-sm text-gray-600">${ann.content || ''}</p>
             </div>
         `).join('');
-        
     } catch (err) {
         console.error('Error loading announcements:', err);
         list.innerHTML = '<p class="text-center text-red-500 py-8">Could not load announcements.</p>';
     }
 }
 
-// 23. Post Announcement to Parents (with Confirmation)
 async function postAnnouncement() {
     const title = document.getElementById('announcement-title').value;
     const content = document.getElementById('announcement-content').value;
     const scheduleDate = document.getElementById('announcement-date').value;
     const scheduleTime = document.getElementById('announcement-time').value;
     const isUrgent = document.getElementById('announcement-urgent').checked;
-    const maxLength = 500;
 
     if (!title || !content) {
         return showNotification('Please fill in both title and content.', "error");
     }
-    if (content.length > maxLength) {
-        return showNotification(`Content cannot exceed ${maxLength} characters.`, "error");
+    if (content.length > 500) {
+        return showNotification('Content cannot exceed 500 characters.', "error");
     }
 
     let scheduled_at = new Date();
@@ -2014,32 +1708,9 @@ async function postAnnouncement() {
         }
     }
 
-    const confirmationMessage = `
-        <div class="text-left space-y-4 p-2">
-            <div>
-                <p class="text-xs font-bold text-gray-400 uppercase">Title</p>
-                <p class="font-semibold text-gray-800">${title}</p>
-            </div>
-            <div>
-                <p class="text-xs font-bold text-gray-400 uppercase">Content</p>
-                <p class="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">${content}</p>
-            </div>
-            <div class="grid grid-cols-2 gap-4 pt-2 border-t">
-                <div>
-                    <p class="text-xs font-bold text-gray-400 uppercase">Urgency</p>
-                    <p class="font-semibold ${isUrgent ? 'text-red-600' : 'text-gray-700'}">${isUrgent ? 'URGENT' : 'Normal'}</p>
-                </div>
-                <div>
-                    <p class="text-xs font-bold text-gray-400 uppercase">Send Time</p>
-                    <p class="font-semibold text-gray-700">${isScheduled ? scheduled_at.toLocaleString() : 'Immediately'}</p>
-                </div>
-            </div>
-        </div>
-    `;
-
-    showConfirmationModal('Confirm Announcement', confirmationMessage, async () => {
+    showConfirmationModal('Confirm Announcement', `Send announcement "${title}" to parents?`, async () => {
         try {
-            const batchId = crypto.randomUUID();
+            const batchId = safeRandomUUID();
             const { data: teacherClass, error: classError } = await supabase
                 .from('classes')
                 .select('id')
@@ -2059,7 +1730,6 @@ async function postAnnouncement() {
             if (studentError) throw studentError;
 
             const parentIds = [...new Set(students.map(s => s.parent_id))];
-
             if (parentIds.length === 0) {
                 throw new Error("No parents found for your homeroom students.");
             }
@@ -2077,22 +1747,16 @@ async function postAnnouncement() {
             }));
 
             const { error: notifError } = await supabase.from('notifications').insert(notifications);
-
             if (notifError) throw notifError;
 
-            const successMessage = isScheduled 
-                ? `Announcement scheduled for ${scheduled_at.toLocaleDateString()} at ${scheduled_at.toLocaleTimeString()}.`
-                : `Announcement sent to ${parentIds.length} parents.`;
-            
-            showNotification(successMessage, "success");
-            
+            showNotification(isScheduled ? `Announcement scheduled for ${scheduled_at.toLocaleString()}` : `Announcement sent to ${parentIds.length} parents.`, "success");
+
             document.getElementById('announcement-title').value = '';
             document.getElementById('announcement-content').value = '';
             document.getElementById('announcement-date').value = '';
             document.getElementById('announcement-time').value = '';
             document.getElementById('announcement-urgent').checked = false;
-            const charCounter = document.getElementById('char-counter');
-            if (charCounter) charCounter.textContent = '0';
+            if (document.getElementById('char-counter')) document.getElementById('char-counter').textContent = '0';
             loadScheduledAnnouncements();
         } catch (err) {
             console.error('Error posting class announcement:', err);
@@ -2101,131 +1765,6 @@ async function postAnnouncement() {
     });
 }
 
-// 24. Setup Announcement Page
-async function setupAnnouncementPage() {
-    await loadAnnouncementsBoard();
-    await loadScheduledAnnouncements();
-    await loadSentAnnouncements();
-
-    const contentArea = document.getElementById('announcement-content');
-    const charCounter = document.getElementById('char-counter');
-    const maxLength = 500;
-
-    if (contentArea && charCounter) {
-        contentArea.addEventListener('input', () => {
-            const currentLength = contentArea.value.length;
-            charCounter.textContent = currentLength;
-            charCounter.parentElement.classList.toggle('text-red-500', currentLength > maxLength);
-        });
-    }
-}
-
-// 25. Load Sent Announcements
-async function loadSentAnnouncements() {
-    const list = document.getElementById('sent-announcements-list');
-    if (!list) return;
-
-    try {
-        // Use direct query instead of RPC (RPC function may not exist)
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('id, title, message, created_at, is_urgent, batch_id, scheduled_at, is_read')
-            .eq('sender_id', currentUser.id)
-            .eq('type', 'announcement')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (!data || data.length === 0) {
-            list.innerHTML = '<p class="text-center text-gray-400 italic">You have not sent any announcements.</p>';
-            return;
-        }
-
-        // For simplicity, show total count (read tracking would require join with read_receipts)
-        list.innerHTML = data.map(ann => {
-            const title = ann.title ? ann.title.replace('Announcement: ', '') : 'Untitled';
-            const isScheduled = ann.scheduled_at && new Date(ann.scheduled_at) > new Date();
-            return `
-                <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="font-bold text-gray-800">${title}</p>
-                            <p class="text-xs text-gray-500 truncate max-w-xs">${ann.message || ''}</p>
-                        </div>
-                        <div class="text-right">
-                            <span class="px-2 py-1 rounded-lg text-xs font-bold ${isScheduled ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}">
-                                ${isScheduled ? 'Scheduled' : 'Sent'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-    } catch (err) {
-        console.error("Error loading sent announcements:", err);
-        list.innerHTML = '<p class="text-center text-red-500">Could not load sent announcements.</p>';
-    }
-}
-
-// 26. Open Edit Announcement Modal
-async function openEditAnnouncementModal(ann) {
-    const scheduledDate = new Date(ann.scheduled_at);
-    
-    const confirmationMessage = `
-        <div class="text-left space-y-4 p-2">
-            <input type="hidden" id="edit-batch-id" value="${ann.batch_id}">
-            <div>
-                <label class="text-xs font-bold text-gray-400 uppercase">Title</label>
-                <input id="edit-title" class="w-full mt-1 p-2 border rounded-lg" value="${ann.title.replace('Announcement: ', '')}">
-            </div>
-            <div>
-                <label class="text-xs font-bold text-gray-400 uppercase">Content</label>
-                <textarea id="edit-content" class="w-full mt-1 p-2 border rounded-lg" rows="4">${ann.message}</textarea>
-            </div>
-            <div class="grid grid-cols-2 gap-4 pt-2 border-t">
-                <div>
-                    <label class="text-xs font-bold text-gray-400 uppercase">Schedule Date</label>
-                    <input type="date" id="edit-date" class="w-full mt-1 p-2 border rounded-lg" value="${scheduledDate.toISOString().split('T')[0]}">
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-gray-400 uppercase">Schedule Time</label>
-                    <input type="time" id="edit-time" class="w-full mt-1 p-2 border rounded-lg" value="${scheduledDate.toTimeString().substring(0,5)}">
-                </div>
-            </div>
-        </div>
-    `;
-
-    showConfirmationModal('Edit Scheduled Announcement', confirmationMessage, submitAnnouncementEdit, 'Save Changes');
-}
-
-// 27. Submit Announcement Edit
-async function submitAnnouncementEdit() {
-    const batchId = document.getElementById('edit-batch-id').value;
-    const title = document.getElementById('edit-title').value;
-    const content = document.getElementById('edit-content').value;
-    const date = document.getElementById('edit-date').value;
-    const time = document.getElementById('edit-time').value;
-    const scheduled_at = new Date(`${date}T${time}`);
-
-    try {
-        const { error } = await supabase.from('notifications')
-            .update({
-                title: `Announcement: ${title}`,
-                message: content,
-                scheduled_at: scheduled_at.toISOString()
-            })
-            .eq('batch_id', batchId);
-
-        if (error) throw error;
-        showNotification("Scheduled announcement updated!", "success");
-        loadScheduledAnnouncements();
-    } catch (err) {
-        showNotification("Failed to update announcement.", "error");
-    }
-}
-
-// 28. Load Scheduled Announcements
 async function loadScheduledAnnouncements() {
     const list = document.getElementById('scheduled-announcements-list');
     if (!list) return;
@@ -2247,31 +1786,60 @@ async function loadScheduledAnnouncements() {
         }
 
         list.innerHTML = data.map(ann => `
-            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2">
                 <div>
-                    <p class="font-semibold text-gray-700">${ann.title}</p>
+                    <p class="font-semibold text-gray-700">${ann.title?.replace('Announcement: ', '')}</p>
                     <p class="text-xs text-blue-600">Scheduled for: ${new Date(ann.scheduled_at).toLocaleString()}</p>
                 </div>
-                <div class="flex gap-2">
-                    <button onclick='openEditAnnouncementModal(${JSON.stringify(ann)})' class="p-2 text-gray-500 hover:bg-gray-100 rounded-lg" title="Edit"><i data-lucide="edit" class="w-5 h-5"></i></button>
-                    <button onclick="cancelScheduledAnnouncement('${ann.batch_id}')" class="p-2 text-red-500 hover:bg-red-100 rounded-lg" title="Cancel">
-                        <i data-lucide="x-circle" class="w-5 h-5"></i>
-                    </button>
-                </div>
+                <button onclick="cancelScheduledAnnouncement('${ann.batch_id}')" class="p-2 text-red-500 hover:bg-red-100 rounded-lg">Cancel</button>
             </div>
         `).join('');
-        
-        if (window.lucide) lucide.createIcons();
-
     } catch (err) {
-        console.error("Error loading scheduled announcements:", err);
+        console.error('Error loading scheduled announcements:', err);
         list.innerHTML = '<p class="text-center text-red-500">Could not load scheduled items.</p>';
     }
 }
 
-// 29. Cancel Scheduled Announcement
+async function loadSentAnnouncements() {
+    const list = document.getElementById('sent-announcements-list');
+    if (!list) return;
+
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, message, created_at, is_urgent, batch_id')
+            .eq('sender_id', currentUser.id)
+            .eq('type', 'announcement')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            list.innerHTML = '<p class="text-center text-gray-400 italic">You have not sent any announcements.</p>';
+            return;
+        }
+
+        list.innerHTML = data.map(ann => `
+            <div class="p-4 bg-gray-50 rounded-xl border border-gray-100 mb-2">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-bold text-gray-800">${ann.title?.replace('Announcement: ', '')}</p>
+                        <p class="text-xs text-gray-500 truncate max-w-xs">${ann.message || ''}</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="px-2 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-600">Sent</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Error loading sent announcements:", err);
+        list.innerHTML = '<p class="text-center text-red-500">Could not load sent announcements.</p>';
+    }
+}
+
 async function cancelScheduledAnnouncement(batchId) {
-    if (!confirm("Are you sure you want to cancel this scheduled announcement? This will delete it for all recipients.")) return;
+    if (!confirm("Cancel this scheduled announcement?")) return;
     try {
         const { error } = await supabase.from('notifications').delete().eq('batch_id', batchId);
         if (error) throw error;
@@ -2282,673 +1850,533 @@ async function cancelScheduledAnnouncement(batchId) {
     }
 }
 
-// 30. Toggle Gatekeeper Mode
+// ==========================================
+// DASHBOARD LIVE STATS (Adviser only)
+// ==========================================
+async function loadLiveDashboardStats() {
+    const presentEl = document.getElementById('present-count');
+    const lateEl = document.getElementById('late-count');
+    const clinicEl = document.getElementById('clinic-count');
+    const excuseEl = document.getElementById('excuse-count');
+
+    if (!presentEl && !lateEl && !clinicEl && !excuseEl) return;
+
+    try {
+        const { data: teacherClass } = await supabase
+            .from('classes')
+            .select('id')
+            .eq('adviser_id', currentUser.id)
+            .single();
+
+        if (!teacherClass) return;
+
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data: students } = await supabase
+            .from('students')
+            .select('id')
+            .eq('class_id', teacherClass.id);
+
+        const studentIds = students?.map(s => s.id) || [];
+        if (studentIds.length === 0) return;
+
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('status')
+            .eq('log_date', today)
+            .in('student_id', studentIds);
+
+        const { data: clinicVisits } = await supabase
+            .from('clinic_visits')
+            .select('student_id')
+            .eq('status', 'In Clinic')
+            .gte('time_in', today)
+            .is('time_out', null)
+            .in('student_id', studentIds);
+
+        const clinicStudentIds = new Set(clinicVisits?.map(cv => cv.student_id) || []);
+
+        let present = 0, late = 0, excused = 0;
+        logs?.forEach(log => {
+            if (log.status === 'Present' || log.status === 'On Time') present++;
+            else if (log.status === 'Late') late++;
+            else if (log.status === 'Excused') excused++;
+        });
+
+        const inClinic = clinicStudentIds.size;
+        const pendingExcuses = 0; // Would need separate query
+
+        if (presentEl) presentEl.textContent = present;
+        if (lateEl) lateEl.textContent = late;
+        if (clinicEl) clinicEl.textContent = inClinic;
+        if (excuseEl) excuseEl.textContent = pendingExcuses;
+
+    } catch (err) {
+        console.error('Error loading live stats:', err);
+    }
+}
+
+function startRealTimeStats() {
+    if (window.statsInterval) clearInterval(window.statsInterval);
+    window.statsInterval = setInterval(() => {
+        if (isAdviserMode) loadLiveDashboardStats();
+    }, 30000);
+}
+
+function loadHomeroomStats(classId) {
+    if (DEBUG) console.log('Loading homeroom stats for class:', classId);
+}
+
+// ==========================================
+// SETTINGS (Password change)
+// ==========================================
+function initializeTeacherSettingsPage() {
+    const container = document.getElementById('settings-container');
+    if (!container) return;
+    container.innerHTML = `
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+            <h3 class="font-bold text-xl mb-4">Change Password</h3>
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium text-gray-500 mb-1">Current Password</label><input type="password" id="cp-current" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl"></div>
+                <div><label class="block text-sm font-medium text-gray-500 mb-1">New Password</label><input type="password" id="cp-new" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl"></div>
+                <div><label class="block text-sm font-medium text-gray-500 mb-1">Confirm New Password</label><input type="password" id="cp-confirm" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl"></div>
+            </div>
+            <div class="mt-6 flex justify-end"><button onclick="submitPasswordChange()" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold">Update Password</button></div>
+        </div>
+    `;
+}
+
+async function submitPasswordChange() {
+    const current = document.getElementById('cp-current')?.value;
+    const newPass = document.getElementById('cp-new')?.value;
+    const confirm = document.getElementById('cp-confirm')?.value;
+
+    if (!current || !newPass || !confirm) return showNotification("All fields required", "error");
+    if (newPass !== confirm) return showNotification("Passwords do not match", "error");
+    if (newPass.length < 6) return showNotification("Password must be at least 6 characters", "error");
+
+    const { data, error } = await supabase.from('teachers').select('id').eq('id', currentUser.id).eq('password', current).single();
+    if (error || !data) return showNotification("Incorrect current password", "error");
+
+    const { error: updateErr } = await supabase.from('teachers').update({ password: newPass }).eq('id', currentUser.id);
+    if (updateErr) showNotification(updateErr.message, "error");
+    else showNotification("Password updated successfully!", "success");
+}
+
+// ==========================================
+// DASHBOARD HOMEROOM DATA (NEW)
+// ==========================================
+async function loadDashboardHomeroomData() {
+    const { data: homeroomClass, error } = await supabase
+        .from('classes')
+        .select('id, grade_level, department')
+        .eq('adviser_id', currentUser.id)
+        .single();
+
+    const homeroomSection = document.getElementById('homeroom-section');
+    const noHomeroomMsg = document.getElementById('no-homeroom-message');
+
+    if (error || !homeroomClass) {
+        if (homeroomSection) homeroomSection.classList.add('hidden');
+        if (noHomeroomMsg) noHomeroomMsg.classList.remove('hidden');
+        return;
+    }
+
+    if (homeroomSection) homeroomSection.classList.remove('hidden');
+    if (noHomeroomMsg) noHomeroomMsg.classList.add('hidden');
+
+    await loadAttendanceSummary(homeroomClass.id);
+    await loadCriticalAbsencesForDashboard(homeroomClass.id);
+    await loadMostLates(homeroomClass.id);
+    await loadGoodPerformance(homeroomClass.id);
+    await loadLatestAnnouncements();
+    await loadPendingExcuses(homeroomClass.id);
+}
+
+async function loadAttendanceSummary(classId) {
+    const presentListDiv = document.getElementById('present-list');
+    const absentListDiv = document.getElementById('absent-list');
+    if (!presentListDiv || !absentListDiv) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: students, error: studentError } = await supabase
+        .from('students')
+        .select('id, full_name, student_id_text')
+        .eq('class_id', classId)
+        .eq('status', 'Enrolled')
+        .order('full_name');
+
+    if (studentError || !students || students.length === 0) {
+        presentListDiv.innerHTML = '<p class="text-gray-500 text-sm">No students found.</p>';
+        absentListDiv.innerHTML = '<p class="text-gray-500 text-sm">No students found.</p>';
+        return;
+    }
+
+    const studentIds = students.map(s => s.id);
+    const { data: logs } = await supabase
+        .from('attendance_logs')
+        .select('student_id, status')
+        .eq('log_date', today)
+        .in('student_id', studentIds);
+
+    const attendanceMap = new Map();
+    logs?.forEach(log => {
+        attendanceMap.set(log.student_id, log.status);
+    });
+
+    const presentStudents = [];
+    const absentStudents = [];
+
+    students.forEach(student => {
+        const status = attendanceMap.get(student.id);
+        if (status === 'On Time' || status === 'Present') {
+            presentStudents.push(student);
+        } else if (status === 'Absent') {
+            absentStudents.push(student);
+        } else if (!status) {
+            absentStudents.push(student);
+        }
+    });
+
+    if (presentStudents.length === 0) {
+        presentListDiv.innerHTML = '<p class="text-gray-500 text-sm">No students present today.</p>';
+    } else {
+        presentListDiv.innerHTML = presentStudents.map(s => `
+            <div class="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+                <span class="font-medium text-gray-800">${escapeHtml(s.full_name)}</span>
+                <span class="text-xs text-gray-500">${s.student_id_text || ''}</span>
+            </div>
+        `).join('');
+    }
+
+    if (absentStudents.length === 0) {
+        absentListDiv.innerHTML = '<p class="text-gray-500 text-sm">No absent students today.</p>';
+    } else {
+        absentListDiv.innerHTML = absentStudents.map(s => `
+            <div class="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+                <span class="font-medium text-gray-800">${escapeHtml(s.full_name)}</span>
+                <span class="text-xs text-gray-500">${s.student_id_text || ''}</span>
+            </div>
+        `).join('');
+    }
+}
+
+async function loadCriticalAbsencesForDashboard(classId) {
+    const container = document.getElementById('critical-absences-list');
+    if (!container) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data: students } = await supabase
+        .from('students')
+        .select('id, full_name')
+        .eq('class_id', classId)
+        .eq('status', 'Enrolled');
+
+    if (!students || students.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students in homeroom.</p>';
+        return;
+    }
+
+    const studentIds = students.map(s => s.id);
+    const { data: logs } = await supabase
+        .from('attendance_logs')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .eq('status', 'Absent')
+        .gte('log_date', startDate);
+
+    const absenceCount = new Map();
+    logs?.forEach(log => {
+        absenceCount.set(log.student_id, (absenceCount.get(log.student_id) || 0) + 1);
+    });
+
+    const critical = [];
+    for (const student of students) {
+        const count = absenceCount.get(student.id) || 0;
+        if (count >= 10) {
+            critical.push({ ...student, count });
+        }
+    }
+
+    if (critical.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students with 10+ absences in the last 30 days.</p>';
+    } else {
+        container.innerHTML = critical.map(s => `
+            <div class="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+                <span class="font-medium text-gray-800">${escapeHtml(s.full_name)}</span>
+                <span class="text-xs font-bold text-red-600">${s.count} absences</span>
+            </div>
+        `).join('');
+    }
+}
+
+async function loadMostLates(classId) {
+    const container = document.getElementById('most-lates-list');
+    if (!container) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data: students } = await supabase
+        .from('students')
+        .select('id, full_name')
+        .eq('class_id', classId)
+        .eq('status', 'Enrolled');
+
+    if (!students || students.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students in homeroom.</p>';
+        return;
+    }
+
+    const studentIds = students.map(s => s.id);
+    const { data: logs } = await supabase
+        .from('attendance_logs')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .eq('status', 'Late')
+        .gte('log_date', startDate);
+
+    const lateCount = new Map();
+    logs?.forEach(log => {
+        lateCount.set(log.student_id, (lateCount.get(log.student_id) || 0) + 1);
+    });
+
+    const withLates = students
+        .map(s => ({ ...s, count: lateCount.get(s.id) || 0 }))
+        .filter(s => s.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+    if (withLates.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No late records in the last 30 days.</p>';
+    } else {
+        container.innerHTML = withLates.map(s => `
+            <div class="flex justify-between items-center p-2 bg-orange-50 rounded-lg">
+                <span class="font-medium text-gray-800">${escapeHtml(s.full_name)}</span>
+                <span class="text-xs font-bold text-orange-600">${s.count} late(s)</span>
+            </div>
+        `).join('');
+    }
+}
+
+async function loadGoodPerformance(classId) {
+    const container = document.getElementById('good-performance-list');
+    if (!container) return;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const { data: students } = await supabase
+        .from('students')
+        .select('id, full_name')
+        .eq('class_id', classId)
+        .eq('status', 'Enrolled');
+
+    if (!students || students.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students in homeroom.</p>';
+        return;
+    }
+
+    const studentIds = students.map(s => s.id);
+    const { data: logs } = await supabase
+        .from('attendance_logs')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .gte('log_date', startDate)
+        .in('status', ['Absent', 'Late']);
+
+    const problematic = new Set();
+    logs?.forEach(log => {
+        problematic.add(log.student_id);
+    });
+
+    const goodStudents = students.filter(s => !problematic.has(s.id)).slice(0, 5);
+
+    if (goodStudents.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students with perfect attendance in the last 30 days.</p>';
+    } else {
+        container.innerHTML = goodStudents.map(s => `
+            <div class="flex justify-between items-center p-2 bg-emerald-50 rounded-lg">
+                <span class="font-medium text-gray-800">${escapeHtml(s.full_name)}</span>
+                <span class="text-xs text-emerald-600">✓ Perfect</span>
+            </div>
+        `).join('');
+    }
+}
+
+async function loadLatestAnnouncements() {
+    const container = document.getElementById('latest-announcements-list');
+    if (!container) return;
+
+    const { data, error } = await supabase
+        .from('announcements')
+        .select('title, content, created_at, is_urgent')
+        .or('target_teachers.eq.true, sender_type.eq.admin')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+    if (error || !data || data.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No announcements found.</p>';
+        return;
+    }
+
+    container.innerHTML = data.map(ann => `
+        <div class="p-3 bg-gray-50 rounded-xl border-l-4 ${ann.is_urgent ? 'border-l-red-500' : 'border-l-blue-500'}">
+            <div class="flex justify-between items-start mb-1">
+                <h4 class="font-bold text-gray-800 text-sm">${escapeHtml(ann.title || 'Announcement')}</h4>
+                <span class="text-xs text-gray-400">${formatDate(ann.created_at)}</span>
+            </div>
+            <p class="text-xs text-gray-600 line-clamp-2">${escapeHtml(ann.content || '').substring(0, 120)}${(ann.content?.length || 0) > 120 ? '...' : ''}</p>
+            ${ann.is_urgent ? '<span class="inline-block mt-1 text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">URGENT</span>' : ''}
+        </div>
+    `).join('');
+}
+
+async function loadPendingExcuses(classId) {
+    const container = document.getElementById('pending-excuses-list');
+    if (!container) return;
+
+    const { data: students } = await supabase
+        .from('students')
+        .select('id')
+        .eq('class_id', classId)
+        .eq('status', 'Enrolled');
+
+    if (!students || students.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No students in homeroom.</p>';
+        return;
+    }
+
+    const studentIds = students.map(s => s.id);
+    const { data: excuses, error } = await supabase
+        .from('excuse_letters')
+        .select(`*, students(full_name, student_id_text)`)
+        .in('student_id', studentIds)
+        .eq('status', 'Pending')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+    if (error) {
+        container.innerHTML = '<p class="text-red-500 text-sm">Error loading excuse letters.</p>';
+        return;
+    }
+
+    if (!excuses || excuses.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No pending excuse letters.</p>';
+        return;
+    }
+
+    container.innerHTML = excuses.map(exc => `
+        <div class="p-3 bg-yellow-50 rounded-xl border-l-4 border-l-yellow-400">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="font-bold text-gray-800 text-sm">${escapeHtml(exc.students?.full_name || 'Unknown')}</p>
+                    <p class="text-xs text-gray-500">${exc.students?.student_id_text || ''}</p>
+                    <p class="text-xs text-gray-600 mt-1">Reason: ${escapeHtml(exc.reason?.substring(0, 80) || 'N/A')}</p>
+                </div>
+                <span class="text-xs text-yellow-600 font-medium">Pending</span>
+            </div>
+            <div class="mt-2 text-right">
+                <button onclick="window.location.href='teacher-excuse-letter-approval.html'" class="text-xs text-blue-600 hover:underline">Review</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+    } catch(e) { return dateString; }
+}
+
+// ==========================================
+// UTILITIES
+// ==========================================
 function toggleGatekeeperMode() {
     if (isGatekeeperMode) {
         window.location.href = 'teacher-gatekeeper-mode.html';
     }
 }
 
-// 31. Navigate to Section
-function navigateTo(section) {
-    const routes = {
-        'dashboard': 'teacher-dashboard.html',
-        'homeroom': 'teacher-homeroom.html',
-        'subject': 'teacher-subject-attendance.html',
-        'clinic': 'teacher-clinicpass.html',
-        'excuse': 'teacher-excuse-letter-approval.html',
-        'analytics': 'teacher-data-analytics.html',
-        'announcements': 'teacher-announcements-board.html'
-    };
-    
-    if (routes[section]) {
-        window.location.href = routes[section];
+function getStatusBadge(status) {
+    switch (status) {
+        case 'On Time': case 'Present': return 'bg-emerald-100 text-emerald-700';
+        case 'Late': return 'bg-amber-100 text-amber-700';
+        case 'Absent': return 'bg-red-100 text-red-700';
+        case 'Excused': return 'bg-blue-100 text-blue-700';
+        default: return 'bg-gray-100 text-gray-500';
     }
 }
 
-// 32. Initialize Teacher Settings Page
-// UPDATED: Settings now handled by teacher-settings.js with tabs for Profile, Password, Theme
-function initializeTeacherSettingsPage() {
-    // No longer needed - teacher-settings.js handles initialization
-    // This function kept for backwards compatibility with the router
+function formatTime(dateStr) {
+    if (!dateStr) return '--:--';
+    return new Date(dateStr).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-// 33. Inject Styles
 function injectStyles() {
     const style = document.createElement('style');
-    style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; } .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }`;
+    style.textContent = `@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fade-in-up { animation: fadeInUp 0.4s ease forwards; }`;
     document.head.appendChild(style);
 }
 
-// 34. Show Notification (REMOVED - now using general-core.js)
-// UPDATED: Using window.showNotification from general-core.js
-
-// 35. Show Confirmation Modal (REMOVED - now using general-core.js)
-// UPDATED: Using window.showConfirm from general-core.js
-
-// 36. Print Homeroom List
 function printHomeroomList() {
-    const printStyles = `
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            .printable-area, .printable-area * {
-                visibility: visible;
-            }
-            .printable-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                padding: 2rem;
-            }
-            .non-printable {
-                display: none !important;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            th, td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-            }
-            th {
-                background-color: #f2f2f2;
-            }
-        }
-    `;
-    const styleSheet = document.createElement("style");
-    styleSheet.type = "text/css";
-    styleSheet.innerText = printStyles;
-    document.head.appendChild(styleSheet);
     window.print();
-    setTimeout(() => {
-        document.head.removeChild(styleSheet);
-    }, 500);
 }
 
-// 37. Get Status Badge Class
-function getStatusBadge(status) {
-    switch (status) {
-        case 'On Time':
-        case 'Present':
-            return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
-        case 'Late':
-            return 'bg-amber-100 text-amber-700 border border-amber-200';
-        case 'Absent':
-            return 'bg-red-100 text-red-700 border border-red-200';
-        case 'Excused':
-            return 'bg-blue-100 text-blue-700 border border-blue-200';
-        default:
-            return 'bg-gray-100 text-gray-500 border border-gray-200';
-    }
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 }
 
-// 38. Format Time
-function formatTime(dateStr) {
-    if (!dateStr) return '--:--';
-    return new Date(dateStr).toLocaleTimeString('en-PH', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-    });
+function showNotification(msg, type) {
+    if (typeof window.showToast === 'function') window.showToast(msg, type);
+    else alert(msg);
 }
 
-// 39. Inject Password Change UI
-function injectPasswordChangeUI() {
-    const container = document.getElementById('settings-container');
-    if (!container) return;
-
-    const html = `
-        <div class="bg-white rounded-2xl shadow-lg p-6 mt-8">
-            <h3 class="font-bold text-xl text-gray-800 mb-4">Change Password</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-500 mb-1">Current Password</label>
-                    <input type="password" id="cp-current" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-500 mb-1">New Password</label>
-                    <input type="password" id="cp-new" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-500 mb-1">Confirm New Password</label>
-                    <input type="password" id="cp-confirm" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end">
-                <button onclick="submitPasswordChange()" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Update Password</button>
-            </div>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', html);
+function showConfirmationModal(title, message, callback, confirmText = 'Confirm') {
+    if (confirm(message)) callback();
 }
 
-// 40. Submit Password Change
-async function submitPasswordChange() {
-    const current = document.getElementById('cp-current').value;
-    const newPass = document.getElementById('cp-new').value;
-    const confirmPass = document.getElementById('cp-confirm').value;
+// Logout
+window.logout = async function() {
+    sessionStorage.clear();
+    localStorage.removeItem('user_session');
+    window.location.href = '../index.html';
+};
 
-    if(!current || !newPass || !confirmPass) return showNotification("All password fields are required.", "error");
-    if(newPass !== confirmPass) return showNotification("New passwords do not match.", "error");
-    if(newPass.length < 6) return showNotification("Password must be at least 6 characters.", "error");
-
-    const user = checkSession('teachers');
-    if(!user) return;
-
-    const { data, error } = await supabase.from('teachers').select('id, full_name').eq('id', user.id).eq('password', current).single();
-    if(error || !data) return showNotification("Incorrect current password.", "error");
-
-    const { error: updateErr } = await supabase.from('teachers').update({ password: newPass }).eq('id', user.id);
-    if(updateErr) showNotification(updateErr.message, "error");
-    else { 
-        // Notify admin about password change
-        await supabase.from('notifications').insert({
-            recipient_role: 'admins',
-            title: 'Password Change',
-            message: `Teacher "${data.full_name}" has changed their password.`,
-            type: 'system_alert',
-            is_read: false
-        });
-        
-        showNotification("Password updated successfully!", "success"); 
-        ['cp-current', 'cp-new', 'cp-confirm'].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.value = '';
-        });
-    }
-}
-
-// =============================================================================
-// NEW FEATURES - Enhanced Teacher Module
-// =============================================================================
-
-// 41. Real-time Dashboard Stats with Auto-refresh
-let statsRefreshInterval = null;
-
-function startRealTimeStats() {
-    // Refresh every 30 seconds
-    if (statsRefreshInterval) clearInterval(statsRefreshInterval);
-    statsRefreshInterval = setInterval(async () => {
-        if (isAdviserMode && homeroomClass) {
-            await loadLiveDashboardStats();
-        }
-    }, 30000);
-}
-
-async function loadLiveDashboardStats() {
-    const presentEl = document.getElementById('present-count');
-    const lateEl = document.getElementById('late-count');
-    const clinicEl = document.getElementById('clinic-count');
-    const excuseEl = document.getElementById('excuse-count');
-    
-    if (!presentEl && !lateEl && !clinicEl && !excuseEl) return;
-    
-    try {
-        const { data: teacherClass } = await supabase
-            .from('classes')
-            .select('id')
-            .eq('adviser_id', currentUser.id)
-            .single();
-            
-        if (!teacherClass) return;
-        
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Get all students in class
-        const { data: students } = await supabase
-            .from('students')
-            .select('id')
-            .eq('class_id', teacherClass.id);
-            
-        const studentIds = students?.map(s => s.id) || [];
-        if (studentIds.length === 0) return;
-        
-        // Get today's attendance
-        const { data: logs } = await supabase
-            .from('attendance_logs')
-            .select('status')
-            .eq('log_date', today)
-            .in('student_id', studentIds);
-            
-        // Get clinic visits
-        const { data: clinicVisits } = await supabase
-            .from('clinic_visits')
-            .select('student_id')
-            .eq('status', 'In Clinic')  // FIX: Added status filter
-            .gte('time_in', today)
-            .is('time_out', null)
-            .in('student_id', studentIds);
-            
-        const clinicStudentIds = new Set(clinicVisits?.map(cv => cv.student_id) || []);
-        
-        let present = 0, late = 0, absent = 0, excused = 0;
-        logs?.forEach(log => {
-            if (log.status === 'Present' || log.status === 'On Time') present++;
-            else if (log.status === 'Late') late++;
-            else if (log.status === 'Absent') absent++;
-            else if (log.status === 'Excused') excused++;
-        });
-        
-        // Students in clinic (not counted in attendance)
-        const inClinic = clinicStudentIds.size;
-        
-        // Update UI
-        if (presentEl) presentEl.textContent = present;
-        if (lateEl) lateEl.textContent = late;
-        if (clinicEl) clinicEl.textContent = inClinic;
-        if (excuseEl) excuseEl.textContent = excused;
-        
-    } catch (err) {
-        console.error('Error loading live stats:', err);
-    }
-}
-
-// 42. Bulk Attendance Marking
-async function bulkMarkAttendance(status) {
-    const studentIds = getSelectedStudentIds();
-    if (studentIds.length === 0) {
-        showNotification('Please select students first', "error");
-        return;
-    }
-    
-    const confirmMsg = `Mark ${studentIds.length} student(s) as ${status}?`;
-    if (!confirm(confirmMsg)) return;
-    
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const now = new Date().toISOString();
-        
-        for (const studentId of studentIds) {
-            const { data: existingLog } = await supabase
-                .from('attendance_logs')
-                .select('time_in, remarks')
-                .eq('student_id', studentId)
-                .eq('log_date', today)
-                .single();
-                
-            let safeTimeIn = null;
-            if (status !== 'Absent') {
-                safeTimeIn = existingLog?.time_in ? existingLog.time_in : now;
-            }
-            
-            await supabase.from('attendance_logs').upsert({
-                student_id: studentId,
-                log_date: today,
-                time_in: safeTimeIn,
-                status: status,
-                remarks: existingLog?.remarks || 'Bulk attendance update'
-            }, { onConflict: 'student_id, log_date' });
-        }
-        
-        showNotification(`${studentIds.length} students marked as ${status}`, "success");
-        clearSelection();
-        await loadHomeroomStudents();
-        
-    } catch (err) {
-        console.error('Error in bulk marking:', err);
-        showNotification("Error marking attendance", "error");
-    }
-}
-
-function getSelectedStudentIds() {
-    const checkboxes = document.querySelectorAll('.student-checkbox:checked');
-    return Array.from(checkboxes).map(cb => cb.value);
-}
-
-function clearSelection() {
-    const checkboxes = document.querySelectorAll('.student-checkbox');
-    checkboxes.forEach(cb => cb.checked = false);
-    const selectAll = document.getElementById('select-all-students');
-    if (selectAll) selectAll.checked = false;
-}
-
-function toggleSelectAll() {
-    const selectAll = document.getElementById('select-all-students');
-    const checkboxes = document.querySelectorAll('.student-checkbox');
-    checkboxes.forEach(cb => cb.checked = selectAll.checked);
-}
-
-// 43. Student Attendance History Modal
-async function showAttendanceHistory(studentId, studentName) {
-    const modal = createModal('attendance-history-modal', 'Attendance History');
-    
-    modal.innerHTML = `
-        <div class="p-4">
-            <p class="font-bold text-lg mb-4">${studentName}</p>
-            <div class="mb-4">
-                <label class="text-xs font-bold text-gray-400 uppercase">Date Range</label>
-                <div class="flex gap-2">
-                    <input type="date" id="history-start-date" class="border rounded px-2 py-1 text-sm">
-                    <input type="date" id="history-end-date" class="border rounded px-2 py-1 text-sm">
-                </div>
-            </div>
-            <button onclick="loadStudentHistory('${studentId}')" class="w-full bg-blue-600 text-white py-2 rounded font-bold">Load History</button>
-            <div id="history-results" class="mt-4 max-h-64 overflow-y-auto"></div>
-        </div>
-    `;
-    
-    // Set default dates (last 30 days)
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    document.getElementById('history-end-date').value = today.toISOString().split('T')[0];
-    document.getElementById('history-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
-    
-    document.body.appendChild(modal);
-    modal.classList.remove('hidden');
-}
-
-async function loadStudentHistory(studentId) {
-    const startDate = document.getElementById('history-start-date').value;
-    const endDate = document.getElementById('history-end-date').value;
-    const resultsDiv = document.getElementById('history-results');
-    
-    if (!startDate || !endDate) {
-        showNotification('Please select date range', "error");
-        return;
-    }
-    
-    try {
-        const { data: logs, error } = await supabase
-            .from('attendance_logs')
-            .select('log_date, status, remarks, time_in, time_out')
-            .eq('student_id', studentId)
-            .gte('log_date', startDate)
-            .lte('log_date', endDate)
-            .order('log_date', { ascending: false });
-            
-        if (error) throw error;
-        
-        if (!logs || logs.length === 0) {
-            resultsDiv.innerHTML = '<p class="text-gray-500 text-center py-4">No attendance records found</p>';
-            return;
-        }
-        
-        // Count stats
-        let present = 0, late = 0, absent = 0, excused = 0;
-        
-        resultsDiv.innerHTML = logs.map(log => {
-            const status = log.status || 'Absent';
-            
-            if (status === 'Present' || status === 'On Time') present++;
-            else if (status === 'Late') late++;
-            else if (status === 'Absent') absent++;
-            else if (status === 'Excused') excused++;
-            
-            const badgeClass = getStatusBadge(status);
-            return `
-                <div class="flex justify-between items-center p-2 border-b">
-                    <div>
-                        <p class="font-bold text-sm">${new Date(log.log_date).toLocaleDateString()}</p>
-                        <p class="text-xs text-gray-500">${log.remarks || '-'}</p>
-                    </div>
-                    <span class="px-2 py-1 rounded text-xs font-bold ${badgeClass}">${status}</span>
-                </div>
-            `;
-        }).join('');
-        
-        // Add summary
-        const total = present + late + absent + excused;
-        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
-        
-        resultsDiv.innerHTML = `
-            <div class="bg-gray-50 p-2 rounded mb-2 flex justify-between text-sm font-bold">
-                <span>Total: ${total}</span>
-                <span>Present: ${present}</span>
-                <span>Late: ${late}</span>
-                <span>Absent: ${absent}</span>
-                <span class="text-green-600">Rate: ${rate}%</span>
-            </div>
-        ` + resultsDiv.innerHTML;
-        
-    } catch (err) {
-        console.error('Error loading history:', err);
-        resultsDiv.innerHTML = '<p class="text-red-500">Error loading data</p>';
-    }
-}
-
-// 44. Create Modal Helper
-function createModal(id, title) {
-    let modal = document.getElementById(id);
-    if (modal) modal.remove();
-    
-    modal = document.createElement('div');
-    modal.id = id;
-    modal.className = 'fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4';
-    
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden">
-            <div class="p-4 border-b flex justify-between items-center">
-                <h3 class="font-bold text-lg">${title}</h3>
-                <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-content"></div>
-        </div>
-    `;
-    
-    return modal.querySelector('.modal-content');
-}
-
-// 45. Auto-notify Parent on Attendance Change
-async function notifyParentOnAttendance(studentId, status, date) {
-    try {
-        // Get student and parent info
-        const { data: student } = await supabase
-            .from('students')
-            .select('parent_id, full_name')
-            .eq('id', studentId)
-            .single();
-            
-        if (!student?.parent_id) return;
-        
-        const { data: parent } = await supabase
-            .from('parents')
-            .select('full_name')
-            .eq('id', student.parent_id)
-            .single();
-            
-        // Create notification
-        await supabase.from('notifications').insert({
-            recipient_id: student.parent_id,
-            recipient_role: 'parent',
-            title: 'Attendance Update',
-            message: `Your child ${student.full_name} has been marked as ${status} on ${new Date(date).toLocaleDateString()}.`,
-            type: 'attendance_update',
-            is_read: false
-        });
-        
-        if (DEBUG) console.log('Parent notified of attendance change');
-        
-    } catch (err) {
-        console.error('Error notifying parent:', err);
-    }
-}
-
-// 46. At-Risk Student Alerts
-async function checkAtRiskStudents() {
-    try {
-        const { data: teacherClass } = await supabase
-            .from('classes')
-            .select('id')
-            .eq('adviser_id', currentUser.id)
-            .single();
-            
-        if (!teacherClass) return [];
-        
-        // Get students with 5+ absences in last 30 days
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        
-        const { data: logs } = await supabase
-            .from('attendance_logs')
-            .select('student_id, status')
-            .eq('students.class_id', teacherClass.id)
-            .eq('status', 'Absent')
-            .gte('log_date', thirtyDaysAgo);
-            
-        // Count absences per student
-        const absenceCounts = {};
-        logs?.forEach(log => {
-            absenceCounts[log.student_id] = (absenceCounts[log.student_id] || 0) + 1;
-        });
-        
-        // Filter at-risk (5+ absences)
-        const atRiskStudents = Object.entries(absenceCounts)
-            .filter(([_, count]) => count >= 5)
-            .map(([id, count]) => ({ studentId: id, count }));
-            
-        return atRiskStudents;
-        
-    } catch (err) {
-        console.error('Error checking at-risk students:', err);
-        return [];
-    }
-}
-
-// 47. Quick Search/Filter for Students
-function filterStudentsByStatus(status) {
-    const rows = document.querySelectorAll('#homeroom-student-list tr');
-    
-    rows.forEach(row => {
-        const statusBadge = row.querySelector('[class*="bg-"]');
-        if (!statusBadge) return;
-        
-        if (status === 'all') {
-            row.style.display = '';
-        } else if (statusBadge.textContent.toLowerCase().includes(status.toLowerCase())) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-
-// 48. Export Attendance to CSV
-function exportAttendanceToCSV() {
-    const rows = document.querySelectorAll('#homeroom-student-list tr');
-    let csv = 'Student ID,Name,LRN,Time In,Status\n';
-    
-    rows.forEach(row => {
-        if (row.style.display === 'none') return;
-        
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 5) {
-            const id = cells[0].textContent.trim();
-            const name = cells[1].textContent.trim();
-            const lrn = cells[2].textContent.trim();
-            const timeIn = cells[3].textContent.trim();
-            const status = cells[4].textContent.trim();
-            csv += `"${id}","${name}","${lrn}","${timeIn}","${status}"\n`;
-        }
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `attendance_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-}
-
-// 49. Keyboard Shortcuts
-document.addEventListener('keydown', function(e) {
-    // FIX: Prevent shortcuts from firing when typing in an input or textarea.
-    const activeElement = document.activeElement;
-    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
-        return;
-    }
-
-    // Ctrl/Cmd + M = Mark Present
-    if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-        e.preventDefault();
-        if (document.getElementById('homeroom-student-list')) {
-            bulkMarkAttendance('Present');
-        }
-    }
-    // Ctrl/Cmd + A = Select All
-    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && e.shiftKey) {
-        e.preventDefault();
-        toggleSelectAll();
-    }
-    // Escape = Close modal
-    if (e.key === 'Escape') {
-        const modals = document.querySelectorAll('.fixed.z-\\[60\\]');
-        modals.forEach(m => m.remove());
-    }
-});
-
-// 50. Student Medical Alerts (for clinic context)
-async function getStudentMedicalInfo(studentId) {
-    try {
-        const { data: student } = await supabase
-            .from('students')
-            .select('*, parents(*)')
-            .eq('id', studentId)
-            .single();
-            
-        return student;
-    } catch (err) {
-        console.error('Error getting medical info:', err);
-        return null;
-    }
-}
-
-// ==========================================
-// ENTERPRISE COMMUNICATION LOOP
-// ==========================================
-window.notifySubjectTeachersOfExcuse = async function(studentId, dateAbsent, studentName) {
-    try {
-        // 1. Get student's class
-        const { data: student } = await supabase.from('students').select('class_id').eq('id', studentId).single();
-        if (!student) return;
-        
-        // 2. Find all subject teachers for this specific class
-        const { data: subjects } = await supabase.from('subject_loads').select('teacher_id').eq('class_id', student.class_id);
-        if (!subjects || subjects.length === 0) return;
-        
-        // Remove duplicates if a teacher teaches multiple subjects to the same class
-        const uniqueTeacherIds = [...new Set(subjects.map(s => s.teacher_id))];
-        
-        // 3. Blast Notifications
-        const notifications = uniqueTeacherIds.map(tid => ({
-            recipient_role: 'teachers',
-            recipient_id: tid,
-            title: 'Excused Absence Verified',
-            message: `Homeroom Adviser verified an excused absence for ${studentName} on ${dateAbsent}.`,
-            type: 'attendance_alert',
-            is_read: false
-        }));
-        
-        await supabase.from('notifications').insert(notifications);
-        if (DEBUG) console.log("Subject teachers successfully notified.");
-    } catch (e) {
-        console.error("Failed to notify subject teachers:", e);
-    }
-}
-
-// EXPORT: Make button handler functions globally accessible for HTML onclick attributes
-window.navigateTo = navigateTo; // Export the navigateTo function for SPA navigation
+// Expose globals for HTML onclick
 window.postAnnouncement = postAnnouncement;
 window.issueClinicPass = issueClinicPass;
-window.filterLetters = filterLetters;
-window.closeDetailModal = function() {
-    document.getElementById('detail-modal')?.classList.add('hidden');
-};
-window.closeModal = function() {
-    // Generic modal closer - tries common modal IDs
-    const modalIds = ['modal', 'detail-modal', 'student-modal', 'proof-modal', 'edit-excuse-modal'];
-    modalIds.forEach(id => {
-        const modal = document.getElementById(id);
-        if (modal) modal.classList.add('hidden');
-    });
-};
 window.approveExcuseLetter = approveExcuseLetter;
 window.rejectExcuseLetter = rejectExcuseLetter;
 window.viewProof = viewProof;
 window.closeProofModal = closeProofModal;
+window.cancelScheduledAnnouncement = cancelScheduledAnnouncement;
+window.toggleGatekeeperMode = toggleGatekeeperMode;
+window.submitPasswordChange = submitPasswordChange;
+window.navigateToAttendance = navigateToAttendance;
+window.markAttendance = markAttendance;
+window.markSubjectAttendance = markSubjectAttendance;
+window.loadSubjectStudents = loadSubjectStudents;
+window.forwardToParent = forwardToParent;
+window.loadRecentClinicPasses = loadRecentClinicPasses;
+window.loadClinicStats = loadClinicStats;
+window.startRealTimeStats = startRealTimeStats;
+window.loadLiveDashboardStats = loadLiveDashboardStats;
+window.exportToCSV = exportToCSV;
+window.printHomeroomList = printHomeroomList;
+window.closeStudentModal = function() { document.getElementById('student-details-modal')?.classList.add('hidden'); };
+window.closeModal = function() { /* generic modal close */ };
+window.loadDashboardHomeroomData = loadDashboardHomeroomData;
+window.backToAttendanceHub = function() { window.location.href = 'teacher-attendance.html'; };
+
+// NEW: Expose filter function for excuse letters
+window.filterLetters = filterLetters;

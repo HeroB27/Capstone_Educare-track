@@ -48,11 +48,12 @@ function showNotification(msg, type = 'info') {
     setTimeout(() => toast.remove(), 3000);
 }
 
-// ==================== ID GENERATOR ====================
+// ==================== ID GENERATOR (FIXED: 4-character suffix) ====================
 function generateOfficialID(prefix, year, identifierSource) {
     const cleanSource = String(identifierSource).replace(/\D/g, '');
     const last4 = cleanSource.slice(-4).padStart(4, '0');
-    const suffix = (Date.now().toString(36).slice(-3) + Math.random().toString(36).substring(2, 5)).toUpperCase();
+    // Generate exactly 4 alphanumeric characters (matches scanner regex)
+    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `${prefix}-${year}-${last4}-${suffix}`;
 }
 

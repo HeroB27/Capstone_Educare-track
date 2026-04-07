@@ -24,6 +24,7 @@
     </script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="parent-utils.js"></script>
 </head>
 <body class="bg-gray-50 font-sans flex flex-col h-screen">
 
@@ -45,25 +46,6 @@
                 </svg>
             </button>
         </div>
-        
-        <!-- Top Navigation Bar -->
-        <nav class="flex items-center gap-1 px-4 pb-3 overflow-x-auto scrollbar-hide">
-            <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Home
-            </button>
-            <button onclick="navigateTo('children')" id="nav-children" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                My Children
-            </button>
-            <button onclick="navigateTo('announcements')" id="nav-announcements" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Announcements
-            </button>
-            <button onclick="navigateTo('excuse')" id="nav-excuse" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Excuse Letters
-            </button>
-            <button onclick="navigateTo('schedule')" id="nav-schedule" class="nav-item flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all">
-                Schedule
-            </button>
-        </nav>
     </header>
     
     <style>

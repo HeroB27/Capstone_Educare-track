@@ -19,11 +19,18 @@
         body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dashboard-card {
+            transition: all 0.2s ease;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px -12px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex">
 
-    <!-- Floating Sidebar -->
+    <!-- Floating Sidebar (unchanged) -->
     <aside class="w-64 m-4 rounded-[32px] bg-blue-900 text-white flex flex-col shadow-2xl shrink-0">
         <div class="p-8 flex items-center gap-3 border-b border-white/10">
             <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-blue-300"></i></div>
@@ -31,39 +38,45 @@
         </div>
         
         <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
             </a>
-            <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-blue-50 hover:text-blue-600 font-medium transition-colors group">
-                <i data-lucide="users" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
-                Homeroom Advisory
-            </a>
-            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
-            </a>
-            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
+            <a href="teacher-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Attendance
             </a>
             <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
+                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Passes
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
             <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
             </a>
-            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Analytics
-            </a>
-            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
-            </a>
             <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
+            </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
             <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings
             </a>
         </nav>
      
+        <!-- Gatekeeper Toggle -->
+        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
+                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
+                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
+                </div>
+                <span class="ml-3 text-sm font-medium text-blue-200">Gatekeeper Mode</span>
+            </label>
+        </div>
 
         <div class="p-4 border-t border-blue-800/50">
             <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl transition-all duration-200 hover:shadow-lg shadow-red-500/30">
@@ -80,504 +93,205 @@
         
         <!-- Glassmorphism Header -->
         <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight" id="page-title">My Schedule</h2>
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Dashboard Overview</h2>
             <div class="flex items-center gap-4">
                 <span id="teacher-name" class="font-medium text-gray-600">Loading...</span>
                 <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30" id="user-avatar">T</div>
             </div>
         </header>
 
-        <!-- Gatekeeper Toggle - UPDATED: Added missing element for Phase 1 -->
-        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
-            <label class="flex items-center cursor-pointer">
-                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
-                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
-                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
-                </div>
-                <span class="ml-3 font-medium text-white">Gatekeeper Mode</span>
-            </label>
-        </div>
-
+        <!-- Main Content Area -->
         <div class="flex-1 overflow-auto p-8" id="main-content">
-            <!-- Dynamic Content Loaded Here -->
+            
+            <!-- Quick Stats Cards (Adviser Only) -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" id="stats-container">
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Present Today</p>
+                            <p id="present-count" class="text-3xl font-black text-gray-900 mt-1">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Late Today</p>
+                            <p id="late-count" class="text-3xl font-black text-gray-900 mt-1">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="clock" class="w-6 h-6 text-amber-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">In Clinic</p>
+                            <p id="clinic-count" class="text-3xl font-black text-gray-900 mt-1">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="heart-pulse" class="w-6 h-6 text-red-600"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-bold text-gray-400 uppercase">Pending Excuses</p>
+                            <p id="excuse-count" class="text-3xl font-black text-gray-900 mt-1">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+                            <i data-lucide="file-text" class="w-6 h-6 text-blue-600"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Schedule -->
+            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mb-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                        <i data-lucide="calendar" class="w-5 h-5 text-purple-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">Today's Classes</h3>
+                        <p class="text-sm text-gray-500">Your teaching schedule for today</p>
+                    </div>
+                </div>
+                <div id="schedule-list" class="space-y-2">
+                    <div class="flex items-center justify-center py-8 text-gray-500">
+                        <div class="text-center">
+                            <div class="w-12 h-12 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                            <p>Loading schedule...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Homeroom Analytics Section (only visible if teacher has homeroom) -->
+            <div id="homeroom-section" class="hidden">
+                <!-- Row 1: Attendance Summary (Present / Absent lists) -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="user-check" class="w-5 h-5 text-green-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Present Today</h3>
+                        </div>
+                        <div id="present-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="user-x" class="w-5 h-5 text-red-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Absent Today</h3>
+                        </div>
+                        <div id="absent-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2: Critical Absences, Most Lates, Good Performance -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Critical Absences (10+)</h3>
+                        </div>
+                        <div id="critical-absences-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="clock" class="w-5 h-5 text-orange-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Most Lates (Last 30 days)</h3>
+                        </div>
+                        <div id="most-lates-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="award" class="w-5 h-5 text-emerald-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Good Performance (0 Absences/Lates)</h3>
+                        </div>
+                        <div id="good-performance-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3: Latest Announcements & Pending Excuse Letters -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="megaphone" class="w-5 h-5 text-blue-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Latest Announcements</h3>
+                        </div>
+                        <div id="latest-announcements-list" class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading announcements...</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm dashboard-card">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="file-text" class="w-5 h-5 text-yellow-600"></i>
+                            </div>
+                            <h3 class="font-bold text-gray-800">Pending Excuse Letters</h3>
+                        </div>
+                        <div id="pending-excuses-list" class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                            <p class="text-gray-500 text-sm">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Homeroom Message -->
+            <div id="no-homeroom-message" class="hidden bg-white rounded-3xl p-12 border border-gray-100 shadow-sm text-center">
+                <div class="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="users" class="w-10 h-10 text-gray-400"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">No Homeroom Class Assigned</h3>
+                <p class="text-gray-500">You are not assigned as a homeroom adviser. Only homeroom advisers see class analytics, attendance summaries, excuse letters, and student performance data.</p>
+            </div>
         </div>
     </main>
 
     <script>
-        // Dashboard content templates
-        const dashboardContent = `
-            <div class="p-8 max-w-7xl mx-auto">
-                <div class="mb-8">
-                    <h2 class="text-3xl font-black text-gray-800 tracking-tight">Summary Board</h2>
-                    <p class="text-gray-500 mt-1 font-medium">Your daily overview and quick access hub.</p>
-                </div>
-
-                <div id="adviser-stats" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8" style="display: none;">
-                    <a href="teacher-homeroom.html" class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-emerald-300 transition-all group block">
-                        <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="user-check" class="w-5 h-5 text-emerald-600"></i></div>
-                        <h3 class="text-3xl font-black text-gray-800 mb-1" id="stat-present">0</h3>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Present</p>
-                    </a>
-                    <a href="teacher-homeroom.html" class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-amber-300 transition-all group block">
-                        <div class="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="clock" class="w-5 h-5 text-amber-600"></i></div>
-                        <h3 class="text-3xl font-black text-gray-800 mb-1" id="stat-late">0</h3>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Late</p>
-                    </a>
-                    <a href="teacher-homeroom.html" class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-red-300 transition-all group block">
-                        <div class="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="user-x" class="w-5 h-5 text-red-600"></i></div>
-                        <h3 class="text-3xl font-black text-gray-800 mb-1" id="stat-absent">0</h3>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Absent</p>
-                    </a>
-                    <a href="teacher-homeroom.html" class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-blue-300 transition-all group block">
-                        <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="file-check" class="w-5 h-5 text-blue-600"></i></div>
-                        <h3 class="text-3xl font-black text-gray-800 mb-1" id="stat-excused">0</h3>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Excused</p>
-                    </a>
-                    <a href="teacher-clinicpass.html" class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-rose-300 transition-all group block">
-                        <div class="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><i data-lucide="heart-pulse" class="w-5 h-5 text-rose-600"></i></div>
-                        <h3 class="text-3xl font-black text-gray-800 mb-1" id="stat-clinic">0</h3>
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">In Clinic</p>
-                    </a>
-                </div>
-
-                <h3 class="font-bold text-gray-800 text-lg mb-4 flex items-center gap-2">
-                    <i data-lucide="layout-grid" class="w-5 h-5 text-gray-400"></i> Quick Modules
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <a href="teacher-data-analytics.html" class="bg-gradient-to-br from-indigo-500 to-purple-600 p-8 rounded-3xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden block">
-                        <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
-                            <i data-lucide="pie-chart" class="w-32 h-32"></i>
-                        </div>
-                        <div class="relative z-10">
-                            <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm text-white">
-                                <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
-                            </div>
-                            <h3 class="text-2xl font-black text-white mb-2">Data Analytics</h3>
-                            <p class="text-indigo-100 text-sm font-medium">View attendance trends, critical absences, and export reports.</p>
-                        </div>
-                    </a>
-
-                    <a href="teacher-subject-attendance.html" class="bg-gradient-to-br from-blue-500 to-cyan-600 p-8 rounded-3xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden block">
-                        <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
-                            <i data-lucide="check-square" class="w-32 h-32"></i>
-                        </div>
-                        <div class="relative z-10">
-                            <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm text-white">
-                                <i data-lucide="clipboard-check" class="w-6 h-6"></i>
-                            </div>
-                            <h3 class="text-2xl font-black text-white mb-2">Subject Checker</h3>
-                            <p class="text-blue-100 text-sm font-medium">Mark attendance for your specific subject classes.</p>
-                        </div>
-                    </a>
-
-                    <a href="teacher-announcements-board.html" class="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 rounded-3xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden block">
-                        <div class="absolute right-0 top-0 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
-                            <i data-lucide="bell" class="w-32 h-32"></i>
-                        </div>
-                        <div class="relative z-10">
-                            <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm text-white">
-                                <i data-lucide="megaphone" class="w-6 h-6"></i>
-                            </div>
-                            <h3 class="text-2xl font-black text-white mb-2">Announcements</h3>
-                            <p class="text-emerald-100 text-sm font-medium">Broadcast messages and updates to your students' parents.</p>
-                        </div>
-                    </a>
-                </div>
-
-                <div id="gatekeeper-toggle" class="hidden mt-8 p-6 bg-slate-800 rounded-3xl text-white shadow-xl flex items-center justify-between border border-slate-700">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center">
-                            <i data-lucide="shield-check" class="w-6 h-6 text-emerald-400"></i>
-                        </div>
-                        <div>
-                            <h4 class="font-bold text-lg">Gatekeeper Mode</h4>
-                            <p class="text-slate-400 text-sm">You have authorization to scan student IDs at the gate.</p>
-                        </div>
-                    </div>
-                    <a href="teacher-gatekeeper-mode.html" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold transition-colors">
-                        Launch Scanner
-                    </a>
-                </div>
-
-            </div>
-        `;
-
-        const homeroomContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="font-bold text-xl text-gray-800">Homeroom Class</h3>
-                        <p class="text-sm text-gray-500">View and manage your advisory class attendance</p>
-                    </div>
-                    <span id="homeroom-class-info" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl font-medium">Loading...</span>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-50/80 backdrop-blur-sm sticky top-0 z-10">
-                            <tr class="border-b border-gray-200">
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Student ID</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Name</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">LRN</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Time In</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="homeroom-student-list" class="divide-y divide-gray-100">
-                            <tr><td colspan="6" class="p-8 text-center text-gray-500">Loading students...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-
-        const subjectContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <h3 class="font-bold text-xl text-gray-800">Subject Attendance</h3>
-                <p class="text-sm text-gray-500">Select a subject to mark attendance</p>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <label class="block font-medium text-gray-700 mb-2">Select Subject:</label>
-                <select id="subject-select" onchange="handleSubjectChange()" class="w-full max-w-md px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
-                    <option value="">Select a subject...</option>
-                </select>
-            </div>
-
-            <div id="subject-student-list" class="bg-white rounded-2xl shadow-lg">
-                <div class="p-8 text-center text-gray-500">Select a subject above to view students</div>
-            </div>
-        `;
-
-        const clinicContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <h3 class="font-bold text-xl text-gray-800">Issue Clinic Pass</h3>
-                <p class="text-sm text-gray-500">Send a student to the clinic</p>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h4 class="font-bold text-gray-800 mb-4">New Clinic Pass</h4>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block font-medium text-gray-700 mb-2">Select Student:</label>
-                            <select id="clinic-student-select" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200">
-                                <option value="">Loading...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block font-medium text-gray-700 mb-2">Reason:</label>
-                            <textarea id="clinic-reason" rows="3" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200 resize-none" placeholder="e.g., Fever, headache, stomach ache..."></textarea>
-                        </div>
-                        <button onclick="issueClinicPass()" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all duration-200 hover:shadow-lg shadow-red-500/30">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                            </svg>
-                            Issue Clinic Pass
-                        </button>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h4 class="font-bold text-gray-800 mb-4">Recent Clinic Passes</h4>
-                    <div id="recent-clinic-passes" class="max-h-96 overflow-auto space-y-3">
-                        <div class="text-center text-gray-500 py-8">Loading...</div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        const excuseContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <h3 class="font-bold text-xl text-gray-800">Excuse Letter Approval</h3>
-                <p class="text-sm text-gray-500">Review and approve excuse letters from parents</p>
-            </div>
-
-            <div id="excuse-letter-list" class="space-y-4">
-                <div class="bg-white rounded-2xl shadow-lg p-8 text-center text-gray-500">Loading excuse letters...</div>
-            </div>
-        `;
-
-        const analyticsContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <h3 class="font-bold text-xl text-gray-800">Class Analytics</h3>
-                <p class="text-sm text-gray-500">Attendance statistics and trends</p>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h4 class="font-bold text-gray-800 mb-4">Today's Attendance</h4>
-                    <canvas id="attendancePieChart"></canvas>
-                </div>
-                <div class="bg-white rounded-2xl shadow-lg p-6">
-                    <h4 class="font-bold text-gray-800 mb-4">Weekly Trend</h4>
-                    <canvas id="monthlyBarChart"></canvas>
-                </div>
-            </div>
-        `;
-
-        const announcementsContent = `
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <h3 class="font-bold text-xl text-gray-800">Post Announcement</h3>
-                <p class="text-sm text-gray-500">Send announcements to parents</p>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block font-medium text-gray-700 mb-2">Title:</label>
-                        <input type="text" id="announcement-title" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" placeholder="e.g., PTA Meeting Announcement">
-                    </div>
-                    <div>
-                        <label class="block font-medium text-gray-700 mb-2">Content:</label>
-                        <textarea id="announcement-content" rows="4" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none" placeholder="Enter announcement details..."></textarea>
-                        <div class="text-right text-xs text-gray-400 mt-1 font-medium"><span id="char-counter">0</span> / 500</div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        <div>
-                            <label class="block font-medium text-gray-700 mb-2">Schedule (Optional)</label>
-                            <div class="flex gap-2">
-                                <input type="date" id="announcement-date" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                                <input type="time" id="announcement-time" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
-                            </div>
-                        </div>
-                        <div class="flex items-end pb-1">
-                             <label class="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer w-full border border-gray-200 hover:border-red-300 transition-all">
-                                <input type="checkbox" id="announcement-urgent" class="w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500">
-                                <span class="font-semibold text-gray-700">Mark as Urgent</span>
-                                <svg class="w-5 h-5 text-red-500 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            </label>
-                        </div>
-                    </div>
-                    <button onclick="postAnnouncement()" class="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-200 hover:shadow-lg shadow-blue-500/30">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
-                        </svg>
-                        Send Announcement
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h4 class="font-bold text-gray-800 mb-4">Received Announcements</h4>
-                <div id="announcements-list" class="space-y-3">
-                    <div class="text-center text-gray-500 py-8">Loading...</div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6 mt-6">
-                <h4 class="font-bold text-gray-800 mb-4">My Sent Announcements</h4>
-                <div id="sent-announcements-list" class="space-y-3">
-                    <div class="text-center text-gray-500 py-8">Loading...</div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6 mt-6">
-                <h4 class="font-bold text-gray-800 mb-4">My Sent Announcements</h4>
-                <div id="sent-announcements-list" class="space-y-3">
-                    <div class="text-center text-gray-500 py-8">Loading...</div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-lg p-6 mt-6">
-                <h4 class="font-bold text-gray-800 mb-4">My Scheduled Announcements</h4>
-                <div id="scheduled-announcements-list" class="space-y-3">
-                    <div class="text-center text-gray-500 py-8">Loading...</div>
-                </div>
-            </div>
-        `;
-
-        // Content router
-        function loadPageContent(page) {
-            const content = document.getElementById('main-content');
-            const title = document.getElementById('page-title');
-            
-            // Update active nav
-            document.querySelectorAll('nav a').forEach(a => {
-                a.classList.remove('bg-blue-800/50', 'border-white', 'text-white');
-                a.classList.add('text-blue-200', 'hover:text-white');
-            });
-            const activeNav = document.getElementById('nav-' + page);
-            if (activeNav) {
-                activeNav.classList.add('bg-blue-800/50', 'border-white');
-                activeNav.classList.remove('text-blue-200');
-            }
-            
-            // Load content
-            switch(page) {
-                case 'dashboard':
-                    content.innerHTML = dashboardContent;
-                    title.innerText = 'Summary Board';
-                    setTimeout(() => {
-                        if (typeof initializeTeacherPortal === 'function') initializeTeacherPortal();
-                        if (typeof loadSchedule === 'function') loadSchedule();
-                    }, 100);
-                    break;
-                case 'homeroom':
-                    content.innerHTML = homeroomContent;
-                    title.innerText = 'Homeroom Class';
-                    setTimeout(() => { if (typeof loadHomeroomStudents === 'function') loadHomeroomStudents(); }, 100);
-                    break;
-                case 'subject':
-                    content.innerHTML = subjectContent;
-                    title.innerText = 'Subject Attendance';
-                    setTimeout(() => { if (typeof loadSubjectLoads === 'function') loadSubjectLoads(); }, 100);
-                    break;
-                case 'clinic':
-                    content.innerHTML = clinicContent;
-                    title.innerText = 'Clinic Pass';
-                    setTimeout(() => { if (typeof loadClinicPassInterface === 'function') loadClinicPassInterface(); }, 100);
-                    break;
-                case 'excuse':
-                    content.innerHTML = excuseContent;
-                    title.innerText = 'Excuse Letter Approval';
-                    setTimeout(() => { if (typeof loadExcuseLetters === 'function') loadExcuseLetters(); }, 100);
-                    break;
-                case 'analytics':
-                    content.innerHTML = analyticsContent;
-                    title.innerText = 'Analytics';
-                    setTimeout(() => { if (typeof loadAnalytics === 'function') loadAnalytics(); }, 100);
-                    break;
-                case 'announcements':
-                    content.innerHTML = announcementsContent;
-                    title.innerText = 'Announcements';
-                    setTimeout(() => { if (typeof setupAnnouncementPage === 'function') setupAnnouncementPage(); }, 100);
-                    break;
-                default:
-                    content.innerHTML = dashboardContent;
-                    title.innerText = 'Summary Board';
-                    setTimeout(() => { if (typeof initializeTeacherPortal === 'function') initializeTeacherPortal(); }, 100);
-            }
-        }
-
-        // Handle subject dropdown change
-        function handleSubjectChange() {
-            const subjectId = document.getElementById('subject-select').value;
-            loadSubjectStudents(subjectId);
-        }
-
-        // Override navigateTo to use SPA-like behavior
-        const originalNavigateTo = navigateTo;
-        navigateTo = function(section) {
-            loadPageContent(section);
-        };
-
-        // Initialize with dashboard
-        document.addEventListener('DOMContentLoaded', () => {
-            loadPageContent('dashboard');
-        });
-
-        // Load Dashboard Stats - Updated Status Definitions
-        async function loadAdviserDashboardStats() {
-            try {
-                // FIX 1: Timezone adjustment for morning defenses
-                const localDate = new Date();
-                localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-                const today = localDate.toISOString().split('T')[0];
-
-                let present = 0, late = 0, absent = 0, excused = 0, inClinic = 0, pendingCount = 0;
-                let studentIds = [];
-
-                // Only fetch homeroom students if the teacher has an advisory class
-                if (homeroomClass && homeroomClass.id) {
-                    const { data: students } = await supabase
-                        .from('students')
-                        .select('id')
-                        .eq('class_id', homeroomClass.id);
-                    
-                    if (students && students.length > 0) {
-                        studentIds = students.map(s => s.id);
-                    }
-                }
-
-                // If they have homeroom students, get their attendance and excuses
-                if (studentIds.length > 0) {
-                    // FIX: Get all attendance logs and group by student to get the LATEST status
-                    const { data: attLogs } = await supabase
-                        .from('attendance_logs')
-                        .select('student_id, status')
-                        .eq('log_date', today)
-                        .in('student_id', studentIds);
-
-                    if (attLogs && attLogs.length > 0) {
-                        // Group by student to get the LATEST status (protecting against double scans)
-                        const latestStatus = {};
-                        attLogs.forEach(log => {
-                            latestStatus[log.student_id] = log.status; // Overwrites older ones naturally
-                        });
-
-                        Object.values(latestStatus).forEach(status => {
-                            if (status === 'On Time') present++;
-                            if (status === 'Late') late++;
-                            if (status === 'Excused') excused++;
-                        });
-
-                        // Calculate absent: students with no scan are absent
-                        absent = studentIds.length - present - late - excused;
-                    }
-
-                    const { data: pendingExcuses } = await supabase
-                        .from('excuse_letters')
-                        .select('id')
-                        .in('student_id', studentIds)
-                        .eq('status', 'Pending');
-                    
-                    pendingCount = pendingExcuses?.length || 0;
-                }
-
-                // FIX 2: Get clinic visits for homeroom students OR students this teacher referred
-                let clinicQuery = supabase.from('clinic_visits').select('id').eq('status', 'In Clinic').is('time_out', null);
-                if (studentIds.length > 0) {
-                    clinicQuery = clinicQuery.or(`student_id.in.(${studentIds.join(',')}),referred_by_teacher_id.eq.${currentUser.id}`);
-                } else {
-                    clinicQuery = clinicQuery.eq('referred_by_teacher_id', currentUser.id);
-                }
-                
-                const { data: clinicVisits } = await clinicQuery;
-                inClinic = clinicVisits?.length || 0;
-
-                // Update the UI
-                document.getElementById('stat-present').innerText = present;
-                document.getElementById('stat-late').innerText = late;
-                document.getElementById('stat-absent').innerText = absent;
-                document.getElementById('stat-excused').innerText = excused;
-                document.getElementById('stat-clinic').innerText = inClinic;
-            } catch (err) {
-                console.error('Error loading dashboard stats:', err);
-            }
-        }
-
-        // ==========================================
-        // REAL-TIME DASHBOARD ENGINE
-        // ==========================================
-        let dashboardChannel;
-        
-        function initDashboardRealtime() {
-            if (dashboardChannel) supabase.removeChannel(dashboardChannel);
-            
-            dashboardChannel = supabase.channel('dashboard-live-wire')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-                    console.log('Live update: Attendance changed');
-                    loadAdviserDashboardStats(); // Silently updates counters
-                })
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_visits' }, () => {
-                    console.log('Live update: Clinic pass issued/updated');
-                    loadAdviserDashboardStats();
-                })
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'excuse_letters' }, () => {
-                    console.log('Live update: New excuse letter submitted');
-                    loadAdviserDashboardStats();
-                })
-                .subscribe();
-        }
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
-            setTimeout(initDashboardRealtime, 1500); // Start listening after initial load
+            if (typeof loadSchedule === 'function') {
+                await loadSchedule();
+            }
+            if (typeof loadLiveDashboardStats === 'function') {
+                await loadLiveDashboardStats();
+            }
+            // New dashboard functions (added in teacher-core.js)
+            if (typeof loadDashboardHomeroomData === 'function') {
+                await loadDashboardHomeroomData();
+            }
+            // Start real-time stats refresh every 30 seconds (if adviser)
+            if (typeof startRealTimeStats === 'function') {
+                startRealTimeStats();
+            }
         });
     </script>
 </body>

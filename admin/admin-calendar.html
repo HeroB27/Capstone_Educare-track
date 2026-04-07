@@ -17,6 +17,10 @@
         body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        /* Multi‑day event bar styling (optional) */
+        .calendar-event-bar {
+            transition: all 0.2s;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
@@ -139,7 +143,8 @@
                                 class="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm focus:outline-none focus:border-violet-500 transition-all w-64">
                             <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                         </div>
-                        <select id="filter-type" onchange="loadHolidays()" class="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm focus:border-violet-500 transition-all outline-none">                            <option value="all">All Types</option>
+                        <select id="filter-type" onchange="loadHolidays()" class="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm focus:border-violet-500 transition-all outline-none">
+                            <option value="all">All Types</option>
                             <option value="suspension">Suspension Days</option>
                             <option value="holiday">Regular Holidays</option>
                         </select>
@@ -189,9 +194,7 @@
                         </tr>
                     </thead>
                     <tbody id="holidays-list" class="divide-y divide-gray-50">
-                        <tr>
-                            <td colspan="5" class="px-6 py-12 text-center text-gray-400 italic">Loading holidays...</td>
-                        </tr>
+                        <tr><td colspan="5" class="px-6 py-12 text-center text-gray-400 italic">Loading holidays...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -208,7 +211,7 @@
                 </button>
             </div>
             <div class="p-8 space-y-6">
-                <input type="hidden" id="edit-holiday-date">
+                <input type="hidden" id="edit-holiday-range">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Start Date</label>
@@ -219,7 +222,7 @@
                         <input type="date" id="holiday-end-date" class="w-full px-5 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all">
                     </div>
                 </div>
-                <div class="mt-4">
+                <div id="time-coverage-container">
                     <label class="block text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Time Coverage</label>
                     <select id="holiday-coverage" class="w-full px-5 py-3 bg-gray-50 border-2 border-gray-100 rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all">
                         <option value="Full Day">Full Day</option>
@@ -273,8 +276,8 @@
                 <h3 class="text-xl font-black text-gray-800 mb-2">Delete Holiday?</h3>
                 <p class="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
                 <div class="flex gap-3">
-                    <button onclick="document.getElementById('delete-modal').classList.add('hidden')" class="modal-close flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button>
-                    <button onclick="confirmDelete()" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-red-700 transition-all">Delete</button>
+                    <button onclick="closeDeleteModal()" class="modal-close flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">Cancel</button>
+                    <button id="confirm-delete-btn" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-red-700 transition-all">Delete</button>
                 </div>
             </div>
         </div>
@@ -297,6 +300,10 @@
 
     <script>
         lucide.createIcons();
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.add('hidden');
+        }
+        window.closeDeleteModal = closeDeleteModal;
     </script>
 </body>
 </html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Hub - Teacher Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="teacher-core.js"></script>
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex">
+
+    <!-- Sidebar (same as original) -->
+    <aside class="w-64 m-4 rounded-[32px] bg-blue-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-blue-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter uppercase">TEACHER</span>
+        </div>
+<nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="teacher-attendance.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Attendance
+            </a>
+            <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Passes
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
+            </a>
+            <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
+            </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings
+            </a>
+        </nav>
+        <div class="p-4 border-t border-blue-800/50">
+            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl">Logout</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10">
+            <h2 class="text-3xl font-black text-gray-900 tracking-tight">Attendance Hub</h2>
+            <div class="flex items-center gap-4">
+                <span id="teacher-name" class="font-medium text-gray-600">Loading...</span>
+                <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold">T</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                <!-- Homeroom Card -->
+                <div id="homeroom-card" class="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 transition-all cursor-pointer hover:shadow-2xl">
+                    <div class="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center mb-6">
+                        <i data-lucide="users" class="w-10 h-10 text-blue-600"></i>
+                    </div>
+                    <h3 class="text-2xl font-black text-gray-900">Homeroom Attendance</h3>
+                    <p class="text-gray-500 mt-2">Daily checklist for your advisory class. Includes gatekeeper sync and manual override.</p>
+                    <div class="mt-6 flex items-center justify-between">
+                        <span class="text-sm font-medium text-blue-600">View Homeroom →</span>
+                        <span id="homeroom-badge" class="bg-emerald-100 text-emerald-700 text-xs px-3 py-1 rounded-full">Adviser</span>
+                    </div>
+                </div>
+
+                <!-- Subject Attendance Card -->
+                <div id="subject-card" class="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 transition-all cursor-pointer hover:shadow-2xl" onclick="window.location.href='teacher-subject-attendance.html'">
+                    <div class="bg-purple-50 w-20 h-20 rounded-3xl flex items-center justify-center mb-6">
+                        <i data-lucide="book-open" class="w-10 h-10 text-purple-600"></i>
+                    </div>
+                    <h3 class="text-2xl font-black text-gray-900">Subject Attendance</h3>
+                    <p class="text-gray-500 mt-2">Period‑based tracking to catch class cuts. Notifies homeroom teacher and parents.</p>
+                    <div class="mt-6 flex items-center justify-between">
+                        <span class="text-sm font-medium text-purple-600">View Subjects →</span>
+                        <span class="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">Always active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons();
+            if (!window.currentUser) {
+                window.location.href = '../index.html';
+                return;
+            }
+            document.getElementById('teacher-name').innerText = `Hi, ${window.currentUser.full_name?.split(' ')[0] || 'Teacher'}`;
+
+            // Smart Hub Logic: Check if Teacher is a Homeroom Adviser
+            const { data: homeroom } = await supabase
+                .from('classes')
+                .select('id')
+                .eq('adviser_id', window.currentUser.id)
+                .maybeSingle();
+
+            const hrCard = document.getElementById('homeroom-card');
+            if (homeroom) {
+                // Is Adviser → Enable Card
+                hrCard.onclick = () => window.location.href = 'teacher-homeroom.html';
+            } else {
+                // Not Adviser → Disable Card
+                hrCard.classList.remove('cursor-pointer', 'hover:shadow-2xl');
+                hrCard.classList.add('bg-gray-50', 'opacity-60', 'cursor-not-allowed');
+                const iconDiv = hrCard.querySelector('.bg-blue-50');
+                if (iconDiv) iconDiv.classList.replace('bg-blue-50', 'bg-gray-200');
+                const icon = iconDiv?.querySelector('i');
+                if (icon) icon.classList.replace('text-blue-600', 'text-gray-500');
+                const badge = document.getElementById('homeroom-badge');
+                if (badge) {
+                    badge.innerText = 'Not Assigned as Adviser';
+                    badge.classList.remove('bg-emerald-100', 'text-emerald-700');
+                    badge.classList.add('bg-gray-200', 'text-gray-600');
+                }
+                const heading = hrCard.querySelector('h3');
+                if (heading) heading.classList.add('text-gray-400');
+                hrCard.onclick = null;
+            }
+        });
+    </script>
+</body>
+</html>

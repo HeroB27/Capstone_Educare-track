@@ -220,8 +220,7 @@ async function loadAnnouncementsFiltered(category) {
         }
         
         const { data: announcements, error } = await query
-            .order('created_at', { ascending: false })
-            .limit(30); // THE FIX: Add the bandwidth cap
+            .order('created_at', { ascending: false });
         
         if (error) throw error;
         
@@ -236,13 +235,31 @@ async function loadAnnouncementsFiltered(category) {
 // UTILITIES
 // ============================================================================
 
-/**
- * View announcement details
- */
-function viewAnnouncement(announcementId) {
-    // Could open a modal with full announcement details
-    console.log('View announcement:', announcementId);
-    // For now, just log the ID - modal implementation can be added
+async function viewAnnouncement(announcementId) {
+    // Fetch full announcement details
+    const { data: announcement, error } = await supabase
+        .from('announcements')
+        .select('*, admins(full_name)')
+        .eq('id', announcementId)
+        .single();
+    if (error || !announcement) return;
+
+    document.getElementById('modal-title').innerText = announcement.title;
+    const date = new Date(announcement.created_at);
+    const contentHtml = `
+        <div class="prose max-w-none">
+            <div class="text-sm text-gray-500 mb-4">
+                Posted by ${announcement.admins?.full_name || 'Admin'} on ${date.toLocaleString()}
+            </div>
+            <p class="text-gray-800">${escapeHtml(announcement.content)}</p>
+        </div>
+    `;
+    document.getElementById('modal-content').innerHTML = contentHtml;
+    document.getElementById('announcement-modal').classList.remove('hidden');
+}
+
+function closeAnnouncementModal() {
+    document.getElementById('announcement-modal').classList.add('hidden');
 }
 
 /**

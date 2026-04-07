@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
+    <!-- Core scripts (assumed to provide supabase client & helper functions) -->
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="teacher-core.js"></script>
@@ -18,6 +19,21 @@
         body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .announcement-card {
+            transition: all 0.2s ease;
+        }
+        .announcement-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px -12px rgba(0, 0, 0, 0.1);
+        }
+        .urgent-badge {
+            animation: subtle-pulse 1.5s infinite;
+        }
+        @keyframes subtle-pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex">
@@ -29,40 +45,35 @@
             <span class="text-2xl font-black tracking-tighter uppercase">TEACHER</span>
         </div>
         
-        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+<nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
             </a>
-            <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="users" class="w-5 h-5"></i> Homeroom Class
-            </a>
-            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
-            </a>
-            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
+            <a href="teacher-attendance.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Attendance
             </a>
             <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
+                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Passes
+            </a>
+            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
             </a>
             <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
             </a>
-            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Analytics
-            </a>
-            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
-                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
-            </a>
             <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
+            </a>
+            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
             <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="settings" class="w-5 h-5"></i> Settings
             </a>
         </nav>
-       
-        
         <!-- Gatekeeper Toggle -->
         <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
             <label class="flex items-center cursor-pointer">
@@ -99,8 +110,8 @@
         <!-- Content -->
         <div class="flex-1 overflow-auto p-8">
             <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                <!-- Post Announcement (1 column) -->
-                <div class="lg:col-span-1">
+                <!-- POST ANNOUNCEMENT COLUMN - will be conditionally hidden if not adviser -->
+                <div id="post-announcement-column" class="lg:col-span-1">
                     <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm sticky top-0">
                         <div class="flex items-center gap-3 mb-6">
                             <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -137,8 +148,8 @@
                                 </div>
                             </div>
                             <div class="flex items-center gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
-                                <input type="checkbox" id="urgent-flag" class="w-5 h-5 text-red-500 rounded border-gray-300 focus:ring-red-500">
-                                <label for="urgent-flag" class="text-sm text-red-700 font-semibold">Mark as URGENT</label>
+                                <input type="checkbox" id="announcement-urgent" class="w-5 h-5 text-red-500 rounded border-gray-300 focus:ring-red-500">
+                                <label for="announcement-urgent" class="text-sm text-red-700 font-semibold">Mark as URGENT</label>
                             </div>
                             <button onclick="postAnnouncement()" class="w-full py-3 bg-blue-600 text-white rounded-xl hover:shadow-lg shadow-blue-200 transition-all duration-200 flex items-center justify-center gap-2 font-semibold">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -148,7 +159,7 @@
                     </div>
                 </div>
 
-                <!-- Received & Sent Announcements (3 columns) -->
+                <!-- Announcements Lists (3 columns) -->
                 <div class="lg:col-span-3">
                     <!-- Received from Admin -->
                     <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mb-6">
@@ -217,70 +228,359 @@
         </div>
     </main>
 
-    <!-- Notification Modal (handled by core) -->
-    <!-- Confirmation Modal (handled by core) -->
-
-    <!-- teacher-announcements-board.js removed - using core functions -->
+    <!-- Custom script for announcements board with adviser restriction -->
     <script>
-    window.postAnnouncement = async function(event) {
-        if (event) event.preventDefault();
+        // Global variables for current user and supabase
+        let currentUser = null;
+        let supabaseClient = null;
         
-        const title = document.getElementById('announcement-title')?.value;
-        const content = document.getElementById('announcement-content')?.value;
-        const isUrgent = document.getElementById('urgent-flag')?.checked || false;
-
-        if (!title || !content) return showNotification('Title and content are required.', 'error');
-
-        const btn = document.getElementById('post-btn');
-        const originalText = btn ? btn.innerHTML : 'Post';
-        if (btn) { btn.innerHTML = 'Sending...'; btn.disabled = true; }
-
-        try {
-            // Force fetch homeroom class directly from DB to prevent "null" errors
-            const { data: myClass } = await supabase.from('classes').select('id').eq('adviser_id', currentUser.id).single();
-            if (!myClass) throw new Error('Only Homeroom Advisers can post announcements.');
-
-            const { data: students } = await supabase.from('students').select('parent_id').eq('class_id', myClass.id).not('parent_id', 'is', null);
-            if (!students || students.length === 0) throw new Error('No parents found in homeroom.');
-
-            const uniqueParentIds = [...new Set(students.map(s => s.parent_id))];
-
-            const notifications = uniqueParentIds.map(pid => ({
-                recipient_role: 'parents', recipient_id: pid,
-                title: isUrgent ? `🚨 URGENT: ${title}` : title, message: content, type: 'announcement', is_read: false
-            }));
-
-            await supabase.from('notifications').insert(notifications);
-            await supabase.from('announcements').insert({
-                title, content, author_id: currentUser.id, author_role: 'teachers', target_audience: 'homeroom_parents', is_urgent: isUrgent
-            });
-
-            showNotification(`Sent to ${uniqueParentIds.length} parents!`, 'success');
-            document.getElementById('announcement-title').value = '';
-            document.getElementById('announcement-content').value = '';
-            
-            if (typeof loadSentAnnouncements === 'function') loadSentAnnouncements();
-        } catch (err) {
-            showNotification(err.message, 'error');
-        } finally {
-            if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        // Helper: load user data and check adviser status
+        async function initializeAnnouncementsBoard() {
+            try {
+                // Initialize Lucide icons
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                
+                // Get supabase client from global (provided by supabase-client.js)
+                if (typeof window.supabase !== 'undefined') {
+                    supabaseClient = window.supabase;
+                } else if (typeof supabase !== 'undefined') {
+                    supabaseClient = supabase;
+                }
+                
+                // Get current session (expecting teacher-core or general-core provides getCurrentUser)
+                let user = null;
+                if (typeof getCurrentUser === 'function') {
+                    user = await getCurrentUser();
+                } else if (typeof window.currentUser !== 'undefined') {
+                    user = window.currentUser;
+                } else if (supabaseClient) {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session?.user) {
+                        // fetch teacher profile
+                        const { data: teacherData } = await supabaseClient
+                            .from('teachers')
+                            .select('id, full_name, email')
+                            .eq('email', session.user.email)
+                            .single();
+                        if (teacherData) user = teacherData;
+                    }
+                }
+                
+                if (!user && supabaseClient) {
+                    // fallback: try to get from localStorage
+                    const cached = localStorage.getItem('teacherUser');
+                    if (cached) user = JSON.parse(cached);
+                }
+                
+                if (user) {
+                    currentUser = user;
+                    document.getElementById('teacher-name').innerText = user.full_name || user.name || 'Teacher';
+                    const avatarEl = document.getElementById('user-avatar');
+                    if (avatarEl) avatarEl.innerText = (user.full_name?.[0] || user.email?.[0] || 'T').toUpperCase();
+                    
+                    // ADVISER CHECK: hide post column if not homeroom adviser
+                    await checkAdviserAndTogglePostForm(user);
+                } else {
+                    document.getElementById('teacher-name').innerText = 'Teacher';
+                }
+                
+                // Load all announcements (admin, sent, scheduled)
+                await loadAdminAnnouncements();
+                await loadSentAnnouncements();
+                await loadScheduledAnnouncements();
+                
+                // Set up character counter
+                const contentArea = document.getElementById('announcement-content');
+                const counter = document.getElementById('char-counter');
+                if (contentArea && counter) {
+                    contentArea.addEventListener('input', function(e) {
+                        counter.textContent = e.target.value.length;
+                    });
+                    // initial counter
+                    counter.textContent = contentArea.value.length;
+                }
+                
+                // Set default date to today for scheduling
+                const dateInput = document.getElementById('announcement-date');
+                if (dateInput && !dateInput.value) {
+                    const today = new Date().toISOString().split('T')[0];
+                    dateInput.value = today;
+                }
+            } catch (err) {
+                console.error('Initialization error:', err);
+                document.getElementById('teacher-name').innerText = 'Educator';
+            }
         }
-    };
-</script>
+        
+        // Check if teacher is homeroom adviser by looking up classes table
+        async function checkAdviserAndTogglePostForm(teacher) {
+            const postColumn = document.getElementById('post-announcement-column');
+            if (!postColumn) return;
+            
+            try {
+                if (!supabaseClient) {
+                    console.warn('Supabase client not available');
+                    return;
+                }
+                const { data: classData, error } = await supabaseClient
+                    .from('classes')
+                    .select('id, class_name')
+                    .eq('adviser_id', teacher.id)
+                    .maybeSingle();  // using maybeSingle to avoid error if none
+                
+                const isAdviser = classData && !error;
+                if (!isAdviser) {
+                    // Replace post column content with non-adviser message
+                    postColumn.innerHTML = `
+                        <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                            <div class="text-center py-6">
+                                <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800 mb-2">Access Restricted</h3>
+                                <p class="text-gray-500 text-sm">You are not assigned as a homeroom adviser.<br>Announcements can only be posted by advisers.</p>
+                                <p class="text-xs text-gray-400 mt-4">Contact administrator for homeroom assignment.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error('Error checking adviser status:', err);
+                // In case of error, keep form but show a soft warning? better hide to be safe.
+                // But we can also show a generic message.
+                postColumn.innerHTML = `
+                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                        <div class="text-center py-4">
+                            <p class="text-amber-600 text-sm">Unable to verify homeroom status. Please contact support.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load announcements from admin (global)
+        async function loadAdminAnnouncements() {
+            const container = document.getElementById('announcements-list');
+            if (!container) return;
+            if (!supabaseClient) {
+                container.innerHTML = `<div class="text-center py-8 text-gray-500">Supabase not available</div>`;
+                return;
+            }
+            try {
+                // Fetch announcements where sender_type = 'admin' OR target_role = 'teacher'
+                const { data, error } = await supabaseClient
+                    .from('announcements')
+                    .select('*')
+                    .or('sender_type.eq.admin, target_role.eq.teacher')
+                    .eq('status', 'sent')
+                    .order('created_at', { ascending: false })
+                    .limit(30);
+                    
+                if (error) throw error;
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = `<div class="text-center py-8 text-gray-500">No announcements from admin yet.</div>`;
+                    return;
+                }
+                
+                container.innerHTML = data.map(ann => `
+                    <div class="announcement-card bg-gray-50 rounded-2xl p-5 border-l-4 ${ann.is_urgent ? 'border-l-red-500 bg-red-50/30' : 'border-l-blue-500'} transition-all">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-gray-800 text-lg">${escapeHtml(ann.title || 'Announcement')}</h4>
+                            ${ann.is_urgent ? '<span class="urgent-badge text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full">URGENT</span>' : ''}
+                        </div>
+                        <p class="text-gray-600 text-sm mb-3 whitespace-pre-line">${escapeHtml(ann.content || ann.message || 'No content')}</p>
+                        <div class="flex items-center justify-between text-xs text-gray-400">
+                            <span>📅 ${formatDate(ann.created_at)}</span>
+                            <span>🏫 School Administration</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Load admin announcements error:', err);
+                container.innerHTML = `<div class="text-center py-8 text-red-500">Failed to load announcements.</div>`;
+            }
+        }
+        
+        // Load sent announcements by current teacher
+        async function loadSentAnnouncements() {
+            const container = document.getElementById('sent-announcements-list');
+            if (!container || !currentUser) return;
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('announcements')
+                    .select('*')
+                    .eq('sender_id', currentUser.id)
+                    .eq('sender_type', 'teacher')
+                    .order('created_at', { ascending: false });
+                    
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    container.innerHTML = `<div class="text-center py-8 text-gray-500">You haven't posted any announcements yet.</div>`;
+                    return;
+                }
+                container.innerHTML = data.map(ann => `
+                    <div class="announcement-card bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-semibold text-gray-800">${escapeHtml(ann.title || 'No Title')}</h4>
+                            <span class="text-xs px-2 py-1 rounded-full ${ann.status === 'scheduled' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">${ann.status === 'scheduled' ? 'Scheduled' : 'Sent'}</span>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-3 line-clamp-2">${escapeHtml(ann.content || ann.message || '')}</p>
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>📅 ${formatDate(ann.created_at)}</span>
+                            ${ann.scheduled_for ? `<span>⏰ Scheduled: ${formatDate(ann.scheduled_for)}</span>` : ''}
+                            ${ann.is_urgent ? '<span class="text-red-500 font-semibold">⚠️ Urgent</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Load sent announcements error:', err);
+                container.innerHTML = `<div class="text-center py-8 text-gray-500">Could not load your posts.</div>`;
+            }
+        }
+        
+        // Load scheduled announcements (future)
+        async function loadScheduledAnnouncements() {
+            const container = document.getElementById('scheduled-announcements-list');
+            if (!container || !currentUser) return;
+            if (!supabaseClient) return;
+            try {
+                const now = new Date().toISOString();
+                const { data, error } = await supabaseClient
+                    .from('announcements')
+                    .select('*')
+                    .eq('sender_id', currentUser.id)
+                    .eq('sender_type', 'teacher')
+                    .eq('status', 'scheduled')
+                    .gt('scheduled_for', now)
+                    .order('scheduled_for', { ascending: true });
+                    
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    container.innerHTML = `<div class="text-center py-8 text-gray-500">No pending scheduled announcements.</div>`;
+                    return;
+                }
+                container.innerHTML = data.map(ann => `
+                    <div class="announcement-card bg-amber-50/40 rounded-2xl p-5 border border-amber-100">
+                        <h4 class="font-bold text-gray-800">${escapeHtml(ann.title || 'Scheduled Post')}</h4>
+                        <p class="text-gray-600 text-sm mt-1 mb-2">${escapeHtml(ann.content || '').substring(0, 100)}${(ann.content?.length || 0) > 100 ? '...' : ''}</p>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-amber-600 font-medium">📅 Scheduled: ${formatDate(ann.scheduled_for)}</span>
+                            ${ann.is_urgent ? '<span class="text-red-500">Urgent</span>' : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `<div class="text-center py-8 text-gray-500">Error loading scheduled posts.</div>`;
+            }
+        }
+        
+        // Post announcement (used by teacher-core.js or local)
+        window.postAnnouncement = async function() {
+            if (!currentUser) {
+                showNotification?.('Please login to post announcement', 'error');
+                return;
+            }
+            const title = document.getElementById('announcement-title')?.value.trim();
+            const content = document.getElementById('announcement-content')?.value.trim();
+            const isUrgent = document.getElementById('announcement-urgent')?.checked || false;
+            const scheduledDate = document.getElementById('announcement-date')?.value;
+            const scheduledTime = document.getElementById('announcement-time')?.value;
+            
+            if (!title) { showNotification?.('Please enter a title', 'warning'); return; }
+            if (!content) { showNotification?.('Please enter announcement content', 'warning'); return; }
+            if (content.length > 500) { showNotification?.('Content exceeds 500 characters', 'error'); return; }
+            
+            let scheduledFor = null;
+            if (scheduledDate && scheduledTime) {
+                scheduledFor = `${scheduledDate}T${scheduledTime}:00`;
+                if (new Date(scheduledFor) <= new Date()) {
+                    showNotification?.('Schedule time must be in the future', 'error');
+                    return;
+                }
+            }
+            
+            try {
+                if (!supabaseClient) throw new Error('Supabase not ready');
+                const announcementData = {
+                    title: title,
+                    content: content,
+                    message: content,
+                    sender_id: currentUser.id,
+                    sender_type: 'teacher',
+                    target_role: 'parent',
+                    is_urgent: isUrgent,
+                    status: scheduledFor ? 'scheduled' : 'sent',
+                    scheduled_for: scheduledFor,
+                    created_at: new Date().toISOString()
+                };
+                const { error } = await supabaseClient.from('announcements').insert([announcementData]);
+                if (error) throw error;
+                
+                showNotification?.('Announcement posted successfully!', 'success');
+                // reset form
+                document.getElementById('announcement-title').value = '';
+                document.getElementById('announcement-content').value = '';
+                document.getElementById('announcement-urgent').checked = false;
+                if (document.getElementById('char-counter')) document.getElementById('char-counter').innerText = '0';
+                // reload lists
+                await loadSentAnnouncements();
+                await loadScheduledAnnouncements();
+            } catch (err) {
+                console.error('Post error:', err);
+                showNotification?.('Failed to post announcement: ' + err.message, 'error');
+            }
+        };
+        
+        // Helper functions
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch(e) { return dateString; }
+        }
+        
+        function showNotification(msg, type) {
+            // Simple alert fallback, but if general-core provides better use it
+            if (typeof window.showToast === 'function') window.showToast(msg, type);
+            else alert(msg);
+        }
+        
+        // Global logout function referenced in sidebar
+        window.logout = async function() {
+            if (supabaseClient) await supabaseClient.auth.signOut();
+            localStorage.removeItem('teacherUser');
+            window.location.href = '../index.html';
+        };
+        
+        // toggle gatekeeper mode placeholder
+        window.toggleGatekeeperMode = function() {
+            const toggle = document.getElementById('gatekeeper-switch');
+            const isChecked = toggle?.checked;
+            if (isChecked) {
+                showNotification('Gatekeeper Mode activated (demo)', 'info');
+            } else {
+                showNotification('Gatekeeper Mode deactivated', 'info');
+            }
+        };
+        
+        // Start initialization after DOM ready
+        document.addEventListener('DOMContentLoaded', initializeAnnouncementsBoard);
+    </script>
 </body>
 </html>
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-        
-        // Live Character Counter for Announcements
-        const contentArea = document.getElementById('announcement-content');
-        const counter = document.getElementById('char-counter');
-        if (contentArea && counter) {
-            contentArea.addEventListener('input', function(e) {
-                counter.textContent = e.target.value.length;
-            });
-        }
-    });
-</script>

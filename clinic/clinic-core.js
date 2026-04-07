@@ -253,13 +253,12 @@ async function admitReferredStudent(visitId) {
         
         if (error) throw error;
         
-        // FIX Issue #1: Notify parent that child has been admitted to clinic
-        if (visit.students && visit.students.parent_id) {
+        // Notify parent that child is at clinic (moved from clinicCheckIn to avoid duplicates)
+        if (visit.students.parent_id) {
             await notifyParentChildInClinic(
                 visit.students.parent_id,
                 visit.students.full_name
             );
-            if (DEBUG) console.log('[DEBUG] Parent notified of clinic admission');
         }
         
         // Show success toast and refresh
@@ -452,6 +451,27 @@ async function dischargeStudent(visitId, outcome, nurseNotes = '', parentNotifie
 }
 
 /**
+ * Quick approve + check-in combo for pending passes
+ */
+async function approveAndAdmit(visitId) {
+    try {
+        await approveClinicPass(visitId);
+        await clinicCheckIn(visitId);
+        if (typeof showToast === 'function') {
+            showToast('Student approved and admitted', 'success');
+        }
+        if (typeof loadDashboardData === 'function') {
+            loadDashboardData();
+        }
+    } catch (error) {
+        console.error('Error in approveAndAdmit:', error);
+        if (typeof showToast === 'function') {
+            showToast('Error processing pass', 'error');
+        }
+    }
+}
+
+/**
  * Check in a student at the clinic (via QR scan or visit ID)
  * Updates time_in and status to 'In Clinic'
  * @param {number} visitId - The visit ID to check in
@@ -485,13 +505,7 @@ async function clinicCheckIn(visitId) {
             throw error;
         }
         
-        // Notify parent that child is at clinic
-        if (visit.students.parent_id) {
-            await notifyParentChildInClinic(
-                visit.students.parent_id,
-                visit.students.full_name
-            );
-        }
+        // Parent notification removed - handled in admitReferredStudent() to avoid duplicates
         
         return true;
     } catch (err) {
@@ -1618,6 +1632,7 @@ function exportToCSV(data, filename) {
 // ============================================================================
 // WINDOW EXPORTS - Make functions globally accessible
 // ============================================================================
+window.approveAndAdmit = approveAndAdmit;
 window.fetchVisitsByDateRange = fetchVisitsByDateRange;
 window.fetchDailyClinicStats = fetchDailyClinicStats;
 window.formatDate = formatDate;

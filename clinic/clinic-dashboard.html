@@ -550,19 +550,16 @@
                         <div class="flex items-center gap-2">
                             <span class="text-sm text-gray-500 font-medium">By: ${visit.referred_by_teacher?.full_name || 'Unknown'}</span>
                             <button onclick="rejectPass(${visit.id})" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl border-2 border-red-200 text-sm font-bold transition-colors">
-                                <i data-lucide="x" class="w-4 h-4"></i>
+                                <i data-lucide="x" class="w-4 h-4"></i> Reject
                             </button>
-                            <button onclick="approvePass(${visit.id})" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors">
-                                <i data-lucide="check" class="w-4 h-4"></i>
-                            </button>
-                            <button onclick="admitStudent(${visit.id})" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/30 transition-all">
-                                Admit
+                            <button onclick="approveAndAdmit(${visit.id})" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-500/30 transition-all">
+                                <i data-lucide="check-check" class="w-4 h-4"></i> Approve &amp; Admit
                             </button>
                         </div>
                     </div>
                 `;
             }).join('');
-            lucide.createIcons();
+            refreshIcons();
         }
 
         async function loadApprovedPasses() {
@@ -602,7 +599,7 @@
                     </div>
                 `;
             }).join('');
-            lucide.createIcons();
+            refreshIcons();
         }
 
         async function approvePass(visitId) {
@@ -717,33 +714,15 @@
         
         async function handleAssessmentSubmit(event) {
             event.preventDefault();
-            
             const visitId = parseInt(document.getElementById('assessment-visit-id').value);
-            const reason = document.getElementById('assessment-reason').value;
             const notes = document.getElementById('assessment-notes').value;
             const decision = document.querySelector('input[name="assessment-decision"]:checked')?.value;
-            const notifyParent = document.getElementById('assessment-parent-notify').checked;
-            
-            // Get vital signs
-            const vitalSigns = {
-                temp: document.getElementById('assessment-temp').value,
-                bp: document.getElementById('assessment-bp').value,
-                pulse: document.getElementById('assessment-pulse').value
-            };
-            
-            if (!visitId || !reason || !notes || !decision) {
-                showToast('Please fill in all required fields', 'error');
+
+            if (!visitId || !notes || !decision) {
+                showToast('Please fill all required fields', 'error');
                 return;
             }
-            
-            const submitBtn = document.getElementById('assessment-submit-btn');
-            
-            // ==========================================
-            // BUTTON LOCKING (Anti-Redundancy)
-            // ==========================================
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="animate-spin mr-2">⏳</i> Saving...';
-            
+
             try {
                 // Get visit details for notifications
                 const { data: visit } = await supabase
@@ -823,29 +802,14 @@
                     await supabase.from('notifications').insert(notifications);
                 }
                 
-                // If returned to class, update attendance
-                if (decision === 'Return to Class') {
-                    // Mark as completed - attendance already has time_in
-                }
-                
+                // Call the core function that already contains correct logic
+                await addClinicFindings(visitId, notes, decision);
                 closeAssessmentModal();
-                
-                if (decision === 'Send Home') {
-                    showToast('Assessment saved. Waiting for teacher approval.', 'info');
-                } else {
-                    showToast(`Assessment saved. Student: ${decision}`, 'success');
-                }
-                
                 await loadDashboardData();
+                showToast(`Assessment saved. Decision: ${decision}`, 'success');
                 
-            } catch (error) {
-                console.error('Assessment error:', error);
-                showToast('Error saving assessment: ' + error.message, 'error');
-            } finally {
-                // Unlock button
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i data-lucide="save" class="w-5 h-5"></i> Save Assessment';
-                lucide.createIcons();
+            } catch (err) {
+                showToast('Error saving assessment: ' + err.message, 'error');
             }
         }
 
@@ -906,7 +870,7 @@
                     </tr>
                 `;
             }).join('');
-            lucide.createIcons();
+            refreshIcons();
         }
 
         // Modal Functions
@@ -1140,6 +1104,10 @@
         document.getElementById('assessment-modal').addEventListener('click', function(e) {
             if (e.target === this) closeAssessmentModal();
         });
+
+        function refreshIcons() { 
+            lucide.createIcons(); 
+        }
 
     </script>
 </body>

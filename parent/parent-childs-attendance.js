@@ -1,624 +1,169 @@
-// parent/parent-childs-attendance.js
-// Attendance calendar with precise monthly queries and color-coded status
+// parent-childs-attendance.js – Clean calendar with correct attendance logic
 
 let currentViewDate = new Date();
 let attendanceData = {};
-let holidays = {};
+let holidaysInMonth = [];
 let attendanceChart = null;
 
-/**
- * Initialize attendance page
- */
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Initial load if child exists
-    if (currentChild) {
-        await loadAttendanceCalendar();
-    }
-    
-    // 2. THE FIX: ALWAYS attach the listener, remove the 'else' block!
-    document.addEventListener('childChanged', async () => {
-        await loadAttendanceCalendar();
-    });
+    if (window.currentChild) await loadAttendanceCalendar();
+    document.addEventListener('childChanged', () => loadAttendanceCalendar());
 });
 
-/**
- * Load attendance data and render calendar
- */
 async function loadAttendanceCalendar() {
-    if (!currentChild) return;
+    if (!window.currentChild) return;
+    document.getElementById('loading-indicator')?.classList.remove('hidden');
+    document.getElementById('attendance-content')?.classList.add('hidden');
 
-    document.getElementById('loading-indicator').classList.remove('hidden');
-    document.getElementById('attendance-content').classList.add('hidden');
-
-    try {
-        // Load attendance logs for current month
-        await loadMonthAttendance();
-        
-        // Load holidays
-        await loadHolidays();
-        
-        // Render calendar
-        renderCalendar();
-        
-        // Calculate and show stats
-        calculateStats();
-        
-        // Render Chart
-        renderTrendChart();
-
-        document.getElementById('loading-indicator').classList.add('hidden');
-        document.getElementById('attendance-content').classList.remove('hidden');
-
-    } catch (err) {
-        console.error('Error loading attendance calendar:', err);
-        document.getElementById('loading-indicator').classList.add('hidden');
-    }
+    await Promise.all([loadMonthAttendance(), loadMonthHolidays()]);
+    renderCalendar();
+    await calculateStatsAndChart();
+    document.getElementById('loading-indicator')?.classList.add('hidden');
+    document.getElementById('attendance-content')?.classList.remove('hidden');
 }
 
-/**
- * Update child selector dropdown
- */
-function updateChildSelector() {
-    const selectorEl = document.getElementById('child-selector');
-    if (!selectorEl) return;
-
-    selectorEl.innerHTML = `
-        <select id="child-select" onchange="switchChildFromSelector(this.value)" class="p-2 rounded bg-green-700 text-white text-sm font-medium">
-            ${allChildren.map(child => `
-                <option value="${child.id}" ${currentChild?.id === child.id ? 'selected' : ''}>
-                    ${child.full_name.split(' ')[0]}
-                </option>
-            `).join('')}
-        </select>
-    `;
-}
-
-/**
- * Switch child from selector
- */
-function switchChildFromSelector(childId) {
-    switchChild(childId);
-}
-
-/**
- * Load attendance data for current month with precise date bounds
- */
 async function loadMonthAttendance() {
     const year = currentViewDate.getFullYear();
     const month = currentViewDate.getMonth();
-    
-    // Calculate first and last day of the month precisely
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    const monthStart = firstDay.toISOString().split('T')[0];
-    const monthEnd = lastDay.toISOString().split('T')[0];
-
-    try {
-        const { data: logs, error } = await supabase
-            .from('attendance_logs')
-            .select('*')
-            .eq('student_id', currentChild.id)
-            .gte('log_date', monthStart)
-            .lte('log_date', monthEnd);
-
-        if (error) {
-            console.error('Error loading attendance:', error);
-            attendanceData = {};
-            return;
-        }
-
-        // Convert array to object indexed by date for O(1) lookup
+    const { start, end } = getMonthBounds(year, month);
+    const { data, error } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('student_id', window.currentChild.id)
+        .gte('log_date', start)
+        .lte('log_date', end);
+    if (!error) {
         attendanceData = {};
-        logs?.forEach(log => {
-            attendanceData[log.log_date] = log;
-        });
-
-    } catch (err) {
-        console.error('Error in loadMonthAttendance:', err);
-        attendanceData = {};
+        data?.forEach(log => { attendanceData[log.log_date] = log; });
     }
 }
 
-/**
- * Load holidays for current month with precise date bounds
- */
-async function loadHolidays() {
+async function loadMonthHolidays() {
     const year = currentViewDate.getFullYear();
     const month = currentViewDate.getMonth();
-    
-    // Calculate first and last day of the month precisely
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    const monthStart = firstDay.toISOString().split('T')[0];
-    const monthEnd = lastDay.toISOString().split('T')[0];
-
-    try {
-        const { data: holidayData, error } = await supabase
-            .from('holidays')
-            .select('holiday_date, description, is_suspended')
-            .gte('holiday_date', monthStart)
-            .lte('holiday_date', monthEnd);
-
-        if (error) {
-            console.error('Error loading holidays:', error);
-            holidays = {};
-            return;
-        }
-
-        holidays = {};
-        holidayData?.forEach(h => {
-            holidays[h.holiday_date] = h;
-        });
-
-    } catch (err) {
-        console.error('Error in loadHolidays:', err);
-        holidays = {};
-    }
+    const { start, end } = getMonthBounds(year, month);
+    holidaysInMonth = await fetchHolidays(start, end);
 }
 
-/**
- * Render the calendar grid with color-coded days
- */
 function renderCalendar() {
     const year = currentViewDate.getFullYear();
     const month = currentViewDate.getMonth();
-    
-    // Update month title
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                        'July', 'August', 'September', 'October', 'November', 'December'];
-    document.getElementById('current-month').textContent = `${monthNames[month]} ${year}`;
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    document.getElementById('current-month').innerText = `${monthNames[month]} ${year}`;
+
+    const firstDay = new Date(year, month, 1).getDay(); // 0 = Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayStr = getLocalDateString();
 
     const grid = document.getElementById('calendar-grid');
     grid.innerHTML = '';
 
-    // Get first day of month and total days
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().split('T')[0];
+    // Empty cells for days before month starts (shift for Sun=0)
+    for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
 
-    // Empty cells for days before month starts
-    for (let i = 0; i < firstDay; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.className = 'h-12';
-        grid.appendChild(emptyCell);
-    }
-
-    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isToday = dateStr === today;
-        const isWeekend = new Date(dateStr).getDay() === 0 || new Date(dateStr).getDay() === 6;
-        const holiday = holidays[dateStr];
-        const attendance = attendanceData[dateStr];
-
-        const dayCell = document.createElement('div');
-        dayCell.className = `h-12 rounded-lg flex items-center justify-center text-sm font-medium cursor-pointer transition hover:shadow-md ${getDayClass(attendance, holiday, isWeekend, dateStr)}`;
-        dayCell.textContent = day;
-        dayCell.onclick = () => showDayDetails(dateStr, attendance, holiday);
-        
-        if (isToday) {
-            dayCell.classList.add('ring-2', 'ring-green-600');
-        }
-
-        grid.appendChild(dayCell);
+        const isToday = dateStr === todayStr;
+        const holiday = holidaysInMonth.find(h => h.holiday_date === dateStr);
+        const log = attendanceData[dateStr];
+        const dayStatus = getDayStatus(log, holiday, dateStr);
+        const cell = document.createElement('div');
+        cell.className = `h-12 rounded-lg flex items-center justify-center text-sm font-medium cursor-pointer transition ${dayStatus.class}`;
+        if (isToday) cell.classList.add('ring-2', 'ring-green-600');
+        cell.innerText = day;
+        cell.onclick = () => showDayDetails(dateStr, log, holiday);
+        grid.appendChild(cell);
     }
 }
 
-/**
- * Get CSS class for a day cell with precise colors
- */
-function getDayClass(attendance, holiday, isWeekend, dateStr) {
-    const today = new Date().toISOString().split('T')[0];
-    const isFuture = dateStr > today;
-
-    // Holiday - suspended (no class)
-    if (holiday && holiday.is_suspended) {
-        return 'bg-gray-200 text-gray-400';
-    }
-
-    // Holiday with class
-    if (holiday) {
-        return 'bg-purple-200 text-purple-800';
-    }
-
-    // Future date
-    if (isFuture) {
-        return 'bg-gray-100 text-gray-400';
-    }
-
-    // Weekend
-    if (isWeekend) {
-        return 'bg-gray-100 text-gray-400';
-    }
-
-    // No attendance record for a past school day (mark as absent)
-    if (!attendance) {
-        return 'bg-red-200 text-red-800';
-    }
-
-    // FIX: Normalize status to handle variations like "Entered" or "late "
-    const normalizedStatus = (attendance.status || '').trim().toLowerCase();
-
-    switch (normalizedStatus) {
-        case 'present':
-        case 'on time':
-        case 'entered':
-            return 'bg-green-200 text-green-800';
-        case 'late':
-            return 'bg-yellow-200 text-yellow-800';
-        case 'absent':
-            return 'bg-red-200 text-red-800';
-        case 'excused':
-            return 'bg-purple-200 text-purple-800';
-        default:
-            return 'bg-gray-200 text-gray-400'; // Fallback for unknown status
-    }
+function getDayStatus(log, holiday, dateStr) {
+    const today = getLocalDateString();
+    if (dateStr > today) return { class: 'bg-gray-100 text-gray-400' };
+    if (holiday?.is_suspended) return { class: 'bg-gray-200 text-gray-400' };
+    if (holiday) return { class: 'bg-purple-200 text-purple-800' };
+    if (isWeekend(dateStr)) return { class: 'bg-gray-100 text-gray-400' };
+    if (!log) return { class: 'bg-red-200 text-red-800' };
+    const status = (log.status || '').toLowerCase();
+    if (status === 'late') return { class: 'bg-yellow-200 text-yellow-800' };
+    if (status === 'excused') return { class: 'bg-purple-200 text-purple-800' };
+    if (status === 'absent') return { class: 'bg-red-200 text-red-800' };
+    return { class: 'bg-green-200 text-green-800' }; // present / on time
 }
 
-
-function showDayDetails(dateStr, attendance, holiday) {
-    const detailsEl = document.getElementById('day-details');
-    const contentEl = document.getElementById('day-content');
-    const date = new Date(dateStr);
-    const dateFormatted = date.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        month: 'long', 
-        day: 'numeric',
-        year: 'numeric'
-    });
-
-    detailsEl.classList.remove('hidden');
-
+function showDayDetails(dateStr, log, holiday) {
+    const detailsDiv = document.getElementById('day-details');
+    const contentDiv = document.getElementById('day-content');
+    detailsDiv.classList.remove('hidden');
     if (holiday) {
-        contentEl.innerHTML = `
-            <div class="flex items-center gap-2 mb-3">
-                <span class="text-3xl">🎉</span>
-                <span class="font-bold text-lg text-purple-700">${holiday.description}</span>
-            </div>
-            <p class="text-gray-600">${dateFormatted}</p>
-            ${holiday.is_suspended ? '<p class="text-sm text-red-600 mt-2">⚠️ No classes scheduled</p>' : ''}
-        `;
-    } else if (!attendance) {
-        contentEl.innerHTML = `
-            <div class="flex items-center gap-2 mb-3">
-                <span class="text-3xl">❓</span>
-                <span class="font-bold text-lg text-gray-700">No Record</span>
-            </div>
-            <p class="text-gray-600">${dateFormatted}</p>
-            <p class="text-sm text-gray-400 mt-2">No attendance record found for this date.</p>
-        `;
+        contentDiv.innerHTML = `<div class="font-bold text-purple-700">${escapeHtml(holiday.description)}</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
+    } else if (!log) {
+        contentDiv.innerHTML = `<div class="font-bold text-gray-700">No record</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
     } else {
-        let statusIcon = '';
-        let statusClass = '';
-        let statusText = '';
-
-        if (attendance.status === 'Late') {
-            statusIcon = '⏰';
-            statusClass = 'text-yellow-600';
-            statusText = 'Late Arrival';
-        } else if (attendance.status === 'Absent') {
-            statusIcon = '❌';
-            statusClass = 'text-red-600';
-            statusText = 'Absent';
-        } else if (attendance.status === 'Excused') {
-            statusIcon = '📝';
-            statusClass = 'text-purple-600';
-            statusText = 'Excused';
-        } else {
-            statusIcon = '✅';
-            statusClass = 'text-green-600';
-            statusText = 'Present';
-        }
-
-        contentEl.innerHTML = `
-            <div class="flex items-center gap-2 mb-3">
-                <span class="text-3xl">${statusIcon}</span>
-                <span class="font-bold text-lg ${statusClass}">${statusText}</span>
-            </div>
-            <p class="text-gray-600">${dateFormatted}</p>
-            <div class="mt-4 space-y-2">
-                ${attendance.time_in ? `
-                    <div class="flex justify-between py-2 border-b">
-                        <span class="text-gray-500">Time In:</span>
-                        <span class="font-medium">${formatTime(attendance.time_in)}</span>
-                    </div>
-                ` : ''}
-                ${attendance.time_out ? `
-                    <div class="flex justify-between py-2 border-b">
-                        <span class="text-gray-500">Time Out:</span>
-                        <span class="font-medium">${formatTime(attendance.time_out)}</span>
-                    </div>
-                ` : ''}
-                ${attendance.remarks ? `
-                    <div class="flex justify-between py-2 border-b">
-                        <span class="text-gray-500">Remarks:</span>
-                        <span class="font-medium text-right max-w-[60%]">${attendance.remarks}</span>
-                    </div>
-                ` : ''}
-            </div>
+        let icon = log.status?.toLowerCase() === 'late' ? '⏰' : (log.status?.toLowerCase() === 'excused' ? '📝' : '✅');
+        contentDiv.innerHTML = `
+            <div class="flex items-center gap-2 mb-2"><span class="text-3xl">${icon}</span><span class="font-bold">${escapeHtml(log.status || 'Present')}</span></div>
+            <div class="text-gray-600">${formatDate(dateStr)}</div>
+            ${log.time_in ? `<div class="mt-2">Time in: ${formatTime(log.time_in)}</div>` : ''}
+            ${log.time_out ? `<div>Time out: ${formatTime(log.time_out)}</div>` : ''}
+            ${log.remarks ? `<div class="mt-2 text-sm">Remarks: ${escapeHtml(log.remarks)}</div>` : ''}
         `;
     }
 }
 
-/**
- * Render the monthly trend chart
- */
-function renderTrendChart() {
-    const ctx = document.getElementById('attendanceChart');
-    if (!ctx) return;
-
-    // Destroy existing chart if it exists
-    if (attendanceChart) {
-        attendanceChart.destroy();
-    }
-
-    // Prepare data
+async function calculateStatsAndChart() {
     const year = currentViewDate.getFullYear();
     const month = currentViewDate.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    const labels = [];
-    const dataPoints = [];
-    
-    // Simple trend: 1 for Present/Late, 0 for Absent, null for future/weekend
-    for (let day = 1; day <= daysInMonth; day++) {
-        labels.push(day);
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const log = attendanceData[dateStr];
-        
-        if (log) dataPoints.push(1); // Present/Late/Excused
-        else if (new Date(dateStr) > new Date()) dataPoints.push(null); // Future
-        else if (new Date(dateStr).getDay() % 6 === 0) dataPoints.push(null); // Weekend
-        else dataPoints.push(0); // Absent
-    }
+    const stats = await calculateAttendanceStats(window.currentChild.id, year, month);
+    document.getElementById('stat-present').innerText = stats.present;
+    document.getElementById('stat-late').innerText = stats.late;
+    document.getElementById('stat-absent').innerText = stats.absent;
+    document.getElementById('stat-percent').innerText = `${stats.percentage}%`;
+    renderTrendChart(stats);
+}
 
+function renderTrendChart(stats) {
+    const ctx = document.getElementById('attendanceChart')?.getContext('2d');
+    if (!ctx) return;
+    if (attendanceChart) attendanceChart.destroy();
     attendanceChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
-            datasets: [{
-                label: 'Attendance',
-                data: dataPoints,
-                backgroundColor: dataPoints.map(v => v === 1 ? '#22c55e' : '#ef4444'),
-                borderRadius: 4
-            }]
+            labels: ['Present', 'Late', 'Excused', 'Absent'],
+            datasets: [{ label: 'Days', data: [stats.present, stats.late, stats.excused, stats.absent], backgroundColor: ['#22c55e', '#f59e0b', '#3b82f6', '#ef4444'] }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { display: false },
-                x: { grid: { display: false } }
-            }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
     });
 }
 
-/**
- * Calculate attendance statistics (Excused counts as Present)
- */
-function calculateStats() {
-    const year = currentViewDate.getFullYear();
-    const month = currentViewDate.getMonth();
-    
-    let present = 0;
-    let late = 0;
-    let absent = 0;
-    let excused = 0;
-    let totalSchoolDays = 0;
-
-    // Count school days and attendance
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().split('T')[0];
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const date = new Date(dateStr);
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-        const isToday = dateStr === today;
-        const holiday = holidays[dateStr];
-        
-        // Skip if holiday (no class)
-        if (holiday && holiday.is_suspended) {
-            continue;
-        }
-
-        // Skip weekends
-        if (isWeekend) {
-            continue;
-        }
-
-        // Skip future dates
-        if (dateStr > today) {
-            continue;
-        }
-
-        totalSchoolDays++;
-
-        const attendance = attendanceData[dateStr];
-        
-        if (!attendance) {
-            absent++;
-        } else if (attendance.status === 'Late') { // FIX: Check status string, not non-existent field
-            late++;
-        } else if (attendance.status === 'Excused') {
-            excused++; // Excused counts as present
-        } else if (attendance.status === 'Absent') {
-            absent++;
-        } else {
-            present++;
-        }
-    }
-
-    // Update UI
-    document.getElementById('stat-present').textContent = present;
-    document.getElementById('stat-late').textContent = late;
-    document.getElementById('stat-absent').textContent = absent;
-    
-    // Attendance percentage (Present + Excused) / Total School Days
-    const percentage = totalSchoolDays > 0 ? Math.round(((present + excused) / totalSchoolDays) * 100) : 0;
-    document.getElementById('stat-percent').textContent = `${percentage}%`;
-}
-
-/**
- * Change month navigation
- */
 function changeMonth(delta) {
     currentViewDate.setMonth(currentViewDate.getMonth() + delta);
     loadAttendanceCalendar();
 }
 
-// ============================================
-// PHASE 1 FEATURE: CSV Export
-// ============================================
-
-/**
- * Export attendance data to CSV
- */
 function exportToCSV() {
-    if (!currentChild || Object.keys(attendanceData).length === 0) {
-        alert('No attendance data to export');
-        return;
-    }
-
-    // Get all dates from attendanceData
-    const dates = Object.keys(attendanceData).sort();
-    
-    // CSV Header
+    if (!Object.keys(attendanceData).length) return alert('No data to export');
     let csv = 'Date,Status,Time In,Time Out,Remarks\n';
-    
-    // Add data rows
-    dates.forEach(date => {
-        const log = attendanceData[date];
-        const status = log.status || 'Unknown';
-        const timeIn = log.time_in ? formatTime(log.time_in) : '';
-        const timeOut = log.time_out ? formatTime(log.time_out) : '';
-        // Escape remarks for CSV
-        const remarks = log.remarks ? `"${log.remarks.replace(/"/g, '""')}"` : '';
-        
-        csv += `${date},${status},${timeIn},${timeOut},${remarks}\n`;
-    });
-
-    // Create download link
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    // Set filename with child name and date range
-    const childName = currentChild.full_name.replace(/[^a-z0-9]/gi, '_');
-    const monthYear = currentViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    link.setAttribute('href', url);
-    link.setAttribute('download', `attendance_${childName}_${monthYear}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// ============================================
-// PHASE 1 FEATURE: Subject Remarks Parser
-// ============================================
-
-/**
- * Parse remarks field to extract subject-specific attendance
- * Format: "[SubjectName: Status]" e.g., "[Math: Present] [Science: Absent]"
- */
-function parseSubjectRemarks(remarks) {
-    if (!remarks) return [];
-    
-    const subjects = [];
-    const regex = /\[([^:]+): (Present|Absent|Excused|Late)\]/g;
-    let match;
-    
-    while ((match = regex.exec(remarks)) !== null) {
-        subjects.push({
-            subject: match[1].trim(),
-            status: match[2].trim()
-        });
+    for (const [date, log] of Object.entries(attendanceData)) {
+        csv += `${date},${log.status || ''},${formatTime(log.time_in)},${formatTime(log.time_out)},"${(log.remarks || '').replace(/"/g, '""')}"\n`;
     }
-    
-    return subjects;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `attendance_${window.currentChild.full_name}_${getLocalDateString(currentViewDate)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
 }
 
-/**
- * Get human-readable subject remarks for display
- */
-function getSubjectRemarksHtml(remarks) {
-    const subjects = parseSubjectRemarks(remarks);
-    
-    if (subjects.length === 0) {
-        return '';
-    }
-    
-    let html = '<div class="mt-3 pt-3 border-t"><p class="text-sm font-medium text-gray-500 mb-2">Subject Attendance:</p><div class="flex flex-wrap gap-2">';
-    
-    subjects.forEach(subj => {
-        let badgeClass = '';
-        let icon = '';
-        
-        switch (subj.status) {
-            case 'Present':
-                badgeClass = 'bg-green-100 text-green-700';
-                icon = '✓';
-                break;
-            case 'Late':
-                badgeClass = 'bg-yellow-100 text-yellow-700';
-                icon = '⏰';
-                break;
-            case 'Absent':
-                badgeClass = 'bg-red-100 text-red-700';
-                icon = '✗';
-                break;
-            case 'Excused':
-                badgeClass = 'bg-purple-100 text-purple-700';
-                icon = '📝';
-                break;
-            default:
-                badgeClass = 'bg-gray-100 text-gray-700';
-        }
-        
-        html += `<span class="px-2 py-1 rounded-full text-xs font-medium ${badgeClass}">${icon} ${subj.subject}: ${subj.status}</span>`;
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
     });
-    
-    html += '</div></div>';
-    return html;
 }
 
-// Make functions available globally
 window.loadAttendanceCalendar = loadAttendanceCalendar;
 window.changeMonth = changeMonth;
-window.switchChildFromSelector = switchChildFromSelector;
 window.exportToCSV = exportToCSV;
-
-/**
- * Get status color for attendance status
- * Used for calendar day coloring
- * @param {string} status - The attendance status
- * @returns {string} - CSS color class
- */
-function getStatusColor(status) {
-    if (!status) return 'bg-gray-100'; // Default gray for empty
-    
-    // FIX: Force lowercase and trim spaces to catch ANY variation
-    const normalized = status.trim().toLowerCase();
-    
-    switch (normalized) {
-        case 'present':
-        case 'on time':
-        case 'entered': // Added safe fallback for Guard scanner
-            return 'bg-green-500'; // Green
-        case 'late':
-            return 'bg-yellow-500'; // Yellow
-        case 'absent':
-            return 'bg-red-500'; // Red
-        case 'excused':
-            return 'bg-blue-500'; // Blue
-        default:
-            return 'bg-gray-100'; // Gray fallback
-    }
-}
-
-window.getStatusColor = getStatusColor;

@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
 });
 
-// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (e.g., EDU-2026-G010-A1B2)
-const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i;
+// UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (accepts 4-6 char suffix)
+const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4,6}$/i;
 
 // jsQR scanner variables
 let videoStream = null;
@@ -426,4 +426,3 @@ async function selectStudentForCheckIn(studentIdText, studentName) {
     // Reuse the handleScanSuccess function logic
     await handleScanSuccess(studentIdText);
 }
-

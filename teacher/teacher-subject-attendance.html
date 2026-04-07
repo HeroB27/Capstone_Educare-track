@@ -9,217 +9,106 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
     <script src="teacher-core.js"></script>
-    
-    <!-- Restricted Privacy Modal for Subject Teachers -->
-    <div id="subject-student-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col animate-fade-in-up">
-            <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h3 class="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> Restricted View</h3>
-                <button onclick="closeSubjectModal()" class="text-gray-400 hover:text-gray-700 bg-white rounded-full p-2 shadow-sm border border-gray-100"><i data-lucide="x" class="w-4 h-4"></i></button>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .status-square {
+            width: 100px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .status-square:hover {
+            transform: scale(0.97);
+            filter: brightness(0.95);
+        }
+        .locked-square {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .locked-square:hover {
+            transform: none;
+            filter: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen">
+
+    <!-- Simple top bar -->
+    <div class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-10">
+        <div class="px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <button onclick="window.location.href='teacher-dashboard.html'" class="p-2 rounded-xl hover:bg-gray-100 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </button>
+                <h1 class="text-xl font-bold text-gray-800">Subject Attendance</h1>
             </div>
-            <div class="p-8 text-center">
-                <div class="w-24 h-24 mx-auto rounded-3xl overflow-hidden bg-gray-100 shadow-md mb-4 border-4 border-white" id="sub-modal-img"></div>
-                <h3 class="text-2xl font-black text-gray-800" id="sub-modal-name">Name</h3>
-                <p class="text-blue-600 font-mono font-bold text-sm mb-6" id="sub-modal-id">ID</p>
-                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 shadow-inner">
-                    <p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Subject Attendance Rate</p>
-                    <p class="text-5xl font-black text-blue-700 my-2" id="sub-modal-rate">--%</p>
-                    <p class="text-[10px] text-blue-500 font-medium uppercase tracking-wider mt-3 bg-blue-100/50 py-1.5 rounded-lg inline-block px-3"><i data-lucide="shield-check" class="w-3 h-3 inline pb-0.5"></i> Data limited to your subject</p>
-                </div>
+            <div class="flex items-center gap-2">
+                <span id="teacher-name" class="text-sm text-gray-600">Loading...</span>
+                <div class="h-8 w-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">T</div>
             </div>
         </div>
     </div>
-    
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    </style>
-</head>
-<body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen flex">
 
-    <!-- Floating Sidebar -->
-    <aside class="w-64 m-4 rounded-[32px] bg-blue-900 text-white flex flex-col shadow-2xl shrink-0">
-        <div class="p-8 flex items-center gap-3 border-b border-white/10">
-            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-blue-300"></i></div>
-            <span class="text-2xl font-black tracking-tighter uppercase">TEACHER</span>
+    <main class="p-6">
+        <!-- Subject selection and action buttons -->
+        <div class="bg-white rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between border shadow-sm">
+            <div class="flex gap-4 items-center flex-wrap">
+                <label class="font-bold text-gray-700">Subject:</label>
+                <select id="subject-select" class="px-3 py-2 border rounded-xl w-64">
+                    <option value="">-- Select Subject --</option>
+                </select>
+                <button id="load-subject" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow">Load</button>
+            </div>
+            <div class="flex gap-2">
+                <button id="save-subject-attendance-btn" class="px-4 py-2 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition flex items-center gap-2">
+                    <i data-lucide="save" class="w-4 h-4"></i> Save Changes
+                </button>
+                <button id="view-subject-table-btn" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition flex items-center gap-2">
+                    <i data-lucide="table" class="w-4 h-4"></i> View Attendance Table
+                </button>
+            </div>
         </div>
-        
-        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-            <a href="teacher-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
-            </a>
-            <a href="teacher-homeroom.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="users" class="w-5 h-5"></i> Homeroom Class
-            </a>
-            <a href="teacher-calendar.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
-            </a>
-            <a href="teacher-subject-attendance.html" class="flex items-center gap-3 px-4 py-3 bg-white border-l-4 border-blue-600 text-blue-700 rounded-r-xl font-bold transition-all">
-                <i data-lucide="book-open" class="w-5 h-5"></i> Subject Attendance
-            </a>
-            <a href="teacher-clinicpass.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="heart-pulse" class="w-5 h-5"></i> Clinic Pass
-            </a>
-            <a href="teacher-excuse-letter-approval.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="file-text" class="w-5 h-5"></i> Excuse Letters
-            </a>
-            <a href="teacher-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Analytics
-            </a>
-            <a href="teacher-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
-            </a>
-            <a href="teacher-gatekeeper-mode.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="scan-line" class="w-5 h-5"></i> Gatekeeper Mode
-            </a>
-            <a href="teacher-settings.html" class="flex items-center gap-3 px-4 py-3 text-blue-200 hover:bg-white/5 rounded-xl transition-all">
-                <i data-lucide="settings" class="w-5 h-5"></i> Settings
-            </a>
-        </nav>
-       
-        
-        <!-- Gatekeeper Toggle -->
-        <div id="gatekeeper-toggle" class="hidden mx-4 mb-4 p-4 bg-blue-800/50 rounded-2xl">
-            <label class="flex items-center cursor-pointer">
-                <input type="checkbox" id="gatekeeper-switch" onchange="toggleGatekeeperMode()" class="sr-only">
-                <div class="w-10 h-6 bg-gray-400 rounded-full relative transition-colors duration-300" id="gatekeeper-toggle-bg">
-                    <div class="w-4 h-4 bg-white rounded-full absolute left-1 top-1 transition-transform duration-300" id="gatekeeper-knob"></div>
-                </div>
-                <span class="ml-3 text-sm font-medium text-blue-200">Gatekeeper Mode</span>
-            </label>
+
+        <!-- Date picker -->
+        <div class="bg-white rounded-2xl p-4 mb-6 flex items-center gap-4 border shadow-sm">
+            <label class="font-bold text-gray-700">Date:</label>
+            <input type="date" id="attendance-date" class="px-3 py-2 border rounded-xl">
         </div>
-        
-        <div class="p-4 border-t border-blue-800/50">
-            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl transition-all duration-200 hover:shadow-lg shadow-red-500/30">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                </svg>
-                <span class="font-medium">Logout</span>
-            </button>
-        </div>
-    </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-        <!-- Header -->
-        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
-            <h2 class="text-3xl font-black text-gray-900 tracking-tight" id="page-title">Subject Attendance</h2>
-            <div class="flex items-center gap-4">
-                <span id="teacher-name" class="font-medium text-gray-600">Loading...</span>
-                <div class="h-12 w-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/30" id="user-avatar">T</div>
+        <!-- Checklist table -->
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gray-50">
+                <h3 class="font-bold text-lg">📋 Subject Checklist – <span id="subject-name-display"></span></h3>
             </div>
-        </header>
-                <div class="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-2xl flex items-center justify-center text-white font-semibold shadow-lg shadow-blue-500/30">T</div>
-            </div>
-        </header>
-
-        <!-- Content -->
-        <div class="flex-1 overflow-auto p-8">
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500">Total Students</p>
-                            <p class="text-2xl font-bold text-gray-800 mt-1" id="total-students">--</p>
-                        </div>
-                        <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500">Present</p>
-                            <p class="text-2xl font-bold text-green-600 mt-1" id="present-count">--</p>
-                        </div>
-                        <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500">Absent</p>
-                            <p class="text-2xl font-bold text-red-600 mt-1" id="absent-count">--</p>
-                        </div>
-                        <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all duration-200">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500">Late</p>
-                            <p class="text-2xl font-bold text-yellow-600 mt-1" id="late-count">--</p>
-                        </div>
-                        <div class="w-12 h-12 bg-yellow-50 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Subject Selection Card --> 
-            <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mb-8">
-                <div class="flex gap-3">
-                    <input type="date" id="attendance-date" class="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:bg-gray-50 transition-colors">
-                </div>
-            </div>
-
-            <div id="subject-cards-container" class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-                </div>
-
-            <!-- Student List -->
-            <div id="subject-student-list" class="hidden">
-                <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div class="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                        <h3 class="font-bold text-gray-800">Student Attendance</h3>
-                        <button onclick="markAllPresent()" class="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition-all shadow-sm border border-emerald-200">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 inline-block mr-1 -mt-0.5"></i> Mark All Present
-                        </button>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-gray-50/50">
-                                <tr>
-                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student Name</th>
-                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Subject Status</th>
-                            </tr>
-                            </thead>
-                            <tbody id="student-table-body" class="divide-y divide-gray-100">
-                                <!-- Students will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Empty State -->
-            <div id="empty-state" class="bg-white rounded-3xl p-12 border border-gray-100 shadow-sm text-center">
-                <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                </div>
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Select a Subject</h3>
-                <p class="text-gray-500">Choose a subject from the dropdown above to view and mark student attendance</p>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left sticky left-0 bg-gray-50">Student Name</th>
+                            <th class="px-4 py-3 text-left">Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subject-checklist-tbody">
+                        <tr><td colspan="2" class="text-center py-8">Select a subject first...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
 
     <script src="teacher-subject-attendance.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+    </script>
 </body>
 </html>
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-    });
-</script>

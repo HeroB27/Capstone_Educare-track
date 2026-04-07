@@ -1,439 +1,200 @@
-// parent/parent-core.js
-// Core logic for Parent Module - handles session, child switching, and real-time sync
+// parent-core.js – Core session, child switcher, realtime, sidebar navigation
+// Must be loaded after supabase-client.js and general-core.js
 
-
-// ============================================
-// SESSION MANAGEMENT
-// ============================================
-
-var currentUser = checkSession('parents');
-
-// Initialize user info
-document.addEventListener('DOMContentLoaded', async () => {
-    if (currentUser) {
-        // Update welcome message with time-based greeting and weekend support
-        const welcomeEl = document.getElementById('parent-name');
-        if (welcomeEl) {
-            const now = new Date();
-            const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-            const hour = now.getHours();
-            
-            let greeting;
-            
-            // Check if it's weekend
-            if (day === 0) {
-                greeting = 'Happy Sunday';
-            } else if (day === 6) {
-                greeting = 'Happy Saturday';
-            } else if (hour < 12) {
-                greeting = 'Good Morning';
-            } else if (hour < 18) {
-                greeting = 'Good Afternoon';
-            } else {
-                greeting = 'Good Evening';
-            }
-            
-            welcomeEl.innerText = `${greeting}, ${currentUser.full_name.split(' ')[0]}`;
-        }
-
-        // Add listener for child changes to update header
-        document.addEventListener('childChanged', (e) => {
-            const childNameEl = document.getElementById('current-child-name');
-            if (childNameEl) childNameEl.innerText = e.detail.full_name;
-        });
-        
-        // Load children and initialize child switcher
-        await loadChildren();
-        
-        // Setup real-time subscriptions
-        setupRealtimeSubscriptions();
-    }
-});
-
-// ============================================
-// CHILD MANAGEMENT
-// ============================================
-
+let currentUser = null;
 let allChildren = [];
 let currentChild = null;
-let currentChildLiveStatus = null; // Cache for live status
+let realtimeChannel = null;
+let notificationChannel = null;
 
-/**
- * Load all children for the logged-in parent
- * fetches students linked to parent's account
- * UPDATED: Extract parentId directly from localStorage
- */
+// Wait for DOM and Supabase
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check session
+    currentUser = checkSession('parents');
+    if (!currentUser) return;
+    window.currentUser = currentUser;
+
+    // Update welcome message if element exists
+    const welcomeEl = document.getElementById('parent-name');
+    if (welcomeEl) {
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+        welcomeEl.innerText = `${greeting}, ${currentUser.full_name.split(' ')[0]}`;
+    }
+
+    // Load children
+    await loadChildren();
+
+    // Setup realtime subscriptions
+    setupRealtimeSubscriptions();
+    setupNotificationRealtime();
+    await updateNotificationBadge();
+
+    // Initialize sidebar (injects HTML, CSS, toggle button)
+    initSidebar();
+
+    // Update sidebar header after children loaded
+    updateSidebarHeader();
+
+    // Trigger initial dashboard refresh if on dashboard page
+    if (typeof refreshDashboard === 'function') await refreshDashboard();
+    if (typeof loadAttendanceCalendar === 'function') await loadAttendanceCalendar();
+    if (typeof loadAnnouncements === 'function') await loadAnnouncements();
+});
+
+// -------------------- Child Management --------------------
 async function loadChildren() {
     try {
-        // FIX: Explicitly get parentId from localStorage to ensure it's available
-        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
-        if (!userStr) {
-            console.error('No user session found in localStorage');
-            return;
-        }
-        
-        const user = JSON.parse(userStr);
-        const parentId = user.id;
-        
-        if (DEBUG) console.log('Loading children for parentId:', parentId);
-        
-        // FIX: Added classes join to get grade_level and department
-        // UPDATED: Also fetch class info for display
         const { data: children, error } = await supabase
             .from('students')
             .select('*, classes(grade_level, department)')
-            .eq('parent_id', parentId);
-
-        if (error) {
-            console.error('Error loading children:', error);
-            return;
-        }
+            .eq('parent_id', currentUser.id);
+        if (error) throw error;
 
         allChildren = children || [];
-        
-        // Get selected child from localStorage or default to first
-        const savedChildId = localStorage.getItem('educare_selected_child');
-        currentChild = savedChildId 
-            ? allChildren.find(c => c.id == savedChildId) 
-            : allChildren[0];
+        const savedId = localStorage.getItem('educare_selected_child');
+        currentChild = savedId ? allChildren.find(c => c.id == savedId) : allChildren[0] || null;
 
-        // If no saved selection and no children, handle gracefully
-        if (!currentChild && allChildren.length > 0) {
-            currentChild = allChildren[0];
-        }
+        window.allChildren = allChildren;
+        window.currentChild = currentChild;
 
-        // Update UI with child info
         updateChildSwitcher();
-        
-        // Load live status for current child
-        await loadChildLiveStatus();
-        
-        // Trigger child loaded event for other scripts
         if (currentChild) {
             localStorage.setItem('educare_selected_child', currentChild.id);
-            document.dispatchEvent(new CustomEvent('childChanged', { detail: { ...currentChild } }));
+            document.dispatchEvent(new CustomEvent('childChanged', { detail: currentChild }));
         }
-
     } catch (err) {
-        console.error('Error in loadChildren:', err);
+        console.error('loadChildren error:', err);
     }
 }
 
-/**
- * Load live status for the current child
- * Fetches the very latest log for today to determine In/Out status
- */
-async function loadChildLiveStatus() {
-    if (!currentChild) {
-        currentChildLiveStatus = null;
-        return null;
-    }
-    
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const today = localDate.toISOString().split('T')[0];
-
-    try {
-        const { data: log, error } = await supabase
-            .from('attendance_logs')
-            .select('*')
-            .eq('student_id', currentChild.id)
-            .eq('log_date', today)
-            .order('id', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (error) {
-            console.error('Error loading live status:', error);
-            currentChildLiveStatus = null;
-            return null;
-        }
-        
-        currentChildLiveStatus = log;
-        
-        // Update UI if status indicator exists
-        const statusIndicator = document.getElementById('live-status-indicator');
-        if (statusIndicator) {
-            updateStatusUI(log);
-        }
-        
-        return log;
-        
-    } catch (err) {
-        console.error('Error in loadChildLiveStatus:', err);
-        currentChildLiveStatus = null;
-        return null;
-    }
-}
-
-/**
- * Update status UI based on log data
- * @param {Object|null} log - The attendance log entry
- */
-function updateStatusUI(log) {
-    const statusIndicator = document.getElementById('live-status-indicator');
-    if (!statusIndicator) return;
-    
-    if (!log) {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-700';
-        statusIndicator.innerHTML = '<span class="inline-block w-2 h-2 bg-gray-500 rounded-full mr-2"></span>Not Yet Arrived';
-        return;
-    }
-
-    if (log.status === 'Excused') {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-700';
-        statusIndicator.innerHTML = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-2"></span>Excused Absence';
-        return;
-    }
-    if (log.status === 'Absent') {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700';
-        statusIndicator.innerHTML = '<span class="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>Absent';
-        return;
-    }
-    
-    if (log.time_in && !log.time_out) {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700';
-        statusIndicator.innerHTML = '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>Inside School';
-    } else if (log.time_out) {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-gray-100 text-gray-700';
-        statusIndicator.innerHTML = '<span class="inline-block w-2 h-2 bg-gray-500 rounded-full mr-2"></span>Outside School';
-    } else {
-        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700';
-        statusIndicator.innerHTML = 'Status Unknown';
-    }
-}
-
-/**
- * Update the child switcher dropdown with all children
- */
 function updateChildSwitcher() {
-    const switcherContainer = document.getElementById('child-switcher');
-    if (!switcherContainer) return;
+    const container = document.getElementById('child-switcher');
+    if (!container) return;
 
-    let html = '';
-    
     if (allChildren.length === 0) {
-        html = '<p class="text-gray-500 text-sm">No children linked to your account</p>';
-    } else if (allChildren.length === 1) {
-        // Single child - show name only
+        container.innerHTML = '<p class="text-gray-500 text-sm">No children linked</p>';
+        return;
+    }
+
+    if (allChildren.length === 1) {
         const child = allChildren[0];
-        html = `
+        container.innerHTML = `
             <div class="flex items-center gap-2">
                 <div class="h-10 w-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold">
                     ${getInitials(child.full_name)}
                 </div>
                 <div>
-                    <p class="font-bold text-gray-800">${child.full_name}</p>
-                    <p class="text-xs text-gray-500">${child.classes?.grade_level} - ${child.classes?.department}</p>
+                    <p class="font-bold text-gray-800">${escapeHtml(child.full_name)}</p>
+                    <p class="text-xs text-gray-500">${child.classes?.grade_level || ''} ${child.classes?.department || ''}</p>
                 </div>
             </div>
         `;
     } else {
-        // Multiple children - show dropdown
-        html = `
-            <select id="child-select" onchange="switchChild(this.value)" class="w-full p-2 border rounded-lg bg-white">
+        container.innerHTML = `
+            <select id="child-select" class="w-full p-2 border rounded-lg bg-white">
                 ${allChildren.map(child => `
                     <option value="${child.id}" ${currentChild?.id === child.id ? 'selected' : ''}>
-                        ${child.full_name} (${child.classes?.grade_level || 'N/A'})
+                        ${escapeHtml(child.full_name)} (${child.classes?.grade_level || 'N/A'})
                     </option>
                 `).join('')}
             </select>
         `;
+        document.getElementById('child-select')?.addEventListener('change', (e) => switchChild(e.target.value));
     }
-    
-    switcherContainer.innerHTML = html;
 }
 
-/**
- * Switch to a different child
- * @param {number} childId - The ID of the child to switch to
- */
 async function switchChild(childId) {
-    // 1. Update the local state
     const child = allChildren.find(c => c.id == childId);
     if (!child) return;
-
     currentChild = child;
+    window.currentChild = currentChild;
     localStorage.setItem('educare_selected_child', childId);
-    
-    // 2. Update the UI header
-    const childNameEl = document.getElementById('current-child-name');
-    if (childNameEl) {
-        childNameEl.innerText = currentChild.full_name;
-    }
-    
-    // 3. BROADCAST: Tell other pages to refresh their data
-    const event = new CustomEvent('childChanged', { detail: { ...child } });
-    document.dispatchEvent(event);
-    
-    // Close modal if open (ignore if function doesn't exist)
-    if (typeof closeChildModal === 'function') {
-        closeChildModal();
-    }
-    
-    // RE-FETCH: Crucial step to get new data for this child
-    await loadChildLiveStatus();
-    
-    // Re-setup real-time subscriptions for new child
+    updateChildSwitcher();
+    updateSidebarHeader();
+
+    // Recreate realtime subscriptions for new child
     setupRealtimeSubscriptions();
-    
-    // Refresh current page data
-    if (typeof refreshDashboard === 'function') {
-        refreshDashboard();
-    }
-    if (typeof loadAttendanceCalendar === 'function') {
-        loadAttendanceCalendar();
-    }
+
+    document.dispatchEvent(new CustomEvent('childChanged', { detail: child }));
+    if (typeof refreshDashboard === 'function') await refreshDashboard();
+    if (typeof loadAttendanceCalendar === 'function') await loadAttendanceCalendar();
 }
 
-// ============================================
-// REALTIME SUBSCRIPTIONS
-// ============================================
-
-let realtimeChannel = null;
-
-/**
- * Setup real-time subscriptions for attendance and clinic updates
- */
+// -------------------- Realtime Subscriptions --------------------
 function setupRealtimeSubscriptions() {
     if (!currentChild) return;
-
-    // Remove existing channel
-    if (realtimeChannel) {
-        supabase.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-    }
+    if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 
     realtimeChannel = supabase
-        .channel('parent-updates')
+        .channel(`parent-updates-${currentChild.id}`)
         .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'attendance_logs',
+            event: '*', schema: 'public', table: 'attendance_logs',
             filter: `student_id=eq.${currentChild.id}`
-        }, async (payload) => {
-            if (DEBUG) console.log('Attendance change received:', payload);
-            await loadChildLiveStatus(); // Re-fetch the latest status
-            // Refresh dashboard or calendar if the functions exist on the current page
-            if (typeof refreshDashboard === 'function') {
-                refreshDashboard();
-            }
+        }, async () => {
+            if (typeof refreshDashboard === 'function') await refreshDashboard();
+            if (typeof loadAttendanceCalendar === 'function') await loadAttendanceCalendar();
         })
         .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'clinic_visits',
+            event: '*', schema: 'public', table: 'clinic_visits',
             filter: `student_id=eq.${currentChild.id}`
-        }, async (payload) => {
-            if (DEBUG) console.log('Clinic visit change received:', payload);
-            if (typeof refreshDashboard === 'function') {
-                refreshDashboard();
-            }
+        }, async () => {
+            if (typeof refreshDashboard === 'function') await refreshDashboard();
         })
-        .subscribe((status, err) => {
-            if (err) {
-                console.error('Realtime subscription error:', err);
-            }
-        });
+        .subscribe();
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
+function setupNotificationRealtime() {
+    if (!currentUser) return;
+    if (notificationChannel) supabase.removeChannel(notificationChannel);
 
-/**
- * Get initials from a full name
- */
-function getInitials(fullName) {
-    if (!fullName) return '?';
-    return fullName
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
+    notificationChannel = supabase
+        .channel('parent-notifications')
+        .on('postgres_changes', {
+            event: 'INSERT', schema: 'public', table: 'notifications',
+            filter: `recipient_id=eq.${currentUser.id}`
+        }, async () => {
+            await updateNotificationBadge();
+            if (typeof loadNotificationsPreview === 'function') await loadNotificationsPreview();
+        })
+        .subscribe();
 }
 
-/**
- * Format time for display
- * Handles both full datetime strings and time-only strings (HH:MM:SS)
- */
-function formatTime(dateString) {
-    if (!dateString) return '--:--';
-    
-    let date;
-    // Handle time-only strings (HH:MM:SS) from Supabase
-    if (dateString.includes(':') && !dateString.includes('T')) {
-        date = new Date(`1970-01-01T${dateString}`);
-    } else {
-        date = new Date(dateString);
-    }
-    
-    if (isNaN(date.getTime())) return '--:--';
-    
-    return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
+async function updateNotificationBadge() {
+    const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_id', currentUser.id)
+        .eq('is_read', false);
+    const badges = document.querySelectorAll('#notif-badge-quick-action, #notif-badge-quick-action-2');
+    badges.forEach(badge => {
+        if (count > 0) {
+            badge.textContent = count > 9 ? '9+' : count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
     });
 }
 
-/**
- * Format date for display (REMOVED - now using general-core.js)
- * UPDATED: Using window.formatDate from general-core.js
- */
-
-/**
- * Format relative time (e.g., "5 minutes ago")
- */
-function getRelativeTime(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hr ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return formatDate(dateString);
-}
-
-/**
- * Navigate to a different page in the parent module
- */
+// -------------------- Navigation --------------------
 function navigateTo(page) {
-    const pageMap = {
-        'dashboard': 'parent-dashboard.html',
-        'children': 'parent-children.html',
-        'attendance': 'parent-childs-attendance.html',
-        'excuse': 'parent-excuse-letter-template.html',
-        'notifications': 'parent-notifications.html',
-        'announcements': 'parent-announcements-board.html',
-        'schedule': 'parent-schedule.html',
-        'calendar': 'parent-calendar.html' // NEW: Add calendar page route
+    const pages = {
+        dashboard: 'parent-dashboard.html',
+        children: 'parent-children.html',
+        announcements: 'parent-announcements-board.html',
+        excuse: 'parent-excuse-letter-template.html',
+        schedule: 'parent-schedule.html',
+        calendar: 'parent-calendar.html',
+        attendance: 'parent-childs-attendance.html',
+        notifications: 'parent-notifications.html',
+        settings: 'parent-settings.html'
     };
-    
-    if (pageMap[page]) {
-        window.location.href = pageMap[page];
-    }
+    const url = pages[page];
+    if (url) window.location.href = url;
+    else console.error('Unknown page:', page);
 }
 
-// Export functions for use in other files
-window.switchChild = switchChild;
-window.navigateTo = navigateTo;
-window.getInitials = getInitials;
-window.formatTime = formatTime;
-window.formatDate = formatDate;
-window.getRelativeTime = getRelativeTime;
-
-/**
- * Logout function - clears session and redirects to login
- * UPDATED: Added confirmation dialog
- */
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
         sessionStorage.removeItem('educare_user');
@@ -441,170 +202,183 @@ function logout() {
         window.location.href = '../index.html';
     }
 }
-window.logout = logout;
 
-// ============================================
-// NOTIFICATION HELPER FUNCTIONS (Phase 2)
-// ============================================
-
-/**
- * Get notification icon based on type
- * Phase 2: Added gate_entry, gate_exit, late_notification, critical_absence
- */
-function getNotificationIcon(type) {
-    switch (type) {
-        case 'gate_entry': return '🚪';
-        case 'gate_exit': return '🚪';
-        case 'early_exit': return '⚠️';
-        case 'clinic':
-        case 'clinic_visit': return '🏥';
-        case 'attendance': return '📋';
-        case 'late_notification': return '⏰';
-        case 'critical_absence': return '⚠️';
-        case 'announcement': return '📢';
-        case 'excuse_approved': return '✅';
-        case 'excuse_rejected': return '❌';
-        case 'excuse_pending': return '⏳';
-        case 'excuse': return '📝';
-        default: return '🔔';
-    }
-}
-
-/**
- * Get notification color classes based on type
- * Phase 2: Color coding per notification type
- */
-function getNotificationColor(type) {
-    switch (type) {
-        case 'gate_entry': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
-        case 'gate_exit': return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
-        case 'early_exit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
-        case 'clinic':
-        case 'clinic_visit': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
-        case 'attendance': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
-        case 'late_notification': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
-        case 'critical_absence': return { bg: 'bg-red-50', border: 'border-l-red-600', icon: 'text-red-700' };
-        case 'announcement': return { bg: 'bg-blue-50', border: 'border-l-blue-500', icon: 'text-blue-600' };
-        case 'excuse_approved': return { bg: 'bg-green-50', border: 'border-l-green-500', icon: 'text-green-600' };
-        case 'excuse_rejected': return { bg: 'bg-red-50', border: 'border-l-red-500', icon: 'text-red-600' };
-        case 'excuse_pending': return { bg: 'bg-yellow-50', border: 'border-l-yellow-500', icon: 'text-yellow-600' };
-        case 'excuse': return { bg: 'bg-purple-50', border: 'border-l-purple-500', icon: 'text-purple-600' };
-        default: return { bg: 'bg-gray-50', border: 'border-l-gray-500', icon: 'text-gray-600' };
-    }
-}
-
-/**
- * Get notification label for display
- * Phase 2: Category labels
- */
-function getNotificationLabel(type) {
-    switch (type) {
-        case 'gate_entry': return 'Gate Entry';
-        case 'gate_exit': return 'Gate Exit';
-        case 'early_exit': return 'Early Exit Alert';
-        case 'clinic':
-        case 'clinic_visit': return 'Clinic Visit';
-        case 'attendance': return 'Attendance';
-        case 'late_notification': return 'Late Arrival';
-        case 'critical_absence': return 'Critical Absence';
-        case 'announcement': return 'Announcement';
-        case 'excuse_approved': return 'Excuse Approved';
-        case 'excuse_rejected': return 'Excuse Rejected';
-        case 'excuse_pending': return 'Excuse Pending';
-        case 'excuse': return 'Excuse Letter';
-        default: return 'Notification';
-    }
-}
-
-/**
- * Show notification toast
- * Phase 2: Reusable toast function
- */
-function showNotificationToast(notification) {
-    const icon = getNotificationIcon(notification.type);
-    const colors = getNotificationColor(notification.type);
-    
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = `fixed top-4 left-4 right-4 ${colors.bg} rounded-lg shadow-lg p-4 z-50 animate-slide-in border-l-4 ${colors.border}`;
-    toast.innerHTML = `
-        <div class="flex items-start gap-3">
-            <span class="text-2xl">${icon}</span>
-            <div class="flex-1">
-                <p class="font-bold text-gray-800">${notification.title}</p>
-                <p class="text-sm text-gray-600 truncate">${notification.message}</p>
-            </div>
-            <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        toast.classList.add('animate-slide-out');
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
-}
-
-/**
- * Update notification badge in header
- * Phase 2: Updates the badge count on notification bell
- */
-async function updateNotificationBadge() {
-    try {
-        const userStr = localStorage.getItem('educare_user') || sessionStorage.getItem('educare_user');
-        if (!userStr) return;
-        
-        const user = JSON.parse(userStr);
-        const parentId = user.id;
-        
-        // Get unread count
-        const { count, error } = await supabase
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('recipient_id', parentId)
-            .eq('recipient_role', 'parents')
-            .eq('is_read', false);
-        
-        if (error) {
-            console.error('Error getting notification count:', error);
-            return;
-        }
-        
-        // Update badge in header (look for notification badge element)
-        const badge = document.getElementById('notif-badge-quick-action');
-        if (badge) {
-            if (count > 0) {
-                badge.textContent = count > 9 ? '9+' : count;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
+// -------------------- Sidebar --------------------
+function initSidebar() {
+    // Inject CSS if not present
+    if (!document.querySelector('#parent-sidebar-style')) {
+        const style = document.createElement('style');
+        style.id = 'parent-sidebar-style';
+        style.textContent = `
+            /* Parent Sidebar Styles */
+            #sidebar-backdrop {
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+                z-index: 1000; opacity: 0; visibility: hidden;
+                transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
             }
-        }
-        
-    } catch (err) {
-        console.error('Error in updateNotificationBadge:', err);
+            #sidebar-backdrop.show { opacity: 1; visibility: visible; }
+            #parent-sidebar {
+                position: fixed; top: 0; left: 0; height: 100vh; width: 280px; max-width: 85vw;
+                background: linear-gradient(135deg, #fff 0%, #f8fafc 50%, #f1f5f9 100%);
+                border-right: 1px solid #e2e8f0; box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+                transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+                z-index: 1001; display: flex; flex-direction: column; overflow-y: auto;
+            }
+            #parent-sidebar.show { transform: translateX(0); }
+            .sidebar-header { padding: 1.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white; }
+            .sidebar-header h2 { font-size: 1.25rem; font-weight: 800; margin: 0; }
+            .sidebar-header p { margin: 0.25rem 0 0; opacity: 0.9; font-size: 0.875rem; }
+            .sidebar-nav { flex: 1; padding: 0.5rem 0; }
+            .sidebar-item {
+                display: flex; align-items: center; gap: 1rem; padding: 0.875rem 1.5rem;
+                color: #64748b; font-weight: 500; text-decoration: none; transition: all 0.2s ease;
+                border-left: 3px solid transparent; cursor: pointer;
+            }
+            .sidebar-item:hover { background: #f1f5f9; color: #10b981; border-left-color: #10b981; }
+            .sidebar-item.active { background: #dcfce7; color: #059669; border-left-color: #10b981; font-weight: 600; }
+            .sidebar-icon { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.8; }
+            .sidebar-bottom { padding: 1rem 1.5rem 1.5rem; border-top: 1px solid #e2e8f0; }
+            .sidebar-divider { height: 1px; background: #e2e8f0; margin: 1rem 0; }
+            #sidebar-toggle { background: none; border: none; padding: 0.75rem; border-radius: 0.75rem; cursor: pointer; }
+            #sidebar-toggle:hover { background: #f3f4f6; }
+            #sidebar-toggle svg { width: 20px; height: 20px; stroke-width: 2.5; stroke: #6b7280; }
+            #sidebar-toggle:hover svg { stroke: #10b981; }
+            body.sidebar-open { overflow: hidden; position: fixed; width: 100%; }
+        `;
+        document.head.appendChild(style);
     }
+
+    // Inject sidebar HTML if not exists
+    if (!document.getElementById('parent-sidebar')) {
+        const sidebarHTML = `
+            <div id="parent-sidebar">
+                <div class="sidebar-header">
+                    <h2 id="sidebar-parent-name">Parent Portal</h2>
+                    <p id="sidebar-child-name">Select child</p>
+                </div>
+                <nav class="sidebar-nav">
+                    <a class="sidebar-item" data-page="dashboard" onclick="sidebarNavigate('dashboard')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                        <span>Home</span>
+                    </a>
+                    <a class="sidebar-item" data-page="children" onclick="sidebarNavigate('children')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        <span>My Children</span>
+                    </a>
+                    <a class="sidebar-item" data-page="announcements" onclick="sidebarNavigate('announcements')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                        <span>Announcements</span>
+                    </a>
+                    <a class="sidebar-item" data-page="excuse" onclick="sidebarNavigate('excuse')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <span>Excuse Letters</span>
+                    </a>
+                    <a class="sidebar-item" data-page="schedule" onclick="sidebarNavigate('schedule')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <span>Schedule</span>
+                    </a>
+                    <a class="sidebar-item" data-page="calendar" onclick="sidebarNavigate('calendar')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM12 9v3m0 0l3 3m-3-3h3m-3 4H9m12 0h-.01"/></svg>
+                        <span>Calendar</span>
+                    </a>
+                </nav>
+                <div class="sidebar-bottom">
+                    <div class="sidebar-divider"></div>
+                    <a class="sidebar-item" data-page="settings" onclick="sidebarNavigate('settings')">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <span>Settings</span>
+                    </a>
+                    <button onclick="logout()" class="sidebar-item w-full text-left">
+                        <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+            <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', sidebarHTML);
+    }
+
+    // Add hamburger toggle button to header
+    addHamburgerToggle();
+
+    // Set active sidebar item based on current page
+    const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+    const pageMap = {
+        'parent-dashboard': 'dashboard',
+        'parent-children': 'children',
+        'parent-announcements-board': 'announcements',
+        'parent-excuse-letter-template': 'excuse',
+        'parent-schedule': 'schedule',
+        'parent-calendar': 'calendar',
+        'parent-childs-attendance': 'attendance',
+        'parent-settings': 'settings'
+    };
+    const activePage = pageMap[currentPage] || 'dashboard';
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.dataset.page === activePage) item.classList.add('active');
+    });
 }
 
-// Export notification functions
-window.getNotificationIcon = getNotificationIcon;
-window.getNotificationColor = getNotificationColor;
-window.getNotificationLabel = getNotificationLabel;
-window.showNotificationToast = showNotificationToast;
-window.updateNotificationBadge = updateNotificationBadge;
+function addHamburgerToggle() {
+    if (document.getElementById('sidebar-toggle')) return;
+    const headerRow = document.querySelector('header .flex.items-center.justify-between');
+    if (!headerRow) return;
+    const firstDiv = headerRow.children[0];
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'sidebar-toggle';
+    toggleBtn.className = 'p-2 hover:bg-gray-100 rounded-xl transition-colors mr-2';
+    toggleBtn.innerHTML = `<svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>`;
+    toggleBtn.onclick = () => toggleSidebar();
+    firstDiv.insertBefore(toggleBtn, firstDiv.firstChild);
+}
 
-// MISSING: loadClinicHistory - stub function for button in dashboard
-window.loadClinicHistory = function() {
-    // Navigate to clinic history section or show notification
-    showNotificationToast({
-        title: 'Clinic History',
-        message: 'Clinic history feature is available in the clinic module.',
-        type: 'info'
+function toggleSidebar() {
+    const sidebar = document.getElementById('parent-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.toggle('show');
+    backdrop.classList.toggle('show');
+    document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('parent-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.remove('show');
+    backdrop.classList.remove('show');
+    document.body.classList.remove('sidebar-open');
+}
+
+function sidebarNavigate(page) {
+    closeSidebar();
+    navigateTo(page);
+}
+
+function updateSidebarHeader() {
+    const parentNameEl = document.getElementById('sidebar-parent-name');
+    const childNameEl = document.getElementById('sidebar-child-name');
+    if (parentNameEl) parentNameEl.textContent = currentUser?.full_name || 'Parent Portal';
+    if (childNameEl) childNameEl.textContent = currentChild ? currentChild.full_name : 'No child selected';
+}
+
+// Helper
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
     });
-};
+}
+
+// Expose globals
+window.navigateTo = navigateTo;
+window.logout = logout;
+window.switchChild = switchChild;
+window.updateNotificationBadge = updateNotificationBadge;
+window.sidebarNavigate = sidebarNavigate;
+window.closeSidebar = closeSidebar;
+window.toggleSidebar = toggleSidebar;

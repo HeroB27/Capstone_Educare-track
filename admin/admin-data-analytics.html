@@ -69,7 +69,7 @@
 
                 <div class="h-10 w-px bg-gray-200"></div>
                 
-            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-4">
                     <button onclick="exportToCSV()" class="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl shadow-md hover:scale-105 transition-transform text-sm font-bold">
                         <i data-lucide="download" class="w-4 h-4"></i> Export CSV
                     </button>
@@ -84,6 +84,23 @@
 
         <div class="flex-1 overflow-y-auto p-10 space-y-8">
             
+            <!-- Class Filter & Average Attendance -->
+            <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h3 class="font-black text-gray-900 text-lg tracking-tight">Filter by Class</h3>
+                        <select id="class-filter" class="mt-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-gray-50">
+                            <option value="">All Classes</option>
+                        </select>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400 uppercase font-bold">School-wide Average Attendance</p>
+                        <p class="text-3xl font-black text-violet-600" id="avgAttendanceRate">--%</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Trend Chart -->
             <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
                 <div class="flex justify-between items-center mb-6">
                     <div>
@@ -96,6 +113,7 @@
                 </div>
             </div>
 
+            <!-- Three Cards Row -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col">
@@ -121,10 +139,28 @@
                         <canvas id="classChart"></canvas>
                     </div>
                 </div>
-
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Predictive Risk Analysis Card -->
+            <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
+                <h3 class="font-black text-amber-600 text-lg tracking-tight mb-1">Predictive Risk Analysis</h3>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">Students at risk of chronic absence or tardiness</p>
+                <div class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar" id="riskListContainer">
+                    <div class="text-center text-gray-400 py-4 italic">Loading predictive data...</div>
+                </div>
+            </div>
+
+            <!-- Add this card inside the main content area, after Predictive Risk Analysis -->
+            <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
+                <h3 class="font-black text-indigo-600 text-lg tracking-tight mb-1">Most Lates & Absences (Combined)</h3>
+                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">Top 10 students by total unexcused lates + absences</p>
+                <div class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar" id="combinedListContainer">
+                    <div class="text-center text-gray-400 py-4 italic">Loading data...</div>
+                </div>
+            </div>
+
+            <!-- Two Lists Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                 <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col h-[350px]">
                     <h3 class="font-black text-red-600 text-lg tracking-tight mb-1">Critical Watchlist</h3>

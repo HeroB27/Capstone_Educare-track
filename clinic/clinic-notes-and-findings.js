@@ -33,56 +33,42 @@ document.addEventListener('DOMContentLoaded', async () => {
  * - Sent Home: Status = 'Completed' with action_taken = 'Sent Home'
  */
 async function updateStatsCards() {
-    // FIX: Timezone adjustment for accurate daily stats
-    const localDate = new Date();
-    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-    const today = localDate.toISOString().split('T')[0];
-    
-    // Fetch all visits for today (with wider range for timezone)
-    const prevDay = new Date(localDate);
-    prevDay.setDate(prevDay.getDate() - 1);
-    const prevDayStr = prevDay.toISOString().split('T')[0];
-    
-    const todayVisits = await fetchVisitsByDateRange(prevDayStr, today);
-    
-    // Today's Visits - filter by time_in date
-    const todayCount = todayVisits.filter(v => {
-        const visitDate = new Date(v.time_in).toISOString().split('T')[0];
-        return visitDate === today;
-    }).length;
-    
-    // Active in Clinic - ALL visits where time_out is NULL (regardless of date)
-    const { data: activeVisits, error } = await supabase
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+    // Today's visits (time_in)
+    const { count: todayCount } = await supabase
         .from('clinic_visits')
-        .select('id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
+        .gte('time_in', `${today}T00:00:00`)
+        .lt('time_in', `${tomorrow}T00:00:00`);
+
+    // Active in clinic (time_out is null)
+    const { count: activeCount } = await supabase
+        .from('clinic_visits')
+        .select('id', { count: 'exact', head: true })
         .is('time_out', null);
-    const activeCount = activeVisits?.count ?? activeVisits?.length ?? 0;
-    
-    // Discharged - query by time_out date (with wider range for timezone)
-    const { data: dischargedData, dischargedError } = await supabase
+
+    // Discharged today (returned to class)
+    const { count: dischargedCount } = await supabase
         .from('clinic_visits')
-        .select('id', { count: 'exact' })
-        .not('time_out', 'is', null)
-        .in('action_taken', ['Returned to Class', 'First Aid Provided', 'Medication Given', 'Observed and Released'])
-        .gte('time_out', `${prevDayStr}T00:00:00`)
-        .lt('time_out', `${today}T23:59:59`);
-    const dischargedCount = dischargedData?.count ?? dischargedData?.length ?? 0;
-    
-    // Sent Home - query by time_out date (with wider range for timezone)
-    const { data: sentHomeData, sentHomeError } = await supabase
+        .select('id', { count: 'exact', head: true })
+        .in('action_taken', ['Returned to Class', 'First Aid Provided', 'Observed and Released'])
+        .gte('time_out', `${today}T00:00:00`)
+        .lt('time_out', `${tomorrow}T00:00:00`);
+
+    // Sent home today
+    const { count: sentHomeCount } = await supabase
         .from('clinic_visits')
-        .select('id', { count: 'exact' })
-        .not('time_out', 'is', null)
-        .in('action_taken', ['Sent Home', 'Picked up by Parent', 'Sent to Hospital'])
-        .gte('time_out', `${prevDayStr}T00:00:00`)
-        .lt('time_out', `${today}T23:59:59`);
-    const sentHomeCount = sentHomeData?.count ?? sentHomeData?.length ?? 0;
-    
-    // Update DOM
-    document.getElementById('stat-today').textContent = todayCount;
-    document.getElementById('stat-active').textContent = activeCount;
-    document.getElementById('stat-discharged').textContent = dischargedCount;
-    document.getElementById('stat-sent-home').textContent = sentHomeCount;
+        .select('id', { count: 'exact', head: true })
+        .in('action_taken', ['Sent Home', 'Picked up by Parent'])
+        .gte('time_out', `${today}T00:00:00`)
+        .lt('time_out', `${tomorrow}T00:00:00`);
+
+    document.getElementById('stat-today').innerText = todayCount || 0;
+    document.getElementById('stat-active').innerText = activeCount || 0;
+    document.getElementById('stat-discharged').innerText = dischargedCount || 0;
+    document.getElementById('stat-sent-home').innerText = sentHomeCount || 0;
 }
 
 async function loadAndOpenVisit(visitId) {
