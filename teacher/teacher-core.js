@@ -7,7 +7,6 @@ var currentTeacher = null;
 
 // ============================================================================
 // HOLIDAY/WEEKEND CHECK FUNCTIONS
-// ============================================================================
 
 function isWeekend(dateStr) {
     const day = new Date(dateStr).getDay();
@@ -20,7 +19,12 @@ async function checkIsHoliday(dateStr) {
             .from('holidays')
             .select('holiday_date, is_suspended, description')
             .eq('holiday_date', dateStr)
-            .single();
+            .maybeSingle();
+        
+        if (error) {
+            console.error('[checkIsHoliday] Error:', error);
+            return { isHoliday: false, isSuspended: false, description: null };
+        }
         
         if (data && data.is_suspended) {
             return { 
@@ -31,6 +35,7 @@ async function checkIsHoliday(dateStr) {
         }
         return { isHoliday: false, isSuspended: false, description: null };
     } catch (e) {
+        console.error('[checkIsHoliday] Exception:', e);
         return { isHoliday: false, isSuspended: false, description: null };
     }
 }
@@ -253,52 +258,68 @@ function setStatsToZero() {
 }
 
 async function loadDashboardHomeroomData() {
+    console.log('[Dashboard] Starting loadDashboardHomeroomData...');
+    
     try {
-        const { data: homeroom } = await supabase
+        console.log('[Dashboard] Fetching homeroom class...');
+        const { data: homeroom, error: homeroomError } = await supabase
             .from('classes')
             .select('id, grade_level, department')
             .eq('adviser_id', currentUser.id)
             .single();
         
+        if (homeroomError) {
+            console.error('[Dashboard] Error fetching homeroom:', homeroomError);
+        }
+        
         const homeroomSection = document.getElementById('homeroom-section');
         const noHomeroomMsg = document.getElementById('no-homeroom-message');
         
         if (!homeroom) {
+            console.log('[Dashboard] No homeroom class found');
             if (homeroomSection) homeroomSection.classList.add('hidden');
             if (noHomeroomMsg) noHomeroomMsg.classList.remove('hidden');
             return;
         }
+        
+        console.log('[Dashboard] Homeroom found:', homeroom.id, homeroom.grade_level);
         
         if (homeroomSection) homeroomSection.classList.remove('hidden');
         if (noHomeroomMsg) noHomeroomMsg.classList.add('hidden');
         
         const today = new Date().toISOString().split('T')[0];
         
-        // Check if today is a school day
+        // Check if today is a school day (for today's attendance only)
         const schoolDayInfo = await getSchoolDayInfo(today);
+        console.log('[Dashboard] School day info:', schoolDayInfo);
         
         const presentList = document.getElementById('present-list');
         const absentList = document.getElementById('absent-list');
         
+        // Show appropriate message for today's attendance lists
         if (!schoolDayInfo.isSchoolDay) {
-            // Show appropriate message for non-school days
+            console.log('[Dashboard] Not a school day:', schoolDayInfo.reason);
             const message = schoolDayInfo.reason === 'Weekend' 
                 ? '<p class="text-gray-500 text-center py-4">No school on weekends.</p>' 
                 : `<p class="text-gray-500 text-center py-4">School suspended: ${schoolDayInfo.reason || 'Holiday'}</p>`;
             
             if (presentList) presentList.innerHTML = message;
             if (absentList) absentList.innerHTML = message;
-            return;
+        } else {
+            // Only load today's attendance if it's a school day
+            await loadPresentList(homeroom.id, today);
+            await loadAbsentList(homeroom.id, today);
         }
         
-        // It's a school day - load normal data
-        await loadPresentList(homeroom.id, today);
-        await loadAbsentList(homeroom.id, today);
+        // ALWAYS load the other widgets (they use historical data, not just today)
+        console.log('[Dashboard] Loading historical data widgets...');
         await loadCriticalAbsences(homeroom.id);
         await loadMostLates(homeroom.id);
         await loadGoodPerformance(homeroom.id);
         await loadLatestAnnouncements();
         await loadPendingExcuses();
+        
+        console.log('[Dashboard] All data loaded!');
         
     } catch (err) {
         console.error('Error in loadDashboardHomeroomData:', err);
@@ -309,49 +330,69 @@ async function loadPresentList(classId, date) {
     const container = document.getElementById('present-list');
     if (!container) return;
     
+    console.log('[loadPresentList] Starting...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Loading...</p>';
+    
     try {
-        const { data: students } = await supabase
+        // Simple query - get students first
+        const { data: students, error: studentsError } = await supabase
             .from('students')
             .select('id, full_name')
             .eq('class_id', classId)
             .eq('status', 'Enrolled');
         
-        const studentIds = students?.map(s => s.id) || [];
-        if (studentIds.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No students in homeroom.</p>';
+        if (studentsError) {
+            console.error('[loadPresentList] Students error:', studentsError);
+            container.innerHTML = '<p class="text-red-500 text-sm">Database error</p>';
             return;
         }
         
-        const { data: logs } = await supabase
+        if (!students || students.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No students enrolled.</p>';
+            return;
+        }
+        
+        const studentIds = students.map(s => s.id);
+        
+        // Then get present students
+        const { data: logs, error: logsError } = await supabase
             .from('attendance_logs')
             .select('student_id, status')
             .in('student_id', studentIds)
             .eq('log_date', date)
             .in('status', ['On Time', 'Late']);
         
-        if (!logs || logs.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No present students today.</p>';
+        if (logsError) {
+            console.error('[loadPresentList] Logs error:', logsError);
+            container.innerHTML = '<p class="text-red-500 text-sm">Database error</p>';
             return;
         }
         
+        if (!logs || logs.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No one present today.</p>';
+            return;
+        }
+        
+        // Build student map
         const studentMap = {};
-        for (const s of students) studentMap[s.id] = s;
+        students.forEach(s => studentMap[s.id] = s);
         
         let html = '';
         logs.forEach(log => {
             const student = studentMap[log.student_id];
             const name = student?.full_name || 'Unknown';
             const initials = getInitials(name);
-            html += `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+            html += `<div class="flex items-center gap-3 p-2 rounded-lg">
                 <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-xs">${initials}</div>
                 <span class="text-sm font-medium text-gray-700">${escapeHtml(name)}</span>
-                <span class="ml-auto text-xs ${log.status === 'Late' ? 'text-amber-600' : 'text-green-600'}">${log.status === 'On Time' ? 'Present' : 'Late'}</span>
+                <span class="ml-auto text-xs ${log.status === 'Late' ? 'text-amber-600' : 'text-green-600'}">${log.status}</span>
             </div>`;
         });
         container.innerHTML = html;
+        console.log('[loadPresentList] Done, rendered', logs.length, 'students');
     } catch (err) {
-        console.error('Error in loadPresentList:', err);
-        container.innerHTML = '<p class="text-gray-500 text-sm">Error loading data.</p>';
+        console.error('[loadPresentList] Exception:', err);
+        container.innerHTML = '<p class="text-red-500 text-sm">Error: ' + err.message + '</p>';
     }
 }
 
@@ -410,8 +451,15 @@ async function loadCriticalAbsences(classId) {
     const container = document.getElementById('critical-absences-list');
     if (!container) return;
     
+    console.log('[Dashboard] Loading critical absences...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Calculating absences...</p>';
+    
     try {
-        // Get students in class
+        const currentYear = new Date().getFullYear();
+        const yearStart = `${currentYear}-01-01`;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get all enrolled students in one query
         const { data: students } = await supabase
             .from('students')
             .select('id, full_name')
@@ -419,106 +467,75 @@ async function loadCriticalAbsences(classId) {
             .eq('status', 'Enrolled');
         
         if (!students || students.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No students found.</p>';
+            container.innerHTML = '<p class="text-gray-500 text-sm">No students in class</p>';
             return;
         }
         
-        // Get full year date range (January 1 to today)
-        const currentYear = new Date().getFullYear();
-        const yearStart = `${currentYear}-01-01`;
-        const today = new Date().toISOString().split('T')[0];
+        const studentIds = students.map(s => s.id);
         
-        console.log('[CriticalAbsences] Checking year:', currentYear, 'Range:', yearStart, 'to', today);
+        // Get ALL attendance logs for all students in one query
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('student_id, status, morning_absent, afternoon_absent')
+            .in('student_id', studentIds)
+            .gte('log_date', yearStart)
+            .lte('log_date', today);
         
-        // Fetch all holidays for the year to exclude suspended days
-        const { data: holidays } = await supabase
-            .from('holidays')
-            .select('holiday_date')
-            .gte('holiday_date', yearStart)
-            .lte('holiday_date', today);
-        const holidaySet = new Set(holidays?.map(h => h.holiday_date) || []);
+        // Count absences per student
+        const absenceCounts = {};
+        students.forEach(s => { absenceCounts[s.id] = { name: s.full_name, count: 0 }; });
         
-        // Count absences for each student (whole year)
-        const studentAbsences = [];
-        
-        for (const student of students) {
-            // Get all attendance logs - include both status AND half-day fields
-            const { data: logs } = await supabase
-                .from('attendance_logs')
-                .select('id, log_date, status, morning_absent, afternoon_absent')
-                .eq('student_id', student.id)
-                .gte('log_date', yearStart)
-                .lte('log_date', today);
+        for (const log of logs || []) {
+            if (!absenceCounts[log.student_id]) continue;
             
-            // Count ALL absences - status field OR half-day fields
-            let absenceCount = 0;
-            for (const log of logs || []) {
-                // Skip weekends
-                const logDate = new Date(log.log_date);
-                const dayOfWeek = logDate.getDay();
-                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-                const isHoliday = holidaySet.has(log.log_date);
-                
-                if (isWeekend || isHoliday) continue;
-                
-                const morningAbsent = !!log.morning_absent;
-                const afternoonAbsent = !!log.afternoon_absent;
-                const statusAbsent = log.status === 'Absent' || log.status === 'Excused';
-                
-                // Count full day (status = Absent/Excused OR both half-days)
-                if (statusAbsent || (morningAbsent && afternoonAbsent)) {
-                    absenceCount++;
-                }
-                // Count half day (one half true, one false)
-                else if (morningAbsent || afternoonAbsent) {
-                    absenceCount += 0.5;
-                }
-            }
+            const isAbsent = log.status === 'Absent' || log.status === 'Excused';
+            const morning = !!log.morning_absent;
+            const afternoon = !!log.afternoon_absent;
             
-            // Round to nearest whole number
-            absenceCount = Math.round(absenceCount);
-            
-            console.log('[CriticalAbsences] Student:', student.full_name, 'Absences:', absenceCount);
-            
-            // Alert threshold: 10+ absences in a school year
-            if (absenceCount >= 10) {
-                studentAbsences.push({
-                    id: student.id,
-                    full_name: student.full_name,
-                    count: absenceCount
-                });
+            if (isAbsent || (morning && afternoon)) {
+                absenceCounts[log.student_id].count++;
+            } else if (morning || afternoon) {
+                absenceCounts[log.student_id].count += 0.5;
             }
         }
         
-        // Sort by absence count descending
-        studentAbsences.sort((a, b) => b.count - a.count);
+        // Find critical (10+ absences)
+        const critical = Object.entries(absenceCounts)
+            .map(([id, data]) => ({ id: parseInt(id), ...data }))
+            .filter(s => s.count >= 10)
+            .sort((a, b) => b.count - a.count);
+        
+        console.log(`[Dashboard] Critical found: ${critical.length}`);
         
         let html = '';
-        if (studentAbsences.length === 0) {
-            html = '<p class="text-gray-500 text-sm">No critical absences (10+ in school year).</p>';
+        if (critical.length === 0) {
+            html = '<p class="text-gray-500 text-sm">No critical absences (10+ YTD)</p>';
         } else {
-            for (const student of studentAbsences) {
-                const initials = getInitials(student.full_name);
+            critical.slice(0, 5).forEach(student => {
+                const initials = getInitials(student.name);
                 html += `<div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
                     <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-bold text-xs">${initials}</div>
                     <div>
-                        <p class="text-sm font-medium text-gray-700">${escapeHtml(student.full_name)}</p>
-                        <p class="text-xs text-red-600 font-semibold">${student.count} absences (${currentYear})</p>
+                        <p class="text-sm font-medium text-gray-700">${escapeHtml(student.name)}</p>
+                        <p class="text-xs text-red-600 font-semibold">${Math.round(student.count)} absences YTD</p>
                     </div>
                 </div>`;
-            }
+            });
         }
-        
         container.innerHTML = html;
     } catch (err) {
         console.error('Error in loadCriticalAbsences:', err);
-        container.innerHTML = '<p class="text-gray-500 text-sm">Error loading data.</p>';
+        container.innerHTML = '<p class="text-red-500 text-sm">Failed to load data</p>';
     }
 }
+
 
 async function loadMostLates(classId) {
     const container = document.getElementById('most-lates-list');
     if (!container) return;
+    
+    console.log('[Dashboard] Loading most lates...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Loading...</p>';
     
     try {
         const thirtyDaysAgo = new Date();
@@ -558,6 +575,8 @@ async function loadMostLates(classId) {
         
         const sorted = Object.values(lateCounts).sort((a, b) => b.count - a.count).slice(0, 5);
         
+        console.log(`[Dashboard] Late records found: ${sorted.length}`);
+        
         if (sorted.length === 0) {
             container.innerHTML = '<p class="text-gray-500 text-sm">No late records.</p>';
             return;
@@ -585,47 +604,70 @@ async function loadGoodPerformance(classId) {
     const container = document.getElementById('good-performance-list');
     if (!container) return;
     
+    console.log('[Dashboard] Loading good performance...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Checking attendance records...</p>';
+    
     try {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+        const currentYear = new Date().getFullYear();
+        const yearStart = `${currentYear}-01-01`;
+        const today = new Date().toISOString().split('T')[0];
         
+        // Get all enrolled students
         const { data: students } = await supabase
             .from('students')
             .select('id, full_name')
             .eq('class_id', classId)
             .eq('status', 'Enrolled');
         
-        let html = '';
-        for (const student of students || []) {
-            const { count: absentCount } = await supabase
-                .from('attendance_logs')
-                .select('id', { count: 'exact', head: true })
-                .eq('student_id', student.id)
-                .eq('status', 'Absent')
-                .gte('log_date', dateStr);
-            
-            const { count: lateCount } = await supabase
-                .from('attendance_logs')
-                .select('id', { count: 'exact', head: true })
-                .eq('student_id', student.id)
-                .eq('status', 'Late')
-                .gte('log_date', dateStr);
-            
-            if ((absentCount || 0) === 0 && (lateCount || 0) === 0) {
-                const initials = getInitials(student.full_name);
-                html += `<div class="flex items-center gap-3 p-2 rounded-lg">
-                    <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-bold text-xs">${initials}</div>
-                    <span class="text-sm font-medium text-gray-700">${escapeHtml(student.full_name)}</span>
-                </div>`;
-            }
+        if (!students || students.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No students in class</p>';
+            return;
         }
         
-        if (!html) html = '<p class="text-gray-500 text-sm">No perfect attendance records.</p>';
+        const studentIds = students.map(s => s.id);
+        
+        // Get attendance logs for ALL students in ONE query
+        const { data: logs } = await supabase
+            .from('attendance_logs')
+            .select('student_id, status')
+            .in('student_id', studentIds)
+            .gte('log_date', yearStart)
+            .lte('log_date', today);
+        
+        // Count absences/lates per student
+        const counts = {};
+        students.forEach(s => { counts[s.id] = { name: s.full_name, absent: 0, late: 0 }; });
+        
+        for (const log of logs || []) {
+            if (!counts[log.student_id]) continue;
+            if (log.status === 'Absent') counts[log.student_id].absent++;
+            if (log.status === 'Late') counts[log.student_id].late++;
+        }
+        
+        // Find students with zero absences and lates
+        const good = Object.entries(counts)
+            .filter(([id, data]) => data.absent === 0 && data.late === 0)
+            .map(([id, data]) => ({ name: data.name }))
+            .slice(0, 5);
+        
+        console.log(`[Dashboard] Good performance: ${good.length}`);
+        
+        let html = '';
+        if (good.length === 0) {
+            html = '<p class="text-gray-500 text-sm">No perfect attendance records.</p>';
+        } else {
+            good.forEach(student => {
+                const initials = getInitials(student.name);
+                html += `<div class="flex items-center gap-3 p-2 rounded-lg">
+                    <div class="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-bold text-xs">${initials}</div>
+                    <span class="text-sm font-medium text-gray-700">${escapeHtml(student.name)}</span>
+                </div>`;
+            });
+        }
         container.innerHTML = html;
     } catch (err) {
         console.error('Error in loadGoodPerformance:', err);
-        container.innerHTML = '<p class="text-gray-500 text-sm">Error loading data.</p>';
+        container.innerHTML = '<p class="text-red-500 text-sm">Failed to load data</p>';
     }
 }
 
@@ -633,13 +675,18 @@ async function loadLatestAnnouncements() {
     const container = document.getElementById('latest-announcements-list');
     if (!container) return;
     
+    console.log('[Dashboard] Loading announcements...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Loading...</p>';
+    
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('announcements')
             .select('*')
             .eq('target_teachers', true)
             .order('created_at', { ascending: false })
             .limit(5);
+        
+        if (error) throw error;
         
         if (!data || data.length === 0) {
             container.innerHTML = '<p class="text-gray-500 text-sm">No announcements.</p>';
@@ -658,13 +705,16 @@ async function loadLatestAnnouncements() {
         container.innerHTML = html;
     } catch (err) {
         console.error('Error in loadLatestAnnouncements:', err);
-        container.innerHTML = '<p class="text-gray-500 text-sm">Error loading announcements.</p>';
+        container.innerHTML = '<p class="text-red-500 text-sm">Failed to load</p>';
     }
 }
 
 async function loadPendingExcuses() {
     const container = document.getElementById('pending-excuses-list');
     if (!container) return;
+    
+    console.log('[Dashboard] Loading pending excuses...');
+    container.innerHTML = '<p class="text-gray-500 text-sm animate-pulse">Loading...</p>';
     
     try {
         const { data: homeroom } = await supabase
@@ -689,7 +739,7 @@ async function loadPendingExcuses() {
             return;
         }
         
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('excuse_letters')
             .select(`
                 id,
@@ -700,6 +750,8 @@ async function loadPendingExcuses() {
             .eq('status', 'Pending')
             .order('created_at', { ascending: false })
             .limit(5);
+        
+        if (error) throw error;
         
         if (!data || data.length === 0) {
             container.innerHTML = '<p class="text-gray-500 text-sm">No pending excuse letters.</p>';
@@ -1384,8 +1436,8 @@ async function loadClinicApprovalRequests() {
                 status,
                 nurse_notes,
                 action_taken,
+time_in,
                 time_in,
-                created_at,
                 students:student_id (id, full_name, student_id_text, classes (grade_level, department))
             `)
             .eq('referred_by_teacher_id', currentUser.id)

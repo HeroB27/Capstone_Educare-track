@@ -626,8 +626,9 @@ async function checkIsHoliday(dateStr) {
         const { data, error } = await supabase
             .from('holidays')
             .select('holiday_date, is_suspended, description, time_coverage')
-            .eq('holiday_date', dateStr)
-            .single();
+.eq('holiday_date', dateStr)
+            .maybeSingle()
+            .preferReturnObject(true);
         
         if (data && data.is_suspended) {
             // Map time_coverage to return value

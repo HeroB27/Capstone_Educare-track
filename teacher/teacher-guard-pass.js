@@ -176,6 +176,25 @@ async function loadGuardPasses() {
             passes = [];
         }
 
+        // Auto-expire passes that are older than 30 minutes from time_out
+        for (const pass of passes || []) {
+            if (pass.status === 'Active' && pass.time_out) {
+                const [hours, minutes] = pass.time_out.split(':').map(Number);
+                const timeOutDate = new Date();
+                timeOutDate.setHours(hours, minutes, 0, 0);
+                const thirtyMinsLater = new Date(timeOutDate.getTime() + 30 * 60000);
+                const now = new Date();
+                if (now > thirtyMinsLater) {
+                    // Auto-expire the pass
+                    await supabase
+                        .from('guard_passes')
+                        .update({ status: 'Expired' })
+                        .eq('id', pass.id);
+                    pass.status = 'Expired';
+                }
+            }
+        }
+
         const todayCount = passes?.length || 0;
         const activeCount = passes?.filter(p => p.status === 'Active').length || 0;
         const usedCount = passes?.filter(p => p.status === 'Used').length || 0;
@@ -216,10 +235,25 @@ async function loadGuardPasses() {
             const time = pass.time_out || '--:--';
             const issuedTime = new Date(pass.issued_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
             
+            // Check if pass is expired (not used within 30 minutes of time_out)
+            let displayStatus = pass.status;
+            let isExpired = false;
+            if (pass.status === 'Active') {
+                const [hours, minutes] = time.split(':').map(Number);
+                const timeOutDate = new Date();
+                timeOutDate.setHours(hours, minutes, 0, 0);
+                const thirtyMinsLater = new Date(timeOutDate.getTime() + 30 * 60000);
+                const now = new Date();
+                if (now > thirtyMinsLater) {
+                    displayStatus = 'Expired';
+                    isExpired = true;
+                }
+            }
+            
             let statusColor = 'bg-yellow-100 text-yellow-700';
-            if (pass.status === 'Used') statusColor = 'bg-green-100 text-green-700';
-            if (pass.status === 'Cancelled') statusColor = 'bg-red-100 text-red-700';
-            if (pass.status === 'Expired') statusColor = 'bg-gray-100 text-gray-700';
+            if (displayStatus === 'Used') statusColor = 'bg-green-100 text-green-700';
+            if (displayStatus === 'Cancelled') statusColor = 'bg-red-100 text-red-700';
+            if (displayStatus === 'Expired') statusColor = 'bg-gray-100 text-gray-700';
 
             html += `
                 <div class="p-4 bg-gray-50 rounded-xl border mb-3">
@@ -231,21 +265,27 @@ async function loadGuardPasses() {
                                 <p class="text-xs text-gray-500">Time Out: ${formatTime12(time)} • Issued: ${issuedTime}</p>
                             </div>
                         </div>
-                        <span class="px-3 py-1 rounded-full text-xs font-bold ${statusColor}">${pass.status}</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold ${statusColor}">${displayStatus}</span>
                     </div>
                     <p class="text-sm text-gray-600 mb-2">Purpose: ${escapeHtml(pass.purpose)}</p>
+                    ${isExpired ? '<p class="text-xs text-red-600 mb-2">⚠️ Expired - Not used within 30 minutes</p>' : ''}
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             ${pass.parent_notified ? '<span class="text-xs text-green-600 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Parent Notified</span>' : ''}
                         </div>
-                        ${pass.status === 'Active' ? `
+                        ${pass.status === 'Active' || pass.status === 'Expired' ? `
                         <div class="flex gap-2">
+                            <button onclick="viewPassDetail(${pass.id})" class="text-sm text-gray-600 hover:text-gray-700 font-medium">
+                                View
+                            </button>
+                            ${pass.status === 'Active' ? `
                             <button onclick="editPass(${pass.id}, '${escapeHtml(pass.purpose).replace(/'/g, "\\'")}', '${pass.time_out}')" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                                 Edit
                             </button>
                             <button onclick="cancelGuardPass(${pass.id})" class="text-sm text-red-600 hover:text-red-700 font-medium">
                                 Cancel
                             </button>
+                            ` : ''}
                         </div>
                         ` : ''}
                     </div>
@@ -345,7 +385,122 @@ async function confirmCancelPass() {
 
 function viewPassDetail(passId) {
     console.log('View pass detail:', passId);
-    // Could implement a view modal here in the future
+    // Fetch pass details and show modal
+    showPassDetailModal(passId);
+}
+
+async function showPassDetailModal(passId) {
+    try {
+        const { data: pass, error } = await supabase
+            .from('guard_passes')
+            .select('*')
+            .eq('id', passId)
+            .single();
+        
+        if (error || !pass) {
+            showToast('Pass not found', 'error');
+            return;
+        }
+        
+        // Get student name
+        const { data: student } = await supabase
+            .from('students')
+            .select('full_name, class_id')
+            .eq('id', pass.student_id)
+            .single();
+        
+        // Get teacher name
+        const { data: teacher } = await supabase
+            .from('teachers')
+            .select('full_name')
+            .eq('id', pass.teacher_id)
+            .single();
+        
+        const studentName = student?.full_name || 'Unknown';
+        const teacherName = teacher?.full_name || 'Unknown';
+        const time = pass.time_out || '--:--';
+        const issuedTime = new Date(pass.issued_at).toLocaleString('en-US', { 
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true 
+        });
+        
+        // Check if expired
+        let displayStatus = pass.status;
+        let isExpired = false;
+        if (pass.status === 'Active' && pass.time_out) {
+            const [hours, minutes] = pass.time_out.split(':').map(Number);
+            const timeOutDate = new Date();
+            timeOutDate.setHours(hours, minutes, 0, 0);
+            const thirtyMinsLater = new Date(timeOutDate.getTime() + 30 * 60000);
+            const now = new Date();
+            if (now > thirtyMinsLater) {
+                displayStatus = 'Expired';
+                isExpired = true;
+            }
+        }
+        
+        let statusColor = 'bg-yellow-100 text-yellow-700';
+        if (displayStatus === 'Used') statusColor = 'bg-green-100 text-green-700';
+        if (displayStatus === 'Cancelled') statusColor = 'bg-red-100 text-red-700';
+        if (displayStatus === 'Expired') statusColor = 'bg-gray-100 text-gray-700';
+        
+        const content = document.getElementById('modal-content');
+        const actions = document.getElementById('modal-actions');
+        
+        content.innerHTML = `
+            <div class="flex items-center gap-4 mb-4">
+                <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center font-bold text-lg text-blue-600">${getInitials(studentName)}</div>
+                <div>
+                    <p class="font-semibold text-lg">${escapeHtml(studentName)}</p>
+                    <p class="text-sm text-gray-500">Class: ${student?.class_id || 'N/A'}</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-xs text-gray-500">Purpose</p>
+                    <p class="font-medium">${escapeHtml(pass.purpose)}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Status</p>
+                    <span class="px-3 py-1 rounded-full text-xs font-bold ${statusColor}">${displayStatus}</span>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Time Out</p>
+                    <p class="font-medium">${formatTime12(time)}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Issued At</p>
+                    <p class="font-medium">${issuedTime}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Issued By</p>
+                    <p class="font-medium">${escapeHtml(teacherName)}</p>
+                </div>
+            </div>
+            ${isExpired ? '<p class="mt-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg">⚠️ This pass has expired and is no longer valid for exit.</p>' : ''}
+            ${pass.parent_notified ? '<p class="mt-4 text-sm text-green-600 flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4"></i> Parent has been notified</p>' : ''}
+        `;
+        
+        let actionHtml = '';
+        if (pass.status === 'Active') {
+            actionHtml = `
+                <button onclick="editPass(${pass.id}, '${escapeHtml(pass.purpose).replace(/'/g, "\\'")}', '${pass.time_out}')" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium">
+                    Edit
+                </button>
+                <button onclick="cancelGuardPass(${pass.id})" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl font-medium">
+                    Cancel Pass
+                </button>
+            `;
+        }
+        actionHtml += `<button onclick="closeDetailModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-medium">Close</button>`;
+        actions.innerHTML = actionHtml;
+        
+        document.getElementById('detail-modal').classList.remove('hidden');
+        if (window.lucide) window.lucide.createIcons();
+        
+    } catch (err) {
+        console.error('Error loading pass detail:', err);
+        showToast('Failed to load pass details', 'error');
+    }
 }
 
 function viewDetailModal(pass) {
@@ -453,6 +608,7 @@ window.confirmCancelPass = confirmCancelPass;
 window.closeEditModal = closeEditModal;
 window.closeCancelModal = closeCancelModal;
 window.viewPassDetail = viewPassDetail;
+window.showPassDetailModal = showPassDetailModal;
 window.viewDetailModal = viewDetailModal;
 window.closeDetailModal = closeDetailModal;
 window.formatTime12 = formatTime12;
