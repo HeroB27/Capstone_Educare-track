@@ -489,13 +489,6 @@ async function loadCriticalAbsences(classId) {
                 });
             }
         }
-                studentAbsences.push({
-                    id: student.id,
-                    full_name: student.full_name,
-                    count: absenceCount
-                });
-            }
-        }
         
         // Sort by absence count descending
         studentAbsences.sort((a, b) => b.count - a.count);

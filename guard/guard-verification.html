@@ -50,22 +50,22 @@
             </div>
             
             <nav class="flex-1 py-4 px-4 space-y-1">
-                <a href="guard-dashboard.html" class="flex items-center gap-3 px-4 py-4 text-yellow-200 hover:bg-white/5 rounded-xl">
+                <a href="guard-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-yellow-200 hover:bg-white/5 rounded-xl">
                     <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
                 </a>
-                <a href="scanner.html" class="flex items-center gap-3 px-4 py-4 text-yellow-200 hover:bg-white/5 rounded-xl">
+                <a href="scanner.html" class="flex items-center gap-3 px-4 py-3 text-yellow-200 hover:bg-white/5 rounded-xl">
                     <i data-lucide="scan-line" class="w-5 h-5"></i> Scanner
                 </a>
-                <a href="guard-verification.html" class="flex items-center gap-3 px-4 py-4 bg-yellow-800/50 border-l-4 border-white text-white rounded-r-xl font-bold">
+                <a href="guard-verification.html" class="flex items-center gap-3 px-4 py-3 bg-yellow-800/50 border-l-4 border-white text-white rounded-r-xl font-bold">
                     <i data-lucide="door-exit" class="w-5 h-5"></i> Guard Pass
                 </a>
-                <a href="guard-basic-analytics.html" class="flex items-center gap-3 px-4 py-4 text-yellow-200 hover:bg-white/5 rounded-xl">
+                <a href="guard-basic-analytics.html" class="flex items-center gap-3 px-4 py-3 text-yellow-200 hover:bg-white/5 rounded-xl">
                     <i data-lucide="bar-chart-2" class="w-5 h-5"></i> Analytics
                 </a>
-                <a href="guard-announcements-board.html" class="flex items-center gap-3 px-4 py-4 text-yellow-200 hover:bg-white/5 rounded-xl">
+                <a href="guard-announcements-board.html" class="flex items-center gap-3 px-4 py-3 text-yellow-200 hover:bg-white/5 rounded-xl">
                     <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
                 </a>
-                <a href="guard-system-settings.html" class="flex items-center gap-3 px-4 py-4 text-yellow-200 hover:bg-white/5 rounded-xl">
+                <a href="guard-system-settings.html" class="flex items-center gap-3 px-4 py-3 text-yellow-200 hover:bg-white/5 rounded-xl">
                     <i data-lucide="settings" class="w-5 h-5"></i> Settings
                 </a>
             </nav>
@@ -157,12 +157,27 @@
             </div>
 
             <!-- Active Passes Today -->
-            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <div class="p-6 border-b border-gray-100">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-gray-100 flex items-center justify-between">
                     <h3 class="text-lg font-bold text-gray-800">Today's Active Passes</h3>
+                    <span id="pass-count" class="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Loading...</span>
                 </div>
-                <div id="active-passes-list" class="p-6 max-h-[400px] overflow-y-auto">
-                    <p class="text-gray-500 text-center py-8">Loading...</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 text-gray-600 text-sm">
+                            <tr>
+                                <th class="px-6 py-3 text-left font-semibold">Student</th>
+                                <th class="px-6 py-3 text-left font-semibold">ID</th>
+                                <th class="px-6 py-3 text-left font-semibold">Purpose</th>
+                                <th class="px-6 py-3 text-left font-semibold">Time Out</th>
+                                <th class="px-6 py-3 text-left font-semibold">Issued By</th>
+                                <th class="px-6 py-3 text-left font-semibold">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="active-passes-list" class="divide-y divide-gray-100">
+                            <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

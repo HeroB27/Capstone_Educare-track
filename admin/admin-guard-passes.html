@@ -51,7 +51,7 @@
                 <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
             </a>
             <a href="admin-guard-passes.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
-                <i data-lucide="door-exit" class="w-5 h-5"></i> Guard Passes
+                <i data-lucide="door-open" class="w-5 h-5"></i> Guard Passes
             </a>
             <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
                 <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
@@ -91,6 +91,10 @@
             <!-- Filters -->
             <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mb-6">
                 <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                        <input type="text" id="filter-search" placeholder="Search student, ID, or reason..." class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500">
+                    </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
                         <input type="date" id="filter-date" class="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500">
@@ -121,11 +125,11 @@
                 </div>
                 <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
                     <p class="text-xs font-bold text-gray-400 uppercase">Active</p>
-                    <p id="stat-active" class="text-3xl font-black text-yellow-600 mt-1">0</p>
+                    <p id="stat-active" class="text-3xl font-black text-green-600 mt-1">0</p>
                 </div>
                 <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
                     <p class="text-xs font-bold text-gray-400 uppercase">Used</p>
-                    <p id="stat-used" class="text-3xl font-black text-green-600 mt-1">0</p>
+                    <p id="stat-used" class="text-3xl font-black text-blue-600 mt-1">0</p>
                 </div>
                 <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
                     <p class="text-xs font-bold text-gray-400 uppercase">Cancelled</p>
@@ -136,7 +140,10 @@
             <!-- Table -->
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm">
                 <div class="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <h3 class="text-lg font-bold text-gray-800">All Guard Passes</h3>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">All Guard Passes</h3>
+                        <p class="text-xs text-gray-500 mt-1">Passes expire automatically after 30 minutes from Time Out</p>
+                    </div>
                     <button onclick="exportToCSV()" class="px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition flex items-center gap-2">
                         <i data-lucide="download" class="w-4 h-4"></i> Export CSV
                     </button>
@@ -145,14 +152,14 @@
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Student Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Grade Level</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">ID Number</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Reason</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Time Out</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Approved By</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Issued</th>
+                                <th onclick="sortTable('student')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Student Name</th>
+                                <th onclick="sortTable('grade')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Grade Level</th>
+                                <th onclick="sortTable('id')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">ID Number</th>
+                                <th onclick="sortTable('reason')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Reason</th>
+                                <th onclick="sortTable('time')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Time Out</th>
+                                <th onclick="sortTable('approver')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Approved By</th>
+                                <th onclick="sortTable('status')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Status</th>
+                                <th onclick="sortTable('issued')" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Issued</th>
                             </tr>
                         </thead>
                         <tbody id="passes-table-body" class="divide-y divide-gray-100">

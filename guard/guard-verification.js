@@ -134,6 +134,7 @@ async function usePass(passId) {
 
 async function loadActivePasses() {
     const container = document.getElementById('active-passes-list');
+    const countEl = document.getElementById('pass-count');
     if (!container) return;
 
     try {
@@ -149,12 +150,15 @@ async function loadActivePasses() {
         if (error) throw error;
 
         if (!passes || passes.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-center py-8">No active guard passes today.</p>';
+            container.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No active guard passes today.</td></tr>`;
+            if (countEl) countEl.textContent = '0 passes';
             return;
         }
 
         const studentIds = [...new Set(passes.map(p => p.student_id))];
+        const teacherIds = [...new Set(passes.map(p => p.teacher_id))];
         const studentMap = {};
+        const teacherMap = {};
         
         if (studentIds.length > 0) {
             const { data: students } = await supabase
@@ -163,31 +167,53 @@ async function loadActivePasses() {
                 .in('id', studentIds);
             students?.forEach(s => studentMap[s.id] = s);
         }
+        
+        if (teacherIds.length > 0) {
+            const { data: teachers } = await supabase
+                .from('teachers')
+                .select('id, full_name')
+                .in('id', teacherIds);
+            teachers?.forEach(t => teacherMap[t.id] = t);
+        }
+
+        if (countEl) countEl.textContent = `${passes.length} pass${passes.length !== 1 ? 'es' : ''}`;
 
         let html = '';
         passes.forEach(pass => {
             const student = studentMap[pass.student_id];
+            const teacher = teacherMap[pass.teacher_id];
             const studentName = student?.full_name || 'Unknown';
             const studentId = student?.student_id_text || '';
+            const teacherName = teacher?.full_name || 'Unknown';
             const timeOut = pass.time_out || '--:--';
+            const purpose = pass.purpose || 'General';
             
             html += `
-                <div class="p-4 bg-gray-50 rounded-xl border mb-3">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="font-semibold text-gray-800">${escapeHtml(studentName)}</p>
-                            <p class="text-xs text-gray-500">ID: ${escapeHtml(studentId)} • Time Out: ${formatTime12(timeOut)}</p>
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-bold text-yellow-700">${getInitials(studentName)}</span>
+                            </div>
+                            <span class="font-medium text-gray-800">${escapeHtml(studentName)}</span>
                         </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(studentId)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(purpose)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${formatTime12(timeOut)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${escapeHtml(teacherName)}</td>
+                    <td class="px-6 py-4">
                         <span class="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">Active</span>
-                    </div>
-                </div>
+                    </td>
+                </tr>
             `;
         });
         container.innerHTML = html;
 
     } catch (err) {
         console.error('Error loading active passes:', err);
-        container.innerHTML = '<p class="text-center text-gray-400 py-4">Error loading passes.</p>';
+        if (countEl) countEl.textContent = 'Error';
+        container.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Error loading passes.</td></tr>';
     }
 }
 
