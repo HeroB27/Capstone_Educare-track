@@ -25,6 +25,23 @@ const scanCooldowns = new Map();
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+// ==========================================
+// FALLBACKS for missing core functions (non-recursive)
+// ==========================================
+if (typeof window.getLateThreshold !== 'function') {
+    window.getLateThreshold = async function(gradeLevel) {
+        // Default late threshold: 8:00 AM
+        return '08:00';
+    };
+}
+
+if (typeof window.getDismissalTime !== 'function') {
+    window.getDismissalTime = function(gradeLevel) {
+        // Default dismissal time: 3:00 PM
+        return '15:00';
+    };
+}
+
 // ============================================================================
 // HELPER FUNCTIONS (Timezone, Holidays, Gate Status, Grade Schedules)
 // ============================================================================
@@ -70,22 +87,40 @@ async function getGradeSchedule(gradeLevel) {
             .eq('grade_level', gradeLevel)
             .maybeSingle();
         if (error || !data) {
-            return { start_time: '07:30:00', end_time: '15:00:00', late_threshold: '07:30:00', early_cutoff: '15:00:00' };
+            return await getDefaultSchoolHours();
         }
         return data;
     } catch (e) {
-        return { start_time: '07:30:00', end_time: '15:00:00', late_threshold: '07:30:00', early_cutoff: '15:00:00' };
+        return await getDefaultSchoolHours();
     }
 }
 
-async function getLateThreshold(gradeLevel) {
-    const sched = await getGradeSchedule(gradeLevel);
-    return sched.late_threshold || sched.start_time;
-}
-
-async function getDismissalTime(gradeLevel) {
-    const sched = await getGradeSchedule(gradeLevel);
-    return sched.end_time;
+async function getDefaultSchoolHours() {
+    try {
+        const { data, error } = await supabase
+            .from('settings')
+            .select('setting_key, setting_value')
+            .in('setting_key', ['school_start_time', 'school_end_time']);
+        
+        if (error || !data || data.length === 0) {
+            return { start_time: '07:30:00', end_time: '15:00:00', late_threshold: '07:30:00', early_cutoff: '15:00:00' };
+        }
+        
+        const settingsMap = {};
+        data.forEach(s => { settingsMap[s.setting_key] = s.setting_value; });
+        
+        const startTime = settingsMap['school_start_time'] || '07:30:00';
+        const endTime = settingsMap['school_end_time'] || '15:00:00';
+        
+        return {
+            start_time: startTime,
+            end_time: endTime,
+            late_threshold: startTime,
+            early_cutoff: endTime
+        };
+    } catch (e) {
+        return { start_time: '07:30:00', end_time: '15:00:00', late_threshold: '07:30:00', early_cutoff: '15:00:00' };
+    }
 }
 
 function isLate(scanTime, gradeLevel, lateThreshold) {
@@ -578,29 +613,45 @@ async function saveAttendanceLog(studentId, direction, status) {
 async function createNotification(studentId, direction, status) {
     const student = await getStudentById(studentId);
     if (!student?.parent_id) return;
+    const time = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12: true });
+    const notifType = direction === 'ENTRY' ? 'gate_entry' : 'gate_exit';
     const action = direction === 'ENTRY' ? 'entered' : 'exited';
-    const time = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
     const message = `Your child, ${student.full_name}, ${action} at ${time} (${status})`;
     await supabase.from('notifications').insert({
         recipient_id: student.parent_id,
         recipient_role: 'parent',
         title: direction === 'ENTRY' ? 'Arrival Alert' : 'Departure Alert',
-        message, type: direction === 'ENTRY' ? 'arrival' : 'departure'
+        message, type: notifType
     });
+
+    if (['Late', 'Early Exit', 'Late Exit'].includes(status)) {
+        let alertTitle = '';
+        if (status === 'Late') alertTitle = 'Late Arrival Notice';
+        else if (status === 'Early Exit') alertTitle = 'Early Dismissal Notice';
+        else if (status === 'Late Exit') alertTitle = 'Late Exit Notice';
+        
+        await supabase.from('notifications').insert({
+            recipient_id: student.parent_id,
+            recipient_role: 'parent',
+            title: alertTitle,
+            message: `Your child ${student.full_name} ${status === 'Late' ? 'arrived late' : 'left early'} at ${time}. Status: ${status}`,
+            type: 'attendance_alert'
+        });
+    }
 }
 
 async function notifyTeacher(student, direction, status) {
     if (!student.class_id) return;
-    const { data: classData } = await supabase.from('classes').select('teacher_id').eq('id', student.class_id).maybeSingle();
-    if (!classData?.teacher_id) return;
-    const time = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+    const { data: classData } = await supabase.from('classes').select('adviser_id').eq('id', student.class_id).maybeSingle();
+    if (!classData?.adviser_id) return;
+    const time = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12: true });
     const grade = student.classes?.grade_level || 'Unknown';
     const section = student.classes?.department || '';
     let title='', message='';
     if (status === 'Late') { title='Late Arrival Alert'; message=`${student.full_name} (${grade} - ${section}) arrived LATE at ${time}`; }
     else if (status === 'Early Exit') { title='Early Exit Alert'; message=`${student.full_name} (${grade} - ${section}) left EARLY at ${time}`; }
     else if (status === 'Late Exit') { title='Late Exit Alert'; message=`${student.full_name} (${grade} - ${section}) left LATE at ${time}`; }
-    if (title) await supabase.from('notifications').insert({ recipient_id: classData.teacher_id, recipient_role: 'teacher', title, message, type:'attendance_alert' });
+    if (title) await supabase.from('notifications').insert({ recipient_id: classData.adviser_id, recipient_role: 'teacher', title, message, type:'attendance_alert' });
 }
 
 async function checkClinicStatus(studentId) {

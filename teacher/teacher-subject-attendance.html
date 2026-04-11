@@ -11,45 +11,26 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/attendance-utils.js"></script>
     <script src="teacher-core.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .status-square {
-            width: 100px;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .status-square:hover {
-            transform: scale(0.97);
-            filter: brightness(0.95);
-        }
-        .locked-square {
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        .locked-square:hover {
-            transform: none;
-            filter: none;
-        }
+        .status-square { width: 80px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 2px solid transparent; }
+        .status-present { background-color: #ecfdf5; color: #047857; border-color: #10b981; }
+        .status-late { background-color: #fffbeb; color: #b45309; border-color: #f59e0b; }
+        .status-absent { background-color: #fef2f2; color: #b91c1c; border-color: #ef4444; }
+        .status-excused { background-color: #eff6ff; color: #1d4ed8; border-color: #3b82f6; }
+        .status-empty { background-color: #f9fafb; color: #9ca3af; border-color: #d1d5db; }
+        .status-square:hover { transform: scale(0.97); filter: brightness(0.95); }
+        .locked-square { cursor: not-allowed; opacity: 0.7; }
+        .locked-square:hover { transform: none; filter: none; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen">
-
-    <!-- Simple top bar -->
     <div class="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-10">
         <div class="px-6 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <button onclick="window.location.href='teacher-dashboard.html'" class="p-2 rounded-xl hover:bg-gray-100 transition">
-                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
-                </button>
+                <button onclick="window.location.href='teacher-dashboard.html'" class="p-2 rounded-xl hover:bg-gray-100 transition"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
                 <h1 class="text-xl font-bold text-gray-800">Subject Attendance</h1>
             </div>
             <div class="flex items-center gap-2">
@@ -60,55 +41,36 @@
     </div>
 
     <main class="p-6">
-        <!-- Subject selection and action buttons -->
         <div class="bg-white rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between border shadow-sm">
             <div class="flex gap-4 items-center flex-wrap">
                 <label class="font-bold text-gray-700">Subject:</label>
-                <select id="subject-select" class="px-3 py-2 border rounded-xl w-64">
-                    <option value="">-- Select Subject --</option>
-                </select>
+                <select id="subject-select" class="px-3 py-2 border rounded-xl w-64"><option value="">-- Select Subject --</option></select>
                 <button id="load-subject" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow">Load</button>
             </div>
             <div class="flex gap-2">
-                <button id="save-subject-attendance-btn" class="px-4 py-2 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition flex items-center gap-2">
-                    <i data-lucide="save" class="w-4 h-4"></i> Save Changes
-                </button>
-                <button id="view-subject-table-btn" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition flex items-center gap-2">
-                    <i data-lucide="table" class="w-4 h-4"></i> View Attendance Table
-                </button>
+                <button id="save-subject-attendance-btn" class="px-4 py-2 bg-green-600 text-white rounded-xl shadow hover:bg-green-700 transition flex items-center gap-2"><i data-lucide="save" class="w-4 h-4"></i> Save Changes</button>
+                <button id="export-subject-csv-btn" onclick="exportSubjectAttendanceToCSV()" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+                <button id="view-subject-table-btn" class="px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition flex items-center gap-2"><i data-lucide="table" class="w-4 h-4"></i> View Attendance Table</button>
             </div>
         </div>
 
-        <!-- Date picker -->
         <div class="bg-white rounded-2xl p-4 mb-6 flex items-center gap-4 border shadow-sm">
             <label class="font-bold text-gray-700">Date:</label>
             <input type="date" id="attendance-date" class="px-3 py-2 border rounded-xl">
         </div>
 
-        <!-- Checklist table -->
         <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div class="px-6 py-4 border-b bg-gray-50">
-                <h3 class="font-bold text-lg">📋 Subject Checklist – <span id="subject-name-display"></span></h3>
-            </div>
+            <div class="px-6 py-4 border-b bg-gray-50"><h3 class="font-bold text-lg">📋 Subject Checklist – <span id="subject-name-display"></span></h3></div>
             <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-4 py-3 text-left sticky left-0 bg-gray-50">Student Name</th>
-                            <th class="px-4 py-3 text-left">Attendance</th>
-                        </tr>
-                    </thead>
-                    <tbody id="subject-checklist-tbody">
-                        <tr><td colspan="2" class="text-center py-8">Select a subject first...</td></tr>
-                    </tbody>
+                <table class="w-full min-w-[400px]">
+                    <thead class="bg-gray-50 border-b border-gray-200"><tr><th class="px-4 py-3 text-left sticky left-0 bg-gray-50 z-10 font-semibold text-gray-700 text-sm">Student Name</th><th class="px-4 py-3 text-left font-semibold text-gray-700 text-sm">Attendance</th></tr></thead>
+                    <tbody id="subject-checklist-tbody" class="divide-y divide-gray-100"><tr><td colspan="2" class="text-center py-8">Select a subject first...</td></tr></tbody>
                 </table>
             </div>
         </div>
     </main>
 
     <script src="teacher-subject-attendance.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
-    </script>
+    <script> document.addEventListener('DOMContentLoaded', () => lucide.createIcons()); </script>
 </body>
 </html>

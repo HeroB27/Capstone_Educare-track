@@ -393,7 +393,7 @@ async function reissueStaffID(staffId, view) {
 async function deleteStaff(id, view) {
     const config = roleConfig[view];
     
-    showConfirmationModal(
+    window.showConfirm(
         `Delete ${config.label}?`,
         `Are you sure you want to delete this ${config.label}? This action cannot be undone.`,
         async () => {
@@ -676,31 +676,6 @@ function showNotification(msg, type) {
     setTimeout(() => toast.remove(), 3000);
 }
 
-function showConfirmationModal(title, message, onConfirm) {
-    const existing = document.getElementById('confirmation-modal');
-    if (existing) existing.remove();
-    
-    const modal = document.createElement('div');
-    modal.id = 'confirmation-modal';
-    modal.className = 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[300] p-4';
-    modal.innerHTML = `
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 class="font-black text-lg text-gray-800 mb-2">${title}</h3>
-            <p class="text-sm text-gray-500 mb-6">${message}</p>
-            <div class="flex gap-3 justify-end">
-                <button onclick="document.getElementById('confirmation-modal').remove()" class="px-4 py-2 text-gray-500 font-bold text-sm hover:text-gray-700">Cancel</button>
-                <button id="confirm-ok-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700">Delete</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    
-    document.getElementById('confirm-ok-btn').onclick = async () => {
-        modal.remove();
-        await onConfirm();
-    };
-}
-
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
         window.location.href = '../index.html';
@@ -723,10 +698,14 @@ window.selectRole = selectRole;
 window.staffNextStep = staffNextStep;
 window.staffPrevStep = staffPrevStep;
 window.logout = logout;
+window.checkSession = window.checkSession;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    lucide.createIcons();
+    const user = checkSession('admins');
+    if (!user) return;
+    
+    if (window.lucide) lucide.createIcons();
     await loadStaff();
     updateStaffWizardUI();
 });

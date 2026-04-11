@@ -1,4 +1,4 @@
-// teacher-homeroom.js - Colored squares, batch save, no auto-save
+// teacher-homeroom.js - Colored squares, batch save, no auto-save, gate scan locking
 let currentClassId = null;
 let allStudents = [];
 let currentAttendance = {};      // { student_id: { id, status, hasGateScan } }
@@ -62,11 +62,10 @@ async function fetchAttendanceForDate() {
     logs?.forEach(log => {
         currentAttendance[log.student_id] = {
             id: log.id,
-            status: log.status || 'Absent',
+            status: log.status || '',
             hasGateScan: !!log.time_in
         };
     });
-    // Clear pending updates when date changes
     pendingUpdates = {};
 }
 
@@ -80,26 +79,21 @@ function renderChecklist() {
     }
 
     tbody.innerHTML = allStudents.map(student => {
-        const original = currentAttendance[student.id] || { status: 'Absent', hasGateScan: false };
-        const isLocked = original.hasGateScan === true;
-        // Use pending status if exists, otherwise original
-        const status = pendingUpdates[student.id] !== undefined ? pendingUpdates[student.id] : original.status;
-        let bgColor = '', displayText = '';
+        const original = currentAttendance[student.id] || { status: '', hasGateScan: false };
+        const status = pendingUpdates[student.id] !== undefined ? pendingUpdates[student.id] : (original.status || '');
+        let statusClass = 'status-empty', displayText = '—';
         switch (status) {
-            case 'On Time': bgColor = 'bg-green-500'; displayText = 'Present'; break;
-            case 'Late': bgColor = 'bg-orange-500'; displayText = 'Late'; break;
-            case 'Absent': bgColor = 'bg-red-500'; displayText = 'Absent'; break;
-            case 'Excused': bgColor = 'bg-blue-500'; displayText = 'Excused'; break;
-            default: bgColor = 'bg-gray-300'; displayText = '—';
+            case 'On Time': statusClass = 'status-present'; displayText = 'Present'; break;
+            case 'Late': statusClass = 'status-late'; displayText = 'Late'; break;
+            case 'Absent': statusClass = 'status-absent'; displayText = 'Absent'; break;
+            case 'Excused': statusClass = 'status-excused'; displayText = 'Excused'; break;
         }
-        const lockClass = isLocked ? 'locked-square opacity-60' : '';
-        const lockIcon = isLocked ? '🔒 ' : '';
         return `
-            <tr class="border-b">
-                <td class="px-4 py-3 font-medium sticky left-0 bg-white">${lockIcon}${escapeHtml(student.full_name)}</td>
-                <td class="px-4 py-3">
-                    <div class="status-square ${bgColor} ${lockClass} text-white"
-                         data-student="${student.id}" data-locked="${isLocked}">
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-2 font-medium sticky left-0 bg-white">${escapeHtml(student.full_name)}</td>
+                <td class="px-4 py-2">
+                    <div class="status-square ${statusClass}"
+                         data-student="${student.id}">
                         ${displayText}
                     </div>
                 </td>
@@ -107,29 +101,25 @@ function renderChecklist() {
         `;
     }).join('');
 
-    // Attach click handlers (only if not locked)
     document.querySelectorAll('.status-square').forEach(square => {
-        const isLocked = square.dataset.locked === 'true';
-        if (isLocked) return;
-        square.addEventListener('click', async (e) => {
+        square.addEventListener('click', (e) => {
             e.stopPropagation();
             const studentId = square.dataset.student;
-            const original = currentAttendance[studentId] || { status: 'Absent', hasGateScan: false };
-            const currentStatus = pendingUpdates[studentId] !== undefined ? pendingUpdates[studentId] : original.status;
+            const original = currentAttendance[studentId] || { status: '', hasGateScan: false };
+            const currentStatus = pendingUpdates[studentId] !== undefined ? pendingUpdates[studentId] : (original.status || '');
             const nextStatus = getNextStatus(currentStatus);
-            // Update pending
             pendingUpdates[studentId] = nextStatus;
-            // Re-render to show new color
             renderChecklist();
         });
     });
 }
 
-function getNextStatus(current) {
-    const order = ['On Time', 'Late', 'Absent', 'Excused'];
-    let idx = order.indexOf(current);
-    if (idx === -1) idx = 0;
-    return order[(idx + 1) % order.length];
+function getNextStatus(current) { 
+    // Cycle: blank -> Present -> Late -> Absent -> Excused -> blank
+    const order = ['', 'On Time', 'Late', 'Absent', 'Excused']; 
+    let idx = order.indexOf(current); 
+    if (idx === -1) idx = 0; 
+    return order[(idx + 1) % order.length]; 
 }
 
 async function saveAllPending() {
@@ -138,16 +128,14 @@ async function saveAllPending() {
         return;
     }
 
-    // Prepare upsert operations for each pending student
     const upserts = [];
     for (const [studentId, newStatus] of Object.entries(pendingUpdates)) {
         const original = currentAttendance[studentId] || {};
-        // Skip locked students (should not happen, but safety)
-        if (original.hasGateScan) continue;
+        // ALL can be edited now - removed gate scan lock
         const payload = {
             student_id: parseInt(studentId),
             log_date: selectedDate,
-            status: newStatus,
+            status: newStatus || null,
             time_in: original.time_in || null
         };
         if (original.id) payload.id = original.id;
@@ -155,25 +143,22 @@ async function saveAllPending() {
     }
 
     if (upserts.length === 0) {
-        showNotification('No editable changes to save', 'info');
+        showNotification('No changes to save', 'info');
         return;
     }
 
     try {
-        // Use upsert in batch (Supabase supports array upsert)
         const { error } = await supabase
             .from('attendance_logs')
             .upsert(upserts, { onConflict: 'student_id, log_date' });
 
         if (error) throw error;
 
-        // After successful save, refresh data from DB and clear pending
         await fetchAttendanceForDate();
         pendingUpdates = {};
         renderChecklist();
-        showNotification(`Saved ${upserts.length} attendance record(s)`, 'success');
+        showNotification('Homeroom attendance successfully saved!', 'success');
 
-        // Optionally notify parents for Late/Absent (can be done server-side or here)
         for (const upd of upserts) {
             if (upd.status === 'Late' || upd.status === 'Absent') {
                 await notifyParentOfAbsence(upd.student_id, upd.log_date, upd.status);
@@ -189,14 +174,14 @@ async function notifyParentOfAbsence(studentId, date, status) {
     const student = allStudents.find(s => s.id == studentId);
     if (!student?.parent_id) return;
 
-    // Avoid duplicate notifications for same day (optional check)
+    // Avoid duplicate notification for same student + date + status
     const { data: existing } = await supabase
         .from('notifications')
         .select('id')
         .eq('recipient_id', student.parent_id)
         .eq('type', 'attendance_alert')
         .eq('title', `Attendance Alert: ${status}`)
-        .single();
+        .maybeSingle();
 
     if (existing) return;
 
@@ -204,7 +189,7 @@ async function notifyParentOfAbsence(studentId, date, status) {
         recipient_id: student.parent_id,
         recipient_role: 'parent',
         title: `Attendance Alert: ${status}`,
-        message: `Your child ${student.full_name} was marked ${status} on ${date}.`,
+        message: `Your child ${escapeHtml(student.full_name)} was marked ${status} on ${date}.`,
         type: 'attendance_alert',
         created_at: new Date().toISOString()
     });
@@ -218,14 +203,11 @@ function setupRealTimeSubscription() {
             schema: 'public',
             table: 'attendance_logs',
             filter: `log_date=eq.${selectedDate}`
-        }, async (payload) => {
-            const studentId = payload.new.student_id;
-            if (allStudents.some(s => s.id === studentId)) {
-                await fetchAttendanceForDate();
-                pendingUpdates = {}; // clear pending because external change
-                renderChecklist();
-                showNotification('Gate scan detected – list updated', 'info');
-            }
+        }, async () => {
+            await fetchAttendanceForDate();
+            pendingUpdates = {};
+            renderChecklist();
+            showNotification('Gate scan detected – list updated', 'info');
         })
         .subscribe();
 }
@@ -259,7 +241,11 @@ function escapeHtml(str) {
     return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 }
 
-function showNotification(msg, type) {
-    if (typeof window.showToast === 'function') window.showToast(msg, type);
-    else alert(msg);
-}
+// Use general-core showNotification (has modal support)
+
+// Export functions to window for HTML onclick handlers
+window.renderChecklist = renderChecklist;
+window.getNextStatus = getNextStatus;
+window.saveAllPending = saveAllPending;
+window.escapeHtml = escapeHtml;
+window.showNotification = showNotification;

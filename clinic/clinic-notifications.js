@@ -1,13 +1,14 @@
 // clinic/clinic-notifications.js
 
 // ============================================================================
-// CLINIC NOTIFICATIONS - JavaScript Logic
-// ============================================================================
-// Features: View and manage clinic notifications, alerts, and clearances
+// CLINIC NOTIFICATIONS - FIXED (Buttons, Error Handling, Student Data)
 // ============================================================================
 
-// Session Check
-// currentUser is now global in clinic-core.js
+// Session Check – ensure currentUser exists
+if (typeof currentUser === 'undefined' || !currentUser) {
+    console.error('No user session. Redirecting to login...');
+    window.location.href = '../login.html';
+}
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -20,30 +21,53 @@ let currentFilter = 'all';
 // ============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (currentUser) {
-        // Set clinic staff name
+        // Set clinic staff name in sidebar and header
         const sidebarName = document.getElementById('clinic-name-sidebar');
         if (sidebarName) sidebarName.textContent = currentUser.full_name || 'Nurse';
         
         const headerName = document.getElementById('clinic-name');
         if (headerName) headerName.textContent = currentUser.full_name || 'Nurse';
         
-        // Load notifications
         await loadNotifications();
+        attachGlobalFunctions(); // Ensure all functions are globally accessible
+    } else {
+        window.location.href = '../login.html';
     }
 });
 
+/**
+ * Explicitly attach notification handlers to window
+ * (Fixes "function not defined" errors for onclick attributes)
+ */
+function attachGlobalFunctions() {
+    window.filterNotifications = filterNotifications;
+    window.markAllAsRead = markAllAsRead;
+    window.viewNotification = viewNotification;
+    window.closeNotificationModal = closeNotificationModal;
+}
+
 // ============================================================================
-// DATA LOADING
+// DATA LOADING (with student join)
 // ============================================================================
 
 /**
- * Fetch clinic notifications from database
+ * Fetch clinic notifications with student details (JOIN)
  */
 async function fetchClinicNotifications() {
     try {
+        // Join with students table to get student info directly
         const { data: notifications, error } = await supabase
             .from('notifications')
-            .select('*')
+            .select(`
+                *,
+                students:student_id (
+                    id,
+                    full_name,
+                    student_id_text,
+                    grade_level,
+                    section
+                )
+            `)
             .eq('recipient_id', currentUser.id)          
             .eq('recipient_role', 'clinic_staff')        
             .order('created_at', { ascending: false })
@@ -54,7 +78,11 @@ async function fetchClinicNotifications() {
             return [];
         }
         
-        return notifications || [];
+        // Transform to match expected structure
+        return (notifications || []).map(n => ({
+            ...n,
+            students: n.students || null
+        }));
         
     } catch (error) {
         console.error('Error fetching clinic notifications:', error);
@@ -63,7 +91,7 @@ async function fetchClinicNotifications() {
 }
 
 /**
- * Load notifications
+ * Load notifications and update UI
  */
 async function loadNotifications() {
     try {
@@ -72,11 +100,12 @@ async function loadNotifications() {
         updateNotificationStats();
     } catch (error) {
         console.error('Error loading notifications:', error);
+        showToast('Failed to load notifications', 'error');
     }
 }
 
 /**
- * Update notification statistics
+ * Update notification statistics cards
  */
 function updateNotificationStats() {
     const total = allNotifications.length;
@@ -85,20 +114,22 @@ function updateNotificationStats() {
         n.type === 'clinic_alert' || n.type === 'emergency'
     ).length;
     
-    document.getElementById('notif-total').textContent = total;
-    document.getElementById('notif-unread').textContent = unread;
-    document.getElementById('notif-clinic').textContent = clinicAlerts;
+    const totalEl = document.getElementById('notif-total');
+    const unreadEl = document.getElementById('notif-unread');
+    const clinicEl = document.getElementById('notif-clinic');
+    
+    if (totalEl) totalEl.textContent = total;
+    if (unreadEl) unreadEl.textContent = unread;
+    if (clinicEl) clinicEl.textContent = clinicAlerts;
 }
 
 // ============================================================================
-// RENDERING
+// RENDERING (Fixed empty state & dynamic student display)
 // ============================================================================
 
-/**
- * Render notifications to the list
- */
 function renderNotifications() {
     const container = document.getElementById('notifications-list');
+    if (!container) return;
     
     let filtered = allNotifications;
     
@@ -128,10 +159,11 @@ function renderNotifications() {
     container.innerHTML = filtered.map(notification => {
         const date = new Date(notification.created_at);
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         
         const isUnread = !notification.is_read;
         const typeStyles = getNotificationTypeStyles(notification.type);
+        const studentName = notification.students?.full_name || '';
         
         return `
             <div onclick="viewNotification('${notification.id}')" 
@@ -149,7 +181,7 @@ function renderNotifications() {
                             <p class="text-sm text-gray-600 line-clamp-2">${escapeHtml(notification.message)}</p>
                             <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
                                 <span>${formattedDate} ${formattedTime}</span>
-                                ${notification.students ? `<span>• ${notification.students.full_name}</span>` : ''}
+                                ${studentName ? `<span>• ${escapeHtml(studentName)}</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -166,7 +198,7 @@ function renderNotifications() {
 }
 
 /**
- * Get notification type styles
+ * Get notification type styles (unchanged, kept for reference)
  */
 function getNotificationTypeStyles(type) {
     const styles = {
@@ -200,91 +232,95 @@ function getNotificationTypeStyles(type) {
 }
 
 // ============================================================================
-// FILTERING
+// FILTERING (Fixed active tab highlighting)
 // ============================================================================
 
-/**
- * Filter notifications by type
- */
 function filterNotifications(filter) {
     currentFilter = filter;
     
-    // Update tab styling
-    document.querySelectorAll('[id^="tab-"]').forEach(tab => {
-        tab.classList.remove('bg-red-500', 'text-white');
-        tab.classList.add('bg-white/80', 'text-gray-500');
+    // Update tab styling – more robust selector
+    const tabs = ['all', 'unread', 'clinic_alert', 'clinic_clearance'];
+    tabs.forEach(tab => {
+        const tabEl = document.getElementById(`tab-${tab}`);
+        if (tabEl) {
+            if (tab === filter) {
+                tabEl.classList.remove('bg-white/80', 'text-gray-500');
+                tabEl.classList.add('bg-red-500', 'text-white');
+            } else {
+                tabEl.classList.remove('bg-red-500', 'text-white');
+                tabEl.classList.add('bg-white/80', 'text-gray-500');
+            }
+        }
     });
-    
-    const activeTab = document.getElementById(`tab-${filter}`);
-    if (activeTab) {
-        activeTab.classList.remove('bg-white/80', 'text-gray-500');
-        activeTab.classList.add('bg-red-500', 'text-white');
-    }
     
     renderNotifications();
 }
 
 // ============================================================================
-// ACTIONS
+// ACTIONS (Fixed async error handling)
 // ============================================================================
 
-/**
- * View notification details
- */
-function viewNotification(notificationId) {
-    const notification = allNotifications.find(n => n.id === notificationId);
-    if (!notification) return;
-    
-    // Mark as read
-    markAsRead(notificationId);
-    
-    // Show modal
-    const modal = document.getElementById('notification-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalContent = document.getElementById('modal-content');
-    
-    modalTitle.textContent = notification.title;
-    
-    const date = new Date(notification.created_at);
-    const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    
-    modalContent.innerHTML = `
-        <div class="space-y-4">
-            <div class="flex items-center gap-2 text-sm text-gray-500">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span>${formattedDate} at ${formattedTime}</span>
-            </div>
-            ${notification.students ? `
-                <div class="p-4 bg-gray-50 rounded-xl">
-                    <p class="text-sm font-medium text-gray-500">Student</p>
-                    <p class="font-semibold text-gray-800">${notification.students.full_name}</p>
-                    <p class="text-sm text-gray-500">${notification.students.student_id} - ${notification.students.grade_level} ${notification.students.section}</p>
-                </div>
-            ` : ''}
-            <div class="p-4 bg-gray-50 rounded-xl">
-                <p class="text-sm font-medium text-gray-500">Message</p>
-                <p class="text-gray-800">${escapeHtml(notification.message)}</p>
-            </div>
-            ${notification.action_url ? `
-                <a href="${notification.action_url}" class="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">
+async function viewNotification(notificationId) {
+    try {
+        const notification = allNotifications.find(n => n.id === notificationId);
+        if (!notification) {
+            console.warn('Notification not found:', notificationId);
+            return;
+        }
+        
+        // Mark as read (don't await to avoid blocking modal)
+        markAsRead(notificationId).catch(err => console.error('Mark read error:', err));
+        
+        // Show modal
+        const modal = document.getElementById('notification-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalContent = document.getElementById('modal-content');
+        
+        if (!modal || !modalTitle || !modalContent) return;
+        
+        modalTitle.textContent = notification.title;
+        
+        const date = new Date(notification.created_at);
+        const formattedDate = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        
+        modalContent.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 text-sm text-gray-500">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    Take Action
-                </a>
-            ` : ''}
-        </div>
-    `;
-    
-    modal.classList.remove('hidden');
+                    <span>${formattedDate} at ${formattedTime}</span>
+                </div>
+                ${notification.students ? `
+                    <div class="p-4 bg-gray-50 rounded-xl">
+                        <p class="text-sm font-medium text-gray-500">Student</p>
+                        <p class="font-semibold text-gray-800">${escapeHtml(notification.students.full_name || '')}</p>
+                        <p class="text-sm text-gray-500">${escapeHtml(notification.students.student_id_text || '')} ${escapeHtml(notification.students.grade_level || '')} ${escapeHtml(notification.students.section || '')}</p>
+                    </div>
+                ` : ''}
+                <div class="p-4 bg-gray-50 rounded-xl">
+                    <p class="text-sm font-medium text-gray-500">Message</p>
+                    <p class="text-gray-800">${escapeHtml(notification.message)}</p>
+                </div>
+                ${notification.action_url ? `
+                    <a href="${notification.action_url}" class="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                        Take Action
+                    </a>
+                ` : ''}
+            </div>
+        `;
+        
+        modal.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error showing notification modal:', error);
+        showToast('Could not open notification', 'error');
+    }
 }
 
-/**
- * Mark notification as read
- */
 async function markAsRead(notificationId) {
     try {
         const { error } = await supabase
@@ -308,9 +344,6 @@ async function markAsRead(notificationId) {
     }
 }
 
-/**
- * Mark all notifications as read
- */
 async function markAllAsRead() {
     try {
         const unreadIds = allNotifications.filter(n => !n.is_read).map(n => n.id);
@@ -324,7 +357,7 @@ async function markAllAsRead() {
             .from('notifications')
             .update({ is_read: true })
             .in('id', unreadIds)
-            .eq('recipient_id', currentUser.id); // THE SAFETY LOCK
+            .eq('recipient_id', currentUser.id);
         
         if (error) throw error;
         
@@ -335,31 +368,17 @@ async function markAllAsRead() {
         
         renderNotifications();
         updateNotificationStats();
+        showToast('All notifications marked as read', 'success');
         
     } catch (error) {
         console.error('Error marking all as read:', error);
+        showToast('Failed to mark all as read', 'error');
     }
 }
 
-/**
- * Close notification modal
- */
 function closeNotificationModal() {
-    document.getElementById('notification-modal').classList.add('hidden');
-}
-
-// ============================================================================
-// UTILITIES
-// ============================================================================
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const modal = document.getElementById('notification-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 // Close modal on outside click
@@ -369,3 +388,31 @@ document.addEventListener('click', (e) => {
         closeNotificationModal();
     }
 });
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'info') {
+    const existingToast = document.getElementById('clinic-notif-toast');
+    if (existingToast) existingToast.remove();
+    
+    const toast = document.createElement('div');
+    toast.id = 'clinic-notif-toast';
+    toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
+        type === 'success' ? 'bg-green-500' :
+        type === 'error' ? 'bg-red-500' :
+        'bg-blue-500'
+    } text-white font-medium`;
+    toast.innerText = message;
+    
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}

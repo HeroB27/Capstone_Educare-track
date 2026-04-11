@@ -83,7 +83,15 @@ function getDayStatus(log, holiday, dateStr) {
     if (holiday) return { class: 'bg-purple-200 text-purple-800' };
     if (isWeekend(dateStr)) return { class: 'bg-gray-100 text-gray-400' };
     if (!log) return { class: 'bg-red-200 text-red-800' };
+    
     const status = (log.status || '').toLowerCase();
+    const morningAbsent = log.morning_absent || false;
+    const afternoonAbsent = log.afternoon_absent || false;
+    
+    // Check for half-day (one session absent, one present)
+    const isHalfDay = morningAbsent !== afternoonAbsent;
+    
+    if (isHalfDay) return { class: 'bg-orange-200 text-orange-800' };
     if (status === 'late') return { class: 'bg-yellow-200 text-yellow-800' };
     if (status === 'excused') return { class: 'bg-purple-200 text-purple-800' };
     if (status === 'absent') return { class: 'bg-red-200 text-red-800' };
@@ -99,9 +107,24 @@ function showDayDetails(dateStr, log, holiday) {
     } else if (!log) {
         contentDiv.innerHTML = `<div class="font-bold text-gray-700">No record</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
     } else {
-        let icon = log.status?.toLowerCase() === 'late' ? '⏰' : (log.status?.toLowerCase() === 'excused' ? '📝' : '✅');
+        const morningAbsent = log.morning_absent || false;
+        const afternoonAbsent = log.afternoon_absent || false;
+        const isHalfDay = morningAbsent !== afternoonAbsent;
+        
+        let icon = '✅';
+        if (log.status?.toLowerCase() === 'late') icon = '⏰';
+        else if (log.status?.toLowerCase() === 'excused') icon = '📝';
+        else if (isHalfDay) icon = '🕐';
+        
+        let statusLabel = log.status || 'Present';
+        if (isHalfDay) {
+            statusLabel = 'Half Day';
+            if (morningAbsent) statusLabel += ' (AM Absent)';
+            else statusLabel += ' (PM Absent)';
+        }
+        
         contentDiv.innerHTML = `
-            <div class="flex items-center gap-2 mb-2"><span class="text-3xl">${icon}</span><span class="font-bold">${escapeHtml(log.status || 'Present')}</span></div>
+            <div class="flex items-center gap-2 mb-2"><span class="text-3xl">${icon}</span><span class="font-bold">${escapeHtml(statusLabel)}</span></div>
             <div class="text-gray-600">${formatDate(dateStr)}</div>
             ${log.time_in ? `<div class="mt-2">Time in: ${formatTime(log.time_in)}</div>` : ''}
             ${log.time_out ? `<div>Time out: ${formatTime(log.time_out)}</div>` : ''}
@@ -117,6 +140,7 @@ async function calculateStatsAndChart() {
     document.getElementById('stat-present').innerText = stats.present;
     document.getElementById('stat-late').innerText = stats.late;
     document.getElementById('stat-absent').innerText = stats.absent;
+    document.getElementById('stat-halfday')?.insertAdjacentHTML('beforeend', `<span class="text-orange-600 font-bold">${stats.halfday || 0}</span>`);
     document.getElementById('stat-percent').innerText = `${stats.percentage}%`;
     renderTrendChart(stats);
 }

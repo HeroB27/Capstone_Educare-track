@@ -1,5 +1,5 @@
 -- Educare Database Schema
--- Updated: 2026-03-10
+-- Updated: 2026-04-09
 
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
@@ -45,6 +45,16 @@ CREATE TABLE public.announcements (
   CONSTRAINT announcements_posted_by_admin_id_fkey FOREIGN KEY (posted_by_admin_id) REFERENCES public.admins(id),
   CONSTRAINT announcements_posted_by_teacher_id_fkey FOREIGN KEY (posted_by_teacher_id) REFERENCES public.teachers(id)
 );
+CREATE TABLE public.attendance_daily_summary (
+  id integer NOT NULL DEFAULT nextval('attendance_daily_summary_id_seq'::regclass),
+  student_id integer NOT NULL,
+  date date NOT NULL,
+  morning_status character varying DEFAULT 'Present'::character varying,
+  afternoon_status character varying DEFAULT 'Present'::character varying,
+  updated_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT attendance_daily_summary_pkey PRIMARY KEY (id),
+  CONSTRAINT attendance_daily_summary_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+);
 CREATE TABLE public.attendance_logs (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   student_id bigint,
@@ -56,8 +66,10 @@ CREATE TABLE public.attendance_logs (
   morning_absent boolean DEFAULT false,
   afternoon_absent boolean DEFAULT false,
   partial_absence_notified boolean DEFAULT false,
+  subject_load_id integer,
   CONSTRAINT attendance_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id)
+  CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT attendance_logs_subject_load_id_fkey FOREIGN KEY (subject_load_id) REFERENCES public.subject_loads(id)
 );
 CREATE TABLE public.attendance_patterns (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -151,6 +163,21 @@ CREATE TABLE public.guards (
   is_active boolean DEFAULT true,
   CONSTRAINT guards_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.guard_passes (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  student_id bigint NOT NULL,
+  teacher_id bigint NOT NULL,
+  purpose text NOT NULL,
+  time_out time without time zone NOT NULL,
+  issued_at timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'Active'::text,
+  parent_notified boolean DEFAULT false,
+  parent_notified_at timestamp with time zone,
+  notes text,
+  CONSTRAINT guard_passes_pkey PRIMARY KEY (id),
+  CONSTRAINT guard_passes_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id),
+  CONSTRAINT guard_passes_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id)
+);
 CREATE TABLE public.holidays (
   holiday_date date NOT NULL UNIQUE,
   description text,
@@ -190,7 +217,7 @@ CREATE TABLE public.parents (
   contact_number text,
   relationship_type text,
   is_active boolean DEFAULT true,
-  notification_preferences jsonb DEFAULT '{"entry_exit": true, "clinic": true, "urgent": true, "excuse": true}'::jsonb,
+  notification_preferences jsonb DEFAULT '{"clinic": true, "excuse": true, "urgent": true, "entry_exit": true}'::jsonb,
   profile_photo_url text,
   CONSTRAINT parents_pkey PRIMARY KEY (id)
 );
@@ -221,6 +248,7 @@ CREATE TABLE public.students (
   qr_code_data text,
   profile_photo_url text,
   status text DEFAULT 'Enrolled'::text,
+  birthdate date,
   CONSTRAINT students_pkey PRIMARY KEY (id),
   CONSTRAINT students_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.parents(id),
   CONSTRAINT students_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)
@@ -233,6 +261,7 @@ CREATE TABLE public.subject_loads (
   schedule_time_start time without time zone,
   schedule_time_end time without time zone,
   schedule_days text,
+  time_slot character varying DEFAULT 'morning'::character varying,
   CONSTRAINT subject_loads_pkey PRIMARY KEY (id),
   CONSTRAINT subject_loads_teacher_id_fkey FOREIGN KEY (teacher_id) REFERENCES public.teachers(id),
   CONSTRAINT subject_loads_class_id_fkey FOREIGN KEY (class_id) REFERENCES public.classes(id)

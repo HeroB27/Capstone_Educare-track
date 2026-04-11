@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadAllChildren() {
     const { data, error } = await supabase
         .from('students')
-        .select('*, classes(grade_level, department)')
+        .select('*, classes(grade_level, strand, department)')
         .eq('parent_id', window.currentUser.id);
     if (error || !data?.length) {
         document.getElementById('loading-indicator')?.classList.add('hidden');
@@ -31,6 +31,13 @@ async function renderChildrenList() {
     container.innerHTML = childrenData.map((child, idx) => {
         const percentage = child.stats.percentage;
         const color = percentage >= 90 ? 'text-green-600' : (percentage >= 75 ? 'text-yellow-600' : 'text-red-600');
+        
+        const grade = child.classes?.grade_level || '';
+        const strand = child.classes?.strand || '';
+        const dept = child.classes?.department || '';
+        const isSHS = grade.includes('11') || grade.includes('12');
+        const classDisplay = isSHS && strand ? `${grade} - ${strand}` : (grade || dept);
+        
         return `
             <div class="bg-white rounded-xl shadow-md overflow-hidden cursor-pointer" onclick="showChildDetail(${idx})">
                 <div class="p-4">
@@ -40,7 +47,7 @@ async function renderChildrenList() {
                         </div>
                         <div>
                             <h3 class="font-bold text-gray-800">${escapeHtml(child.full_name)}</h3>
-                            <p class="text-sm text-gray-500">${escapeHtml(child.classes?.grade_level || '')} ${escapeHtml(child.classes?.department || '')}</p>
+                            <p class="text-sm text-gray-500">${classDisplay}</p>
                         </div>
                     </div>
                     <div class="mt-3">

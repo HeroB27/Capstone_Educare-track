@@ -215,7 +215,7 @@ function saveTeacherThemePreferences() {
         document.body.classList.remove('compact-mode');
     }
     
-    showNotification("Theme preferences saved!", "success");
+    showNotification("Settings successfully saved!", "success");
 }
 
 /**

@@ -47,7 +47,7 @@ async function loadChildren() {
     try {
         const { data: children, error } = await supabase
             .from('students')
-            .select('*, classes(grade_level, department)')
+            .select('*, classes(grade_level, strand, department)')
             .eq('parent_id', currentUser.id);
         if (error) throw error;
 
@@ -86,7 +86,7 @@ function updateChildSwitcher() {
                 </div>
                 <div>
                     <p class="font-bold text-gray-800">${escapeHtml(child.full_name)}</p>
-                    <p class="text-xs text-gray-500">${child.classes?.grade_level || ''} ${child.classes?.department || ''}</p>
+                    <p class="text-xs text-gray-500">${displayClass}</p>
                 </div>
             </div>
         `;
@@ -95,7 +95,12 @@ function updateChildSwitcher() {
             <select id="child-select" class="w-full p-2 border rounded-lg bg-white">
                 ${allChildren.map(child => `
                     <option value="${child.id}" ${currentChild?.id === child.id ? 'selected' : ''}>
-                        ${escapeHtml(child.full_name)} (${child.classes?.grade_level || 'N/A'})
+                        ${escapeHtml(child.full_name)} (${(() => {
+                        const grade = child.classes?.grade_level || '';
+                        const strand = child.classes?.strand || '';
+                        const isSHS = grade.includes('11') || grade.includes('12');
+                        return isSHS && strand ? `${grade} - ${strand}` : (grade || 'N/A');
+                    })()})
                     </option>
                 `).join('')}
             </select>
@@ -124,7 +129,15 @@ async function switchChild(childId) {
 // -------------------- Realtime Subscriptions --------------------
 function setupRealtimeSubscriptions() {
     if (!currentChild) return;
-    if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+    
+    // Clean up old channel before creating new one
+    if (realtimeChannel && typeof realtimeChannel.unsubscribe === 'function') {
+        try {
+            supabase.removeChannel(realtimeChannel);
+        } catch (e) {
+            console.warn('Failed to remove old realtime channel:', e);
+        }
+    }
 
     realtimeChannel = supabase
         .channel(`parent-updates-${currentChild.id}`)
@@ -146,7 +159,15 @@ function setupRealtimeSubscriptions() {
 
 function setupNotificationRealtime() {
     if (!currentUser) return;
-    if (notificationChannel) supabase.removeChannel(notificationChannel);
+    
+    // Clean up old notification channel
+    if (notificationChannel && typeof notificationChannel.unsubscribe === 'function') {
+        try {
+            supabase.removeChannel(notificationChannel);
+        } catch (e) {
+            console.warn('Failed to remove old notification channel:', e);
+        }
+    }
 
     notificationChannel = supabase
         .channel('parent-notifications')

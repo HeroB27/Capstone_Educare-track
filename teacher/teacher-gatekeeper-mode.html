@@ -39,6 +39,20 @@
 </head>
 <body class="text-white min-h-screen flex flex-col">
     
+    <!-- Start Overlay for Camera/Audio Unlock -->
+    <div id="start-overlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center">
+        <div class="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-emerald-500/20 animate-pulse">
+            <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+        </div>
+        <h1 class="text-2xl font-black text-white mb-2">Scanner Inactive</h1>
+        <p class="text-slate-400 mb-8 text-center px-4">Click the button below to start the camera and enable scanning.</p>
+        <button id="start-scanner-btn" class="px-8 py-4 bg-emerald-500 text-white rounded-2xl font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/30 transition-all hover:scale-105">
+            Start Scanner
+        </button>
+    </div>
+    
     <!-- Header -->
     <header class="bg-slate-900/90 backdrop-blur-xl border-b border-slate-700/50 p-3 sm:p-4">
         <div class="flex items-center justify-between max-w-2xl mx-auto">

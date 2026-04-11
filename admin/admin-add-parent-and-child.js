@@ -35,6 +35,21 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function getClassLabel(classId) {
+    if (!classId) return 'Not assigned';
+    const classObj = cachedClasses.find(c => c.id == classId);
+    if (!classObj) return `Class ID ${classId}`;
+    
+    let label = classObj.grade_level || '';
+    if (classObj.department && !label.includes(classObj.department)) {
+        label += ` - ${classObj.department}`;
+    }
+    if (classObj.strand) {
+        label += ` (${classObj.strand})`;
+    }
+    return label || 'Unnamed Class';
+}
+
 function showNotification(msg, type = 'info') {
     const existing = document.getElementById('notification-toast');
     if (existing) existing.remove();
@@ -126,6 +141,10 @@ function renderParentStudentTable(parents, students, classes) {
     const paginatedParents = parents.slice(startIndex, startIndex + parentRowsPerPage);
     
     paginatedParents.forEach(parent => {
+        if (!parent || !parent.id) {
+            console.warn('Skipping parent record with missing ID:', parent);
+            return;
+        }
         const parentStudents = students.filter(s => s.parent_id === parent.id);
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 transition-colors';
@@ -181,6 +200,11 @@ function parentPrevPage() {
 
 // ==================== EDIT PARENT MODAL (WITH STUDENT MANAGEMENT) ====================
 async function openEditParentModal(parentId) {
+    if (!parentId || parentId === 'null' || parentId === 'undefined') {
+        console.error('Invalid parent ID:', parentId);
+        showNotification('Error: Parent ID missing. Refresh the page.', 'error');
+        return;
+    }
     currentEditingParentId = parentId;
     try {
         const { data: parent, error: parentErr } = await supabase
@@ -245,13 +269,14 @@ async function openEditParentModal(parentId) {
 }
 
 function renderStudentEditCard(student) {
+    const className = getClassLabel(student.class_id);
     return `
         <div class="student-edit-card bg-gray-50 rounded-xl p-4 border border-gray-200" data-student-id="${student.id}">
             <div class="flex justify-between items-start">
                 <div class="flex-1">
                     <div class="font-bold text-gray-800">${escapeHtml(student.full_name)}</div>
                     <div class="text-xs text-gray-500">LRN: ${escapeHtml(student.lrn)} | ID: ${escapeHtml(student.student_id_text || 'N/A')}</div>
-                    <div class="text-xs text-gray-500">Class: ${escapeHtml(student.class_id || 'Not assigned')}</div>
+                    <div class="text-xs text-gray-500">Class: ${escapeHtml(className)}</div>
                 </div>
                 <div class="flex gap-2">
                     <button onclick="openEditStudentModal('${student.id}')" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit Student"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
@@ -466,10 +491,22 @@ async function saveStudentChanges() {
         if (photoFile) {
             const ext = photoFile.name.split('.').pop() || 'jpg';
             const fileName = `student_${studentId}_${Date.now()}.${ext}`;
-            const { error: uploadErr } = await supabase.storage.from('student-photos').upload(fileName, photoFile);
-            if (!uploadErr) {
-                const { data: urlData } = supabase.storage.from('student-photos').getPublicUrl(fileName);
+            const { error: uploadErr } = await supabase.storage
+                .from('student-photos')
+                .upload(fileName, photoFile, {
+                    cacheControl: '3600',
+                    upsert: true
+                });
+            
+            if (uploadErr) {
+                console.error('Upload error:', uploadErr);
+                showNotification('Photo upload failed: ' + uploadErr.message, 'error');
+            } else {
+                const { data: urlData } = supabase.storage
+                    .from('student-photos')
+                    .getPublicUrl(fileName);
                 updateData.profile_photo_url = urlData.publicUrl;
+                showNotification('Photo uploaded successfully', 'success');
             }
         }
         
@@ -584,7 +621,7 @@ async function viewStudentIDCard(studentId) {
                                 </div>
                                 <div class="flex-1 flex flex-col items-center pt-4 px-3 text-center">
                                     <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden">
-                                        ${student.profile_photo_url ? `<img src="${student.profile_photo_url}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-gray-200 flex items-center justify-center text-2xl font-black text-gray-400">${student.full_name?.charAt(0) || '?'}</div>`}
+                                        ${student.profile_photo_url ? `<img src="${student.profile_photo_url}" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.full_name)}&background=f3f4f6&color=4b5563';" class="w-full h-full object-cover rounded-lg">` : `<div class="w-full h-full bg-gray-200 flex items-center justify-center text-2xl font-black text-gray-400">${student.full_name?.charAt(0) || '?'}</div>`}
                                     </div>
                                     <h2 class="text-[9px] font-black text-gray-900 uppercase">${escapeHtml(student.full_name)}</h2>
                                     <div class="w-full text-left mt-4 space-y-2 border-t pt-3">
@@ -618,9 +655,43 @@ async function viewStudentIDCard(studentId) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         if (window.lucide) lucide.createIcons();
         
+        // Attach print function to the button
         window.printCurrentIDCard = () => {
+            const container = document.querySelector('#viewIDModal .flex.gap-4');
+            if (!container) return;
             const printWindow = window.open('', '_blank');
-            printWindow.document.write(`<!DOCTYPE html><html><head><title>Student ID Card</title><style>body{font-family:'Inter',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;}</style></head><body><div class="flex gap-4">${document.querySelector('#viewIDModal .flex.gap-4').cloneNode(true).innerHTML}</div><script>window.onload=()=>setTimeout(()=>{window.print();setTimeout(()=>window.close(),500)},500);<\/script></body></html>`);
+            if (!printWindow) {
+                showNotification('Please allow pop-ups to print', 'error');
+                return;
+            }
+            const cardHtml = container.cloneNode(true).innerHTML;
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Student ID Card</title>
+                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        [class*="w-\\[2in\\]"] { width: 2in !important; }
+                        [class*="h-\\[3in\\]"] { height: 3in !important; }
+                        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        body { font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; margin: 0; padding: 20px; }
+                        .flex { display: flex !important; }
+                        .gap-4 { gap: 1rem !important; }
+                    </style>
+                </head>
+                <body>
+                    <div class="flex gap-4 justify-center flex-wrap">
+                        ${cardHtml}
+                    </div>
+                    <script>
+                        window.onload = () => { setTimeout(() => { window.print(); setTimeout(() => window.close(), 500); }, 200); };
+                    <\/script>
+                </body>
+                </html>
+            `);
             printWindow.document.close();
         };
     } catch (err) {
@@ -1036,15 +1107,76 @@ async function updateIDPreview() {
     if (window.lucide) lucide.createIcons();
 }
 
+// ==================== FIXED PRINT FUNCTION ====================
 function printIDCard() {
     const container = document.getElementById('id-preview-container');
-    if (!container?.innerHTML?.trim()) { showNotification('No ID card to print', 'error'); return; }
+    if (!container?.innerHTML?.trim()) {
+        showNotification('No ID card to print', 'error');
+        return;
+    }
+
     const printWindow = window.open('', '_blank');
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Student ID Card</title><style>body{font-family:'Inter',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;}</style></head><body><div class="flex gap-4">${container.innerHTML}</div><script>window.onload=()=>setTimeout(()=>{window.print();setTimeout(()=>window.close(),500)},500);<\/script></body></html>`);
+    if (!printWindow) {
+        showNotification('Please allow pop-ups to print ID cards', 'error');
+        return;
+    }
+
+    const cardHtml = container.innerHTML;
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Student ID Card</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                [class*="w-\\[2in\\]"] { width: 2in !important; }
+                [class*="h-\\[3in\\]"] { height: 3in !important; }
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+                body {
+                    font-family: 'Inter', sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    background: white;
+                }
+                .flex { display: flex !important; }
+                .gap-4 { gap: 1rem !important; }
+                .w-\\[2in\\], .h-\\[3in\\] {
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="flex gap-4 justify-center items-center flex-wrap">
+                ${cardHtml}
+            </div>
+            <script>
+                window.onload = () => {
+                    setTimeout(() => {
+                        window.print();
+                        setTimeout(() => window.close(), 500);
+                    }, 200);
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
     printWindow.document.close();
 }
 
-function downloadIDCard() { printIDCard(); }
+function downloadIDCard() {
+    printIDCard(); // Reuse print logic, or implement JPEG download if needed
+}
 
 async function saveParentToDB() {
     const name = document.getElementById('p-name').value.trim();
@@ -1121,3 +1253,4 @@ window.logout = () => { if (confirm('Logout?')) window.location.href = '../index
 window.filterParentsStudents = filterParentsStudents;
 window.parentNextPage = parentNextPage;
 window.parentPrevPage = parentPrevPage;
+window.getClassLabel = getClassLabel;

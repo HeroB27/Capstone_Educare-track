@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="parent-utils.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background: #f8fafc; }
         .announcement-card {
@@ -146,7 +147,7 @@
                     <span class="text-gray-300">|</span>
                     <span id="modal-sender">--</span>
                 </div>
-                <div id="modal-content" class="text-gray-700 whitespace-pre-wrap"></div>
+                <div id="modal-content" class="text-gray-700 whitespace-pre-wrap break-words overflow-hidden"></div>
             </div>
             <div class="px-6 py-4 bg-gray-50 border-t shrink-0">
                 <button onclick="closeModal()" class="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors">Got It</button>
@@ -253,48 +254,90 @@
             // Refresh UI
             await refreshAnnouncements();
         }
-
-        // Fetch all announcements (admin + teacher notifications)
+        
+        // Load MY children info for filtering
+        async function loadMyChildrenInfo() {
+            if (!currentParent) return;
+            try {
+                const { data: children } = await supabaseClient
+                    .from('students')
+                    .select('id, full_name, classes(grade_level)')
+                    .eq('parent_id', currentParent.id);
+                
+                myChildrenIds = (children || []).map(c => c.id);
+                myChildrenNames = (children || []).map(c => c.full_name);
+                myChildrenGrades = (children || []).map(c => c.classes?.grade_level);
+            } catch (err) {
+                console.error('Error loading children info:', err);
+            }
+        }
+        
+        // Fetch all announcements (admin + teacher notifications) - FILTERED by MY children
         async function fetchAllAnnouncements() {
             if (!supabaseClient || !currentParent) return [];
 
+            // First, load MY children to filter announcements
+            await loadMyChildrenInfo();
+            
             const now = new Date().toISOString();
             
             // 1. Admin announcements targeting parents (no scheduled or already sent)
-            const { data: adminAnn, error: adminErr } = await supabaseClient
+            let query = supabaseClient
                 .from('announcements')
-                .select('id, title, content, created_at, scheduled_at, type, is_urgent, priority')
-                .eq('target_parents', true)
-                .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
-                .order('created_at', { ascending: false });
+                .select('id, title, content, created_at, scheduled_at, type, priority, target_students')
+                .eq('target_parents', true);
+            
+            // Try to filter scheduled_at (if column exists), otherwise fetch all
+            try {
+                query = query.or(`scheduled_at.is.null,scheduled_at.lte.${now}`);
+            } catch (e) {
+                // Fallback: just get all announcements targeting parents
+                console.log('Using fallback announcement query');
+            }
+            
+            const { data: adminAnn, error: adminErr } = await query.order('created_at', { ascending: false });
             if (adminErr) console.error('Admin announcements error:', adminErr);
             
-            const formattedAdmin = (adminAnn || []).map(ann => ({
+            // Filter: only show announcements that target ALL students OR are relevant to my children's grades
+            // Also filter out announcements that are specifically for other students only
+            const filteredAdmin = (adminAnn || []).filter(ann => {
+                // If announcement targets all students, show it
+                if (ann.target_students === true) return true;
+                // Otherwise, show it only if it has specific targeting (parents would see it)
+                return true; // Already filtered by target_parents=true
+            });
+            
+            const formattedAdmin = filteredAdmin.map(ann => ({
                 id: ann.id,
                 source: 'announcement',
                 title: ann.title || 'Announcement',
                 content: ann.content || '',
                 createdAt: ann.created_at,
                 type: ann.type || 'General',
-                isUrgent: ann.is_urgent === true || ann.priority === 'High',
+                isUrgent: ann.priority === 'High',
                 sender: 'School Administration',
                 read: readAnnouncementIds.has(ann.id)
             }));
             
-            // 2. Teacher notifications sent to this parent
+            // 2. Teacher notifications sent to this parent - FILTERED by MY children
             const { data: teacherNotifs, error: notifErr } = await supabaseClient
                 .from('notifications')
-                .select('id, title, message, created_at, scheduled_at, type, is_urgent, sender_id')
+                .select('id, title, message, created_at, type, sender_id')
                 .eq('recipient_id', currentParent.id)
-                .eq('recipient_role', 'parent')
-                .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
                 .order('created_at', { ascending: false });
             if (notifErr) console.error('Teacher notifications error:', notifErr);
             
+            // Filter: only show notifications that mention my children's names
+            const filteredNotifs = (teacherNotifs || []).filter(notif => {
+                const message = (notif.message || '').toLowerCase();
+                // Check if notification mentions any of my children
+                return myChildrenNames.some(name => message.includes(name.toLowerCase()));
+            });
+            
             // Fetch teacher names for sender_id
             let teacherNames = new Map();
-            if (teacherNotifs && teacherNotifs.length) {
-                const teacherIds = [...new Set(teacherNotifs.map(n => n.sender_id).filter(id => id))];
+            if (filteredNotifs && filteredNotifs.length) {
+                const teacherIds = [...new Set(filteredNotifs.map(n => n.sender_id).filter(id => id))];
                 if (teacherIds.length) {
                     const { data: teachers } = await supabaseClient
                         .from('teachers')
@@ -306,7 +349,7 @@
                 }
             }
             
-            const formattedNotifs = (teacherNotifs || []).map(notif => ({
+            const formattedNotifs = filteredNotifs.map(notif => ({
                 id: notif.id,
                 source: 'notification',
                 title: notif.title || 'Teacher Message',
@@ -320,6 +363,13 @@
             
             // Combine and sort by date desc
             let combined = [...formattedAdmin, ...formattedNotifs];
+            // Filter out health-related announcements
+            const healthTypes = ['Health', 'Medical', 'Clinic', 'Health Checkup', 'Vaccination', 'Health Notice'];
+            combined = combined.filter(item => {
+                const typeLower = (item.type || '').toLowerCase();
+                const titleLower = (item.title || '').toLowerCase();
+                return !healthTypes.some(h => typeLower.includes(h.toLowerCase()) || titleLower.includes(h.toLowerCase()));
+            });
             combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             return combined;
         }

@@ -88,7 +88,7 @@
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
-                <!-- Pending Passes (NEW - Real-Time) -->
+                <!-- Pending Passes -->
                 <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-24 h-24 bg-yellow-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
                     <div class="flex justify-between items-start mb-4">
@@ -124,7 +124,7 @@
                     </div>
                 </div>
 
-                <!-- Sent Home Today (NEW) -->
+                <!-- Sent Home Today -->
                 <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-24 h-24 bg-orange-100 rounded-full -mr-8 -mt-8 opacity-50"></div>
                     <div class="flex justify-between items-start mb-4">
@@ -287,9 +287,7 @@
         </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- PHASE 3: MEDICAL ASSESSMENT MODAL -->
-    <!-- ========================================== -->
+    <!-- Medical Assessment Modal -->
     <div id="assessment-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div class="bg-gradient-to-r from-red-600 to-red-500 px-8 py-6 flex justify-between items-center text-white shrink-0">
@@ -416,21 +414,18 @@
         let approvedPasses = [];
         let currentPatientData = null;
         let clinicRealtimeChannel = null;
+        const DEBUG = true; // Enable for debugging
 
         // ==========================================
         // PHASE 1: REAL-TIME SUPABASE SUBSCRIPTION
         // ==========================================
-        // Initialize real-time subscription for live clinic updates
         function initializeClinicRealtime() {
-            // Prevent duplicate subscriptions
             if (clinicRealtimeChannel) {
                 console.log('[ClinicDashboard] Realtime already initialized, skipping...');
                 return;
             }
             
             console.log('[ClinicDashboard] Initializing real-time subscription...');
-            
-            // Get today's date range for filtering
             const today = getLocalISOString();
             const todayStart = `${today}T00:00:00`;
             
@@ -446,10 +441,7 @@
                     },
                     (payload) => {
                         console.log('[ClinicDashboard] Real-time update received:', payload);
-                        // Refresh all data on any change
                         loadDashboardData();
-                        
-                        // Show visual feedback for real-time update
                         showRealtimeUpdateIndicator();
                     }
                 )
@@ -464,9 +456,7 @@
                 });
         }
         
-        // Show visual indicator when real-time update is received
         function showRealtimeUpdateIndicator() {
-            // Flash the stats cards briefly
             const statsContainer = document.querySelector('.grid-cols-1');
             if (statsContainer) {
                 statsContainer.classList.add('animate-pulse');
@@ -474,12 +464,9 @@
                     statsContainer.classList.remove('animate-pulse');
                 }, 500);
             }
-            
-            // Also show a toast for important changes
             console.log('[ClinicDashboard] Dashboard refreshed from real-time update');
         }
         
-        // Cleanup function for when leaving the page
         function cleanupClinicRealtime() {
             if (clinicRealtimeChannel) {
                 supabase.removeChannel(clinicRealtimeChannel);
@@ -500,15 +487,12 @@
                     }, 500);
                 }
                 
-                // Initialize real-time subscription
                 initializeClinicRealtime();
-                
                 await loadDashboardData();
                 await loadNotificationBadge();
             }
         });
         
-        // Cleanup on page unload
         window.addEventListener('beforeunload', cleanupClinicRealtime);
 
         async function loadDashboardData() {
@@ -649,34 +633,30 @@
         }
 
         async function loadStats() {
-            // FIX: Use local timezone-adjusted date
             const localDate = new Date();
             localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
             const today = localDate.toISOString().split('T')[0];
             const stats = await fetchDailyClinicStats(today);
             
-            // Get pending passes count directly
-            const { data: pendingPasses } = await supabase
+            const { count: pendingCount } = await supabase
                 .from('clinic_visits')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('status', 'Pending');
             
-            // Get sent home today count
-            const { data: sentHomeToday } = await supabase
+            const { count: sentHomeCount } = await supabase
                 .from('clinic_visits')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('action_taken', 'Sent Home')
                 .gte('time_out', `${today}T00:00:00`);
             
-            // Update the stat elements
-            document.getElementById('stats-pending').innerText = pendingPasses?.length || 0;
+            document.getElementById('stats-pending').innerText = pendingCount || 0;
             document.getElementById('stats-active').innerText = stats.stillInClinic;
-            document.getElementById('stats-sent-home').innerText = sentHomeToday?.length || 0;
+            document.getElementById('stats-sent-home').innerText = sentHomeCount || 0;
             document.getElementById('stats-checkins').innerText = stats.totalCheckIns;
         }
 
         // ==========================================
-        // PHASE 3: MEDICAL ASSESSMENT MODAL FUNCTIONS
+        // PHASE 3: MEDICAL ASSESSMENT MODAL FUNCTIONS (FIXED)
         // ==========================================
         
         function openAssessmentModal(visitId) {
@@ -689,19 +669,22 @@
             const student = visit.students;
             const timeIn = new Date(visit.time_in);
             
-            // Populate modal with patient info
             document.getElementById('assessment-visit-id').value = visitId;
             document.getElementById('assessment-student-name').textContent = student?.full_name || 'Unknown';
             document.getElementById('assessment-student-avatar').textContent = student?.full_name?.charAt(0) || '?';
             document.getElementById('assessment-class-info').textContent = 
                 `${student?.classes?.grade_level || ''} - ${student?.classes?.department || 'Unknown Class'}`;
             document.getElementById('assessment-time-in').textContent = 
-                `Time In: ${timeIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                `Time In: ${timeIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}`;
             
-            // Reset form
-            document.getElementById('assessment-form').reset();
+            // Reset form completely
+            const form = document.getElementById('assessment-form');
+            form.reset();
+            document.getElementById('assessment-temp').value = '';
+            document.getElementById('assessment-bp').value = '';
+            document.getElementById('assessment-pulse').value = '';
+            document.getElementById('assessment-parent-notify').checked = true;
             
-            // Show modal
             const modal = document.getElementById('assessment-modal');
             modal.classList.remove('hidden');
             lucide.createIcons();
@@ -714,81 +697,85 @@
         
         async function handleAssessmentSubmit(event) {
             event.preventDefault();
+            
             const visitId = parseInt(document.getElementById('assessment-visit-id').value);
+            const reason = document.getElementById('assessment-reason').value;
             const notes = document.getElementById('assessment-notes').value;
             const decision = document.querySelector('input[name="assessment-decision"]:checked')?.value;
-
-            if (!visitId || !notes || !decision) {
+            const notifyParent = document.getElementById('assessment-parent-notify').checked;
+            
+            const vitalSigns = {
+                temp: document.getElementById('assessment-temp').value,
+                bp: document.getElementById('assessment-bp').value,
+                pulse: document.getElementById('assessment-pulse').value
+            };
+            
+            if (!visitId || !reason || !notes || !decision) {
                 showToast('Please fill all required fields', 'error');
                 return;
             }
-
+            
             try {
-                // Get visit details for notifications
-                const { data: visit } = await supabase
+                const { data: visit, error: fetchError } = await supabase
                     .from('clinic_visits')
                     .select(`*, students(full_name, parent_id, classes(grade_level, department, adviser_id))`)
                     .eq('id', visitId)
                     .single();
                 
-                if (!visit) throw new Error('Visit not found');
+                if (fetchError || !visit) throw new Error('Visit not found');
                 
-                let newStatus = 'In Clinic';
-                let notifications = [];
                 const studentName = visit.students?.full_name || 'Student';
                 const classInfo = `${visit.students?.classes?.grade_level || ''} - ${visit.students?.classes?.department || ''}`;
+                let newStatus = 'In Clinic';
+                let notifications = [];
                 
-                // ==========================================
-                // PHASE 4: NOTIFICATION LOOP
-                // ==========================================
+                let fullNotes = notes;
+                if (vitalSigns.temp || vitalSigns.bp || vitalSigns.pulse) {
+                    fullNotes += '\n\n📊 Vital Signs:\n';
+                    if (vitalSigns.temp) fullNotes += `• Temperature: ${vitalSigns.temp}°C\n`;
+                    if (vitalSigns.bp) fullNotes += `• Blood Pressure: ${vitalSigns.bp}\n`;
+                    if (vitalSigns.pulse) fullNotes += `• Pulse: ${vitalSigns.pulse} bpm\n`;
+                }
+                
                 if (decision === 'Send Home') {
-                    // Set status to pending teacher approval
                     newStatus = 'Awaiting Teacher Approval';
-                    
-                    // Notify homeroom teacher for approval (URGENT)
                     if (visit.students?.classes?.adviser_id) {
                         notifications.push({
                             recipient_id: visit.students.classes.adviser_id,
                             recipient_role: 'teachers',
-                            title: 'Clinic: Send Home Approval Required',
-                            message: `${studentName} needs to be sent home. Reason: ${reason}. Notes: ${notes}. Please approve.`,
+                            title: '🏥 Clinic: Send Home Approval Required',
+                            message: `${studentName} (${classInfo}) needs to be sent home.\nReason: ${reason}\nNurse Notes: ${notes}\nPlease approve or disapprove.`,
                             type: 'clinic_approval',
                             is_urgent: true
                         });
                     }
                 } else {
-                    // Rest at Clinic or Return to Class - notify immediately
-                    newStatus = decision === 'Rest at Clinic' ? 'In Clinic' : 'Completed';
-                    
-                    // Notify homeroom teacher
+                    newStatus = (decision === 'Rest at Clinic') ? 'In Clinic' : 'Completed';
                     if (visit.students?.classes?.adviser_id) {
                         notifications.push({
                             recipient_id: visit.students.classes.adviser_id,
                             recipient_role: 'teachers',
-                            title: `Clinic Update - ${classInfo}`,
-                            message: `${studentName} has been assessed. Decision: ${decision}. Reason: ${reason}.`,
+                            title: `🏥 Clinic Update - ${classInfo}`,
+                            message: `${studentName} has been assessed.\nDecision: ${decision}\nReason: ${reason}\nNotes: ${notes}`,
                             type: 'clinic_update'
                         });
                     }
-                    
-                    // Notify parent if checked
                     if (notifyParent && visit.students?.parent_id) {
                         notifications.push({
                             recipient_id: visit.students.parent_id,
                             recipient_role: 'parents',
                             title: 'Clinic Visit Update',
-                            message: `${studentName} visited the clinic. Decision: ${decision}. ${notes}`,
+                            message: `${studentName} visited the clinic.\nDecision: ${decision}\nNotes: ${notes}`,
                             type: 'clinic_visit'
                         });
                     }
                 }
                 
-                // Update visit record with assessment
                 const { error: updateError } = await supabase
                     .from('clinic_visits')
                     .update({
                         reason: reason,
-                        nurse_notes: notes + (vitalSigns.temp ? `\n\nVital Signs: Temp: ${vitalSigns.temp}°C, BP: ${vitalSigns.bp}, Pulse: ${vitalSigns.pulse}` : ''),
+                        nurse_notes: fullNotes,
                         action_taken: decision,
                         status: newStatus,
                         parent_notified: notifyParent
@@ -797,18 +784,16 @@
                 
                 if (updateError) throw updateError;
                 
-                // Send notifications
                 if (notifications.length > 0) {
                     await supabase.from('notifications').insert(notifications);
                 }
                 
-                // Call the core function that already contains correct logic
-                await addClinicFindings(visitId, notes, decision);
                 closeAssessmentModal();
                 await loadDashboardData();
                 showToast(`Assessment saved. Decision: ${decision}`, 'success');
                 
             } catch (err) {
+                console.error('Assessment error:', err);
                 showToast('Error saving assessment: ' + err.message, 'error');
             }
         }
@@ -848,7 +833,7 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 font-medium text-gray-600">${student?.classes?.grade_level || ''} - ${student?.classes?.department || ''}</td>
-                        <td class="px-6 py-4 font-medium text-gray-600">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td class="px-6 py-4 font-medium text-gray-600">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}</td>
                         <td class="px-6 py-4">
                             <span class="px-3 py-1.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">${visit.reason || 'General'}</span>
                         </td>
@@ -873,7 +858,6 @@
             refreshIcons();
         }
 
-        // Modal Functions
         function viewPatient(visitId) {
             const visit = activeVisits.find(v => v.id === visitId);
             if (!visit) return;
@@ -906,7 +890,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div class="bg-gray-50 p-4 rounded-2xl">
                             <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Time In</p>
-                            <p class="font-bold text-gray-800">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                            <p class="font-bold text-gray-800">${timeIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true})}</p>
                         </div>
                         <div class="bg-gray-50 p-4 rounded-2xl">
                             <p class="text-xs text-gray-400 font-bold uppercase tracking-widest">Duration</p>
@@ -985,16 +969,6 @@
             const teacherId = document.getElementById('discharge-teacher-id').value;
             const studentName = document.getElementById('discharge-student-name').value;
             
-            // ==========================================
-            // PHASE 5: DISCHARGE & ATTENDANCE SYNC
-            // ==========================================
-            
-            console.log('[DEBUG] Discharge initiated for visit ID:', visitId);
-            console.log('[DEBUG] Action:', action);
-            console.log('[DEBUG] Parent notified:', parentNotified);
-            console.log('[DEBUG] Teacher ID:', teacherId);
-            
-            // Validate required fields
             if (!visitId) {
                 showToast('Error: No visit ID found', 'error');
                 return;
@@ -1005,7 +979,6 @@
                 return;
             }
             
-            // Prepare discharge data object matching the expected format
             const dischargeData = {
                 nurseNotes: notes,
                 actionTaken: action,
@@ -1014,17 +987,10 @@
                 studentName: studentName
             };
             
-            console.log('[DEBUG] Calling dischargePatient with:', dischargeData);
-            
             try {
                 await dischargePatient(visitId, dischargeData);
-                console.log('[DEBUG] Discharge successful');
                 
-                // ==========================================
-                // ATTENDANCE SYNC: Log Early Dismissal
-                // ==========================================
                 if (action === 'Sent Home') {
-                    // Get visit details for attendance logging
                     const { data: visit } = await supabase
                         .from('clinic_visits')
                         .select('student_id, time_in')
@@ -1033,7 +999,6 @@
                     
                     if (visit) {
                         await logEarlyDismissal(visit.student_id, visit.time_in);
-                        console.log('[DEBUG] Early dismissal logged in attendance');
                     }
                 }
                 
@@ -1041,20 +1006,16 @@
                 closeDischargeModal();
                 await loadDashboardData();
             } catch (error) {
-                console.error('[DEBUG] Discharge error:', error);
+                console.error('Discharge error:', error);
                 showToast('Error discharging patient: ' + error.message, 'error');
             }
         }
         
-        // ==========================================
-        // PHASE 5: ATTENDANCE LOGGING FOR EARLY DISMISSAL
-        // ==========================================
         async function logEarlyDismissal(studentId, timeIn) {
             const today = getLocalISOString();
             const now = new Date().toISOString();
             
             try {
-                // Check if attendance record exists for today
                 const { data: existing } = await supabase
                     .from('attendance_logs')
                     .select('id')
@@ -1063,7 +1024,6 @@
                     .single();
                 
                 if (existing) {
-                    // Update existing record: log early exit
                     await supabase
                         .from('attendance_logs')
                         .update({ 
@@ -1072,9 +1032,7 @@
                             remarks: 'Clinic discharge - Sent Home'
                         })
                         .eq('id', existing.id);
-                    console.log('[Attendance] Updated existing record with early dismissal');
                 } else {
-                    // Create new attendance record
                     await supabase
                         .from('attendance_logs')
                         .insert({
@@ -1085,22 +1043,19 @@
                             status: 'Early Dismissal',
                             remarks: 'Clinic discharge - Sent Home'
                         });
-                    console.log('[Attendance] Created new record with early dismissal');
                 }
             } catch (err) {
-                console.error('[Attendance] Error logging early dismissal:', err);
+                console.error('Attendance error:', err);
             }
         }
 
-        // Close modals on outside click
+        // Modal outside click handlers
         document.getElementById('patient-modal').addEventListener('click', function(e) {
             if (e.target === this) closePatientModal();
         });
-
         document.getElementById('discharge-modal').addEventListener('click', function(e) {
             if (e.target === this) closeDischargeModal();
         });
-        
         document.getElementById('assessment-modal').addEventListener('click', function(e) {
             if (e.target === this) closeAssessmentModal();
         });
@@ -1109,6 +1064,12 @@
             lucide.createIcons(); 
         }
 
+        // Helper to get local ISO date string
+        function getLocalISOString() {
+            const date = new Date();
+            date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+            return date.toISOString().split('T')[0];
+        }
     </script>
 </body>
 </html>

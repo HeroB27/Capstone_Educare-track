@@ -21,6 +21,23 @@ const scanCooldowns = new Map(); // Map<studentId, timestamp>
 const ANTI_DUPLICATE_THRESHOLD = 120000; // 2 minutes (Fix #4)
 let lastToastTime = 0; // Global debounce tracker for toast notifications
 
+// ==========================================
+// FALLBACKS for missing core functions (non-recursive)
+// ==========================================
+if (typeof window.getLateThreshold !== 'function') {
+    window.getLateThreshold = async function(gradeLevel) {
+        // Default late threshold: 8:00 AM
+        return '08:00';
+    };
+}
+
+if (typeof window.getDismissalTime !== 'function') {
+    window.getDismissalTime = function(gradeLevel) {
+        // Default dismissal time: 3:00 PM
+        return '15:00';
+    };
+}
+
 // UPDATED: Standardized QR format - EDU-YYYY-LLLL-XXXX (accepts 4-6 char suffix for backward compatibility)
 const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4,6}$/i;
 
@@ -46,7 +63,7 @@ function initializeDateTime() {
     
     function updateTime() {
         const now = new Date();
-        if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US');
+        if (timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
         if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
     
@@ -84,8 +101,24 @@ function initializeScanner() {
     // Append video element to reader container
     readerElement.appendChild(video);
     
-    // Start camera
-    startCamera();
+    // Start camera only after user clicks start button
+    const startBtn = document.getElementById('start-scanner-btn');
+    const overlay = document.getElementById('start-overlay');
+    
+    if (startBtn && overlay) {
+        startBtn.addEventListener('click', () => {
+            overlay.classList.add('hidden');
+            // Unlock audio context for scanner sounds
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch(e) {}
+            startCamera();
+        });
+    } else {
+        // Fallback if overlay elements don't exist
+        startCamera();
+    }
 }
 
 /**
@@ -129,28 +162,32 @@ async function startCamera() {
  */
 function scanFrame() {
     // FIXED: Correct frame-ready check
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
         animationFrameId = requestAnimationFrame(scanFrame);
         return;
     }
     
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        // Draw current frame to canvas
-        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Get image data
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Use jsQR to detect QR code
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
-        });
-        
-        if (code) {
-            // QR code detected!
-            const now = Date.now();
-            handleQRDetection(code.data);
-        }
+    // Update canvas dimensions if video size changed
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    }
+    
+    // Draw current frame to canvas
+    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Get image data
+    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Use jsQR to detect QR code
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert'
+    });
+    
+    if (code) {
+        // QR code detected!
+        const now = Date.now();
+        handleQRDetection(code.data);
     }
     
     // Continue scanning
@@ -302,7 +339,7 @@ async function processScan(studentIdText) {
         document.getElementById('last-scan').classList.remove('hidden');
         document.getElementById('scan-student-name').innerText = studentData.full_name;
         document.getElementById('scan-grade-level').innerText = `${gradeLevel} - ${section}`;
-        document.getElementById('scan-time').innerText = new Date().toLocaleTimeString();
+        document.getElementById('scan-time').innerText = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
         document.getElementById('scan-status').innerText = scanResult.status;
         
         const actionBadge = document.getElementById('scan-action');
@@ -455,7 +492,7 @@ async function createParentNotification(student, direction, status) {
             hour12: true 
         });
         
-        const message = `Your child, ${student.full_name}, ${action} at ${time} (${status})`;
+        const message = `Your child, ${escapeHtml(student.full_name)}, ${action} at ${time} (${status})`;
         
         const { error } = await supabase
             .from('notifications')
@@ -511,13 +548,13 @@ async function notifyTeacherFromTeacherModule(student, direction, status) {
         
         if (status === 'Late') {
             title = 'Late Arrival Alert';
-            message = `${student.full_name} (${gradeLevel} - ${section}) arrived LATE at ${time}`;
+            message = `${escapeHtml(student.full_name)} (${gradeLevel} - ${section}) arrived LATE at ${time}`;
         } else if (status === 'Early Exit') {
             title = 'Early Exit Alert';
-            message = `${student.full_name} (${gradeLevel} - ${section}) left EARLY at ${time}`;
+            message = `${escapeHtml(student.full_name)} (${gradeLevel} - ${section}) left EARLY at ${time}`;
         } else if (status === 'Late Exit') {
             title = 'Late Exit Alert';
-            message = `${student.full_name} (${gradeLevel} - ${section}) left LATE at ${time}`;
+            message = `${escapeHtml(student.full_name)} (${gradeLevel} - ${section}) left LATE at ${time}`;
         }
         
         if (title && message) {
@@ -538,27 +575,6 @@ async function notifyTeacherFromTeacherModule(student, direction, status) {
     } catch (error) {
         console.error('Error in notifyTeacherFromTeacherModule:', error);
     }
-}
-
-// Get late threshold for grade level
-async function getLateThreshold(gradeLevel) {
-    // FIX: Use the centralized getLateThreshold function from general-core.js
-    // This ensures it respects the global settings configured by the admin.
-    if (typeof window.getLateThreshold === 'function') {
-        return await window.getLateThreshold(gradeLevel);
-    }
-    // Fallback if core function is not available
-    return '08:00';
-}
-
-// Get dismissal time for grade level
-async function getDismissalTime(gradeLevel) {
-    // FIX: Use the centralized getDismissalTime function from general-core.js
-    if (typeof window.getDismissalTime === 'function') {
-        return window.getDismissalTime(gradeLevel);
-    }
-    // Fallback
-    return '15:00';
 }
 
 // Compare times in HH:MM format (properly handles string comparison)
@@ -637,18 +653,6 @@ async function checkIsHoliday(dateStr) {
     }
 }
 
-// FIX: Unlock browser audio context for scanner beeps
-document.body.addEventListener('click', () => {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-    } catch (e) {
-        // Audio not supported or already unlocked
-    }
-}, { once: true }); // Only runs once per page load
-
 // Stop scanner when page unloads
 window.addEventListener('beforeunload', () => {
     if (animationFrameId) {
@@ -694,3 +698,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+}

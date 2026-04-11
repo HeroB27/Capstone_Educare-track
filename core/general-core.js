@@ -52,8 +52,10 @@ function logout() {
     }
 }
 
-// EXPORT logout to window for global access (FIX: buttons in HTML couldn't call logout)
+// EXPORT to window for global access
 window.logout = logout;
+window.checkSession = checkSession;
+window.setWelcomeMessage = setWelcomeMessage;
 
 // 3. Dynamic Greeting (Optional Helper)
 // UPDATED: Now includes time-based greetings and weekend greetings
@@ -80,6 +82,96 @@ function setWelcomeMessage(elementId, user) {
         }
         
         el.innerText = `${greeting}, ${user.full_name.split(' ')[0]}`;
+    }
+}
+
+// ==========================================
+// GRADE SCHEDULE CACHING ENGINE
+// ==========================================
+// Caches grade_schedules table in sessionStorage to reduce DB queries
+async function loadGradeSchedulesCache() {
+    try {
+        if (!sessionStorage.getItem('educare_grade_schedules')) {
+            const { data, error } = await supabase.from('grade_schedules').select('*');
+            if (error) throw error;
+            
+            const scheduleMap = {};
+            data.forEach(schedule => {
+                scheduleMap[schedule.grade_level] = schedule;
+            });
+            sessionStorage.setItem('educare_grade_schedules', JSON.stringify(scheduleMap));
+        }
+        return JSON.parse(sessionStorage.getItem('educare_grade_schedules'));
+    } catch (err) {
+        console.error("Failed to load grade schedules:", err);
+        return null;
+    }
+}
+
+// Pre-load schedules on page load
+document.addEventListener('DOMContentLoaded', loadGradeSchedulesCache);
+
+// ==========================================
+// ATTENDANCE TIME LOGIC
+// ==========================================
+
+// Maps complex grade strings to database schedule keys
+function mapGradeToScheduleKey(gradeLevel) {
+    if (!gradeLevel) return 'jhs';
+    const gl = gradeLevel.toUpperCase();
+    if (gl.includes('KINDER') || gl === 'K') return 'kinder';
+    if (['1', '2', '3'].some(g => gl.includes(g))) return 'grades1_3';
+    if (['4', '5', '6'].some(g => gl.includes(g))) return 'grades4_6';
+    if (['7', '8', '9', '10'].some(g => gl.includes(g))) return 'jhs';
+    if (['11', '12'].some(g => gl.includes(g))) return 'shs';
+    return 'jhs';
+}
+
+// 5. Check if Student is Late
+// scanTime: time string (HH:MM), gradeLevel: string, threshold: time string (optional)
+function isLate(scanTime, gradeLevel, customThreshold = null) {
+    const threshold = customThreshold || '08:15';
+    
+    // Parse times
+    const [scanHour, scanMin] = scanTime.split(':').map(Number);
+    const [thresholdHour, thresholdMin] = threshold.split(':').map(Number);
+    
+    const scanMinutes = scanHour * 60 + scanMin;
+    const thresholdMinutes = thresholdHour * 60 + thresholdMin;
+    
+    return scanMinutes > thresholdMinutes;
+}
+
+// UPDATED: Reads from grade_schedules table via cache
+async function getLateThreshold(gradeLevel) {
+    try {
+        const schedules = await loadGradeSchedulesCache();
+        if (schedules) {
+            const key = mapGradeToScheduleKey(gradeLevel);
+            if (schedules[key] && schedules[key].late_threshold) {
+                return schedules[key].late_threshold;
+            }
+        }
+        return '08:00';
+    } catch (err) {
+        console.error('Error getting late threshold:', err);
+        return '08:00';
+    }
+}
+
+// UPDATED: Reads from grade_schedules table via cache
+async function getDismissalTime(gradeLevel) {
+    try {
+        const schedules = await loadGradeSchedulesCache();
+        if (schedules) {
+            const key = mapGradeToScheduleKey(gradeLevel);
+            if (schedules[key] && schedules[key].end_time) {
+                return schedules[key].end_time;
+            }
+        }
+        return '16:00';
+    } catch (err) {
+        return '16:00';
     }
 }
 
@@ -125,37 +217,7 @@ async function checkIsHoliday(date) {
     }
 }
 
-// 5. Get Late Threshold for Grade Level
-// Returns the threshold time string (HH:MM) for a given grade level
-let thresholdSettings = null; // Cache settings to reduce DB calls
-
-async function getLateThreshold(gradeLevel) {
-    try {
-        // Fetch and cache settings if not already loaded
-        if (!thresholdSettings) {
-            const { data, error } = await supabase.from('settings').select('setting_key, setting_value');
-            if (error) throw error;
-            thresholdSettings = data.reduce((acc, setting) => {
-                acc[setting.setting_key] = setting.setting_value;
-                return acc;
-            }, {});
-        }
-
-        // Determine which threshold to use based on grade level
-        if (gradeLevel.includes('Kinder')) return thresholdSettings['threshold_kinder'] || '11:30';
-        if (['1', '2', '3'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g1_g3'] || '08:00';
-        if (['4', '5', '6'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g4_g6'] || '08:00';
-        if (['7', '8', '9', '10'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_g7_g10'] || '08:00';
-        if (['11', '12'].some(g => gradeLevel.includes(g))) return thresholdSettings['threshold_shs'] || '07:30';
-
-        return '08:00'; // Default fallback
-    } catch (err) {
-        console.error('Error getting late threshold:', err);
-        return '08:00'; // Default fallback
-    }
-}
-
-// 6. Check if Student is Late
+// 5. Check if Student is Late
 // scanTime: time string (HH:MM), gradeLevel: string, threshold: time string (optional)
 function isLate(scanTime, gradeLevel, customThreshold = null) {
     const threshold = customThreshold || '08:15';
@@ -388,7 +450,7 @@ function formatTime(timeStr) {
     // Handle if it's a full datetime string
     if (timeStr.includes('T')) {
         const date = new Date(timeStr);
-        return date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
     }
     
     // Handle just time string (HH:MM:SS or HH:MM)
@@ -603,9 +665,13 @@ window.logTeacherAction = async function(actionType, details, targetId, targetTa
 // Export functions to window for global access
 window.formatDate = formatDate;
 window.formatTime = formatTime;
-// Also export showNotification for modules that might need it
 window.showNotification = showNotification;
 window.showConfirm = window.showConfirm;
 window.showModal = window.showModal;
+window.loadGradeSchedulesCache = loadGradeSchedulesCache;
+window.getLateThreshold = getLateThreshold;
+window.getDismissalTime = getDismissalTime;
+window.isLate = isLate;
+window.isEarlyExit = isEarlyExit;
 
-console.log('[GeneralCore] Phase 1 utilities loaded + logTeacherAction stub: formatDate, formatTime, getSettings, showConfirm, showModal');
+console.log('[GeneralCore] Utilities loaded: formatDate, formatTime, getSettings, showConfirm, showModal, grade schedule caching');

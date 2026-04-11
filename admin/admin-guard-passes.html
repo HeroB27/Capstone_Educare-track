@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guard Passes - Admin Portal</title>
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../assets/supabase-client.js"></script>
+    <script src="../core/general-core.js"></script>
+    <script src="admin-core.js" defer></script>
+    <script src="admin-guard-passes.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-violet-50 via-white to-violet-50 min-h-screen flex text-gray-800">
+
+    <!-- Sidebar -->
+    <aside class="w-64 m-4 rounded-3xl bg-violet-900 text-white flex flex-col shadow-2xl shrink-0">
+        <div class="p-8 flex items-center gap-3 border-b border-white/10">
+            <div class="bg-white/10 p-2 rounded-xl"><i data-lucide="graduation-cap" class="w-6 h-6 text-violet-300"></i></div>
+            <span class="text-2xl font-black tracking-tighter">EDUCARE</span>
+        </div>
+        
+        <nav class="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
+            <a href="admin-dashboard.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a href="admin-user-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="users" class="w-5 h-5"></i> User Management
+            </a>
+            <a href="admin-class-management.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="book-open" class="w-5 h-5"></i> Class Management
+            </a>
+            <a href="admin-data-analytics.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Data Analytics
+            </a>
+            <a href="admin-announcements.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="megaphone" class="w-5 h-5"></i> Announcements
+            </a>
+            <a href="admin-settings.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings Hub
+            </a>
+            <a href="admin-grade-schedules.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="users-round" class="w-5 h-5"></i> Grade Schedules
+            </a>
+            <a href="admin-guard-passes.html" class="flex items-center gap-3 px-4 py-3 bg-violet-800/50 border-l-4 border-white text-white rounded-r-xl font-bold transition-all">
+                <i data-lucide="door-exit" class="w-5 h-5"></i> Guard Passes
+            </a>
+            <a href="admin-calendar.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
+            </a>
+            <div class="pt-4 border-t border-white/10 mt-4">
+                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
+                </a>
+                <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all">
+                    <i data-lucide="palette" class="w-5 h-5"></i> ID Template
+                </a>
+            </div>
+        </nav>
+        
+        <div class="p-6 border-t border-white/10">
+            <button onclick="logout()" class="flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-500 rounded-2xl transition-all">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        
+        <!-- Header -->
+        <header class="h-[80px] bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 shrink-0">
+            <h2 class="text-2xl font-black text-gray-900 tracking-tight">Guard Passes</h2>
+            <div class="flex items-center gap-4">
+                <span id="admin-name" class="font-medium text-gray-600">Loading...</span>
+                <div class="h-12 w-12 bg-gradient-to-br from-violet-400 to-violet-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-violet-500/30">A</div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-auto p-8">
+            
+            <!-- Filters -->
+            <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mb-6">
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                        <input type="date" id="filter-date" class="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                        <select id="filter-status" class="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-violet-500">
+                            <option value="">All</option>
+                            <option value="Active">Active</option>
+                            <option value="Used">Used</option>
+                            <option value="Cancelled">Cancelled</option>
+                            <option value="Expired">Expired</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button onclick="loadAllPasses()" class="px-4 py-2 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 transition">
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Total Passes</p>
+                    <p id="stat-total" class="text-3xl font-black text-gray-900 mt-1">0</p>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Active</p>
+                    <p id="stat-active" class="text-3xl font-black text-yellow-600 mt-1">0</p>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Used</p>
+                    <p id="stat-used" class="text-3xl font-black text-green-600 mt-1">0</p>
+                </div>
+                <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Cancelled</p>
+                    <p id="stat-cancelled" class="text-3xl font-black text-red-600 mt-1">0</p>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-800">All Guard Passes</h3>
+                    <button onclick="exportToCSV()" class="px-4 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition flex items-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Student Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Grade Level</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">ID Number</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Reason</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Time Out</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Approved By</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Issued</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passes-table-body" class="divide-y divide-gray-100">
+                            <tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = checkSession('admins');
+            if (user) {
+                const nameEl = document.getElementById('admin-name');
+                if (nameEl) nameEl.innerText = user.full_name || 'Admin';
+            }
+            
+            document.getElementById('filter-date').value = new Date().toISOString().split('T')[0];
+            await loadAllPasses();
+            
+            if (window.lucide) window.lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

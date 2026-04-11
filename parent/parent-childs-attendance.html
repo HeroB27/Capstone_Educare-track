@@ -68,7 +68,7 @@
             <!-- Summary Stats -->
             <div class="bg-white/80 backdrop-blur-xl rounded-2xl p-5 border border-gray-200/50 mb-4">
                 <h3 class="font-bold text-gray-800 mb-4">This Month Summary</h3>
-                <div class="grid grid-cols-4 gap-2 text-center">
+                <div class="grid grid-cols-5 gap-2 text-center">
                     <div class="bg-green-50 rounded-xl p-3">
                         <p id="stat-present" class="text-xl font-bold text-green-600">--</p>
                         <p class="text-xs text-green-600">Present</p>
@@ -76,6 +76,10 @@
                     <div class="bg-yellow-50 rounded-xl p-3">
                         <p id="stat-late" class="text-xl font-bold text-yellow-600">--</p>
                         <p class="text-xs text-yellow-600">Late</p>
+                    </div>
+                    <div class="bg-orange-50 rounded-xl p-3">
+                        <p id="stat-halfday" class="text-xl font-bold text-orange-600">--</p>
+                        <p class="text-xs text-orange-600">Half Day</p>
                     </div>
                     <div class="bg-red-50 rounded-xl p-3">
                         <p id="stat-absent" class="text-xl font-bold text-red-600">--</p>
@@ -120,11 +124,15 @@
             <div class="flex flex-wrap gap-3 mb-4 text-xs">
                 <div class="flex items-center gap-2">
                     <div class="w-5 h-5 bg-green-500 rounded-lg"></div>
-                    <span class="text-gray-600">On Time</span>
+                    <span class="text-gray-600">Present</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <div class="w-5 h-5 bg-yellow-500 rounded-lg"></div>
                     <span class="text-gray-600">Late</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 bg-orange-500 rounded-lg"></div>
+                    <span class="text-gray-600">Half Day</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <div class="w-5 h-5 bg-red-500 rounded-lg"></div>
@@ -133,10 +141,6 @@
                 <div class="flex items-center gap-2">
                     <div class="w-5 h-5 bg-purple-500 rounded-lg"></div>
                     <span class="text-gray-600">Excused</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <div class="w-5 h-5 bg-gray-200 rounded-lg"></div>
-                    <span class="text-gray-600">No Class</span>
                 </div>
             </div>
 

@@ -66,7 +66,6 @@ async function loadAnnouncements() {
                     <div class="flex flex-wrap gap-1">
                         ${ann.target_teachers ? '<span class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black tracking-widest rounded-md border border-violet-100">TEACHERS</span>' : ''}
                         ${ann.target_parents ? '<span class="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black tracking-widest rounded-md border border-blue-100">PARENTS</span>' : ''}
-                        ${ann.target_students ? '<span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[9px] font-black tracking-widest rounded-md border border-emerald-100">STUDENTS</span>' : ''}
                         ${ann.target_clinic ? '<span class="px-2.5 py-1 bg-red-50 text-red-700 text-[9px] font-black tracking-widest rounded-md border border-red-100">CLINIC</span>' : ''}
                         ${ann.target_guards ? '<span class="px-2.5 py-1 bg-amber-50 text-amber-700 text-[9px] font-black tracking-widest rounded-md border border-amber-100">GUARDS</span>' : ''}
                     </div>
@@ -104,11 +103,16 @@ async function editAnnouncement(id) {
         document.getElementById('annType').value = data.type || 'General';
         document.getElementById('annContent').value = data.content;
 
-        document.getElementById('targetTeachers').checked = !!data.target_teachers;
-        document.getElementById('targetParents').checked = !!data.target_parents;
-        document.getElementById('targetStudents').checked = !!data.target_students;
-        document.getElementById('targetClinic').checked = !!data.target_clinic;
-        document.getElementById('targetGuards').checked = !!data.target_guards;
+        // Set checkbox states safely using querySelector
+        const setChecked = (id, val) => {
+            const element = document.querySelector(`#${id}`);
+            if (element) element.checked = val;
+        };
+        
+        setChecked('targetTeachers', !!data.target_teachers);
+        setChecked('targetParents', !!data.target_parents);
+        setChecked('targetClinic', !!data.target_clinic);
+        setChecked('targetGuards', !!data.target_guards);
 
         if (data.scheduled_at) {
             const dt = new Date(data.scheduled_at);
@@ -224,11 +228,14 @@ function closeAnnouncementModal() {
     document.getElementById('annTitle').value = '';
     document.getElementById('annType').value = 'General';
     document.getElementById('annContent').value = '';
-    document.getElementById('targetTeachers').checked = false;
-    document.getElementById('targetParents').checked = false;
-    document.getElementById('targetStudents').checked = false;
-    document.getElementById('targetClinic').checked = false;
-    document.getElementById('targetGuards').checked = false;
+    
+    // Clear checkboxes using querySelector for safer element selection
+    const checkboxes = ['targetTeachers', 'targetParents', 'targetClinic', 'targetGuards'];
+    checkboxes.forEach(id => {
+        const element = document.querySelector(`#${id}`);
+        if (element) element.checked = false;
+    });
+    
     document.getElementById('annDate').value = '';
     document.getElementById('annTime').value = '';
     document.getElementById('annModalTitle').textContent = 'Post Broadcast';
@@ -255,7 +262,6 @@ async function saveAnnouncement(event) {
         
         const targetTeachers = document.getElementById('targetTeachers')?.checked || false;
         const targetParents = document.getElementById('targetParents')?.checked || false;
-        const targetStudents = document.getElementById('targetStudents')?.checked || false;
         const targetClinic = document.getElementById('targetClinic')?.checked || false;
         const targetGuards = document.getElementById('targetGuards')?.checked || false;
         
@@ -263,7 +269,7 @@ async function saveAnnouncement(event) {
             showNotification('Please fill in title and content', 'error');
             return;
         }
-        if (!targetTeachers && !targetParents && !targetStudents && !targetClinic && !targetGuards) {
+        if (!targetTeachers && !targetParents && !targetClinic && !targetGuards) {
             showNotification('Please select at least one target audience', 'error');
             return;
         }
@@ -281,7 +287,6 @@ async function saveAnnouncement(event) {
             priority: annType === 'Emergency' ? 'High' : 'Normal',
             target_teachers: targetTeachers,
             target_parents: targetParents,
-            target_students: targetStudents,
             target_clinic: targetClinic,
             target_guards: targetGuards,
             posted_by_admin_id: adminUser.id
@@ -295,13 +300,34 @@ async function saveAnnouncement(event) {
         }
         
         let error;
-        if (annId) {
-            ({ error } = await supabase.from('announcements').update(payload).eq('id', annId));
-        } else {
-            ({ error } = await supabase.from('announcements').insert([payload]));
+        let retries = 3;
+        let lastError = null;
+        
+        while (retries > 0) {
+            if (annId) {
+                ({ error } = await supabase.from('announcements').update(payload).eq('id', annId));
+            } else {
+                ({ error } = await supabase.from('announcements').insert([payload]));
+            }
+            
+            if (!error) break;
+            lastError = error;
+            retries--;
+            if (retries > 0) {
+                console.log(`Retrying... (${retries} attempts left)`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
         
-        if (error) throw error;
+        if (error) {
+            let errorMsg = 'Action failed. Please try again.';
+            if (error.message && error.message.includes('fetch')) {
+                errorMsg = 'Network error. Please check your connection and try again.';
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
+            throw new Error(errorMsg);
+        }
         
         showNotification(annId ? 'Broadcast updated!' : 'Broadcast posted successfully!', 'success');
         closeAnnouncementModal();

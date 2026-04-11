@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/attendance-utils.js"></script>
     <script src="teacher-core.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f0f9ff 0%, #e6f0fa 100%); }
@@ -73,6 +74,9 @@
             </div>
             <button id="save-attendance-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2">
                 <i data-lucide="save" class="w-4 h-4"></i> Save All Changes
+            </button>
+            <button id="export-subject-table-csv-btn" onclick="exportSubjectTableToCSV()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i> Export CSV
             </button>
         </div>
 

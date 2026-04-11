@@ -96,32 +96,30 @@ async function startCamera() {
  * Scan each video frame for QR codes
  */
 function scanFrame() {
-    if (!video || !video.readyState === video.HAVE_ENOUGH_DATA) {
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
         animationFrameId = requestAnimationFrame(scanFrame);
         return;
     }
     
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        // Draw current frame to canvas
-        canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Draw current frame to canvas
+    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Get image data
+    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Use jsQR to detect QR code
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert'
+    });
+    
+    if (code) {
+        // QR code detected!
+        const now = Date.now();
         
-        // Get image data
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Use jsQR to detect QR code
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
-        });
-        
-        if (code) {
-            // QR code detected!
-            const now = Date.now();
-            
-            // Check cooldown to prevent duplicate scans
-            if (now - lastScanTime > SCAN_COOLDOWN) {
-                lastScanTime = now;
-                handleScanSuccess(code.data);
-            }
+        // Check cooldown to prevent duplicate scans
+        if (now - lastScanTime > SCAN_COOLDOWN) {
+            lastScanTime = now;
+            handleScanSuccess(code.data);
         }
     }
     

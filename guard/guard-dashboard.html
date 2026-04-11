@@ -302,8 +302,6 @@
 
     <!-- Guard Core Script -->
     <script src="guard-core.js"></script>
-    <!-- Phase 4: Advanced Attendance Tracking -->
-    <script src="guard-phase4.js"></script>
 
     <script>
         // Mobile Sidebar Toggle Function
@@ -459,9 +457,9 @@
                     }
                     
                     if (log.time_out) {
-                        displayTime = new Date(log.time_out).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        displayTime = new Date(log.time_out).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
                     } else {
-                        displayTime = log.time_in ? new Date(log.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+                        displayTime = log.time_in ? new Date(log.time_in).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '--:--:--';
                     }
                     
                     return `

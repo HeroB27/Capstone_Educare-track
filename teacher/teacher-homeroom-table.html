@@ -7,18 +7,15 @@
     <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/attendance-utils.js"></script>
     <script src="teacher-core.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #f0f9ff 0%, #e6f0fa 100%); }
-        .attendance-cell {
-            width: 90px;
-            transition: all 0.15s ease;
-            cursor: pointer;
-        }
+        .attendance-cell { width: 100%; transition: all 0.15s ease; cursor: pointer; }
         .attendance-cell:hover { transform: scale(0.96); filter: brightness(0.96); }
         .disabled-cell { cursor: not-allowed; opacity: 0.7; }
         .disabled-cell:hover { transform: none; filter: none; }
@@ -26,21 +23,11 @@
         .stat-badge { transition: all 0.2s; }
         .month-nav-btn { transition: all 0.2s; }
         .month-nav-btn:hover { background: #f1f5f9; transform: translateY(-2px); }
-        .student-stats-cell {
-            background: #f8fafc;
-            font-weight: 600;
-            text-align: center;
-            border-right: 1px solid #e2e8f0;
-        }
-        .warning-banner {
-            background: linear-gradient(90deg, #fef3c7, #ffedd5);
-            border-left: 6px solid #f59e0b;
-        }
+        .student-stats-cell { background: #f8fafc; font-weight: 600; text-align: center; border-right: 1px solid #e2e8f0; }
+        .warning-banner { background: linear-gradient(90deg, #fef3c7, #ffedd5); border-left: 6px solid #f59e0b; }
     </style>
 </head>
 <body class="min-h-screen">
-
-    <!-- Top Navigation -->
     <div class="bg-white/90 backdrop-blur-md sticky top-0 z-20 border-b border-gray-200 shadow-sm">
         <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
@@ -57,7 +44,6 @@
     </div>
 
     <main class="max-w-7xl mx-auto px-6 py-8">
-        <!-- Month Selector & Save -->
         <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6 flex flex-wrap items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <button id="prev-month" class="month-nav-btn p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
@@ -67,9 +53,11 @@
             <button id="save-attendance-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2">
                 <i data-lucide="save" class="w-4 h-4"></i> Save All Changes
             </button>
+            <button id="export-csv-btn" onclick="exportHomeroomAttendanceToCSV()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+            </button>
         </div>
 
-        <!-- Warning Banner (hidden initially) -->
         <div id="absence-warning-banner" class="warning-banner hidden rounded-xl p-4 mb-6 flex items-center justify-between shadow-md">
             <div class="flex items-center gap-3">
                 <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-600"></i>
@@ -81,8 +69,7 @@
             <button onclick="document.getElementById('absence-warning-banner').classList.add('hidden')" class="text-amber-600 hover:text-amber-800">✕</button>
         </div>
 
-        <!-- Stats Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-5 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-5 mb-8">
             <div class="bg-white rounded-2xl border-l-8 border-green-500 shadow-sm p-4 flex justify-between items-center">
                 <div><p class="text-xs text-gray-400 font-bold uppercase">Present (Month)</p><p id="stat-present" class="text-3xl font-black text-gray-800">0</p></div>
                 <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center"><i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i></div>
@@ -95,6 +82,10 @@
                 <div><p class="text-xs text-gray-400 font-bold uppercase">Absent (Month)</p><p id="stat-absent" class="text-3xl font-black text-gray-800">0</p></div>
                 <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i data-lucide="x-circle" class="w-6 h-6 text-red-600"></i></div>
             </div>
+            <div class="bg-white rounded-2xl border-l-8 border-amber-500 shadow-sm p-4 flex justify-between items-center">
+                <div><p class="text-xs text-gray-400 font-bold uppercase">Half-Day (Month)</p><p id="stat-halfday" class="text-3xl font-black text-gray-800">0</p></div>
+                <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center"><i data-lucide="minus-circle" class="w-6 h-6 text-amber-600"></i></div>
+            </div>
             <div class="bg-white rounded-2xl border-l-8 border-blue-500 shadow-sm p-4 flex justify-between items-center">
                 <div><p class="text-xs text-gray-400 font-bold uppercase">Excused (Month)</p><p id="stat-excused" class="text-3xl font-black text-gray-800">0</p></div>
                 <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"><i data-lucide="file-text" class="w-6 h-6 text-blue-600"></i></div>
@@ -105,9 +96,8 @@
             </div>
         </div>
 
-        <!-- Attendance Table -->
         <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-            <div class="table-container">
+            <div class="table-container overflow-x-auto">
                 <table class="min-w-full">
                     <thead id="table-header" class="bg-gray-50 border-b-2 border-gray-200 sticky top-0 z-10"></thead>
                     <tbody id="table-body" class="divide-y divide-gray-100"></tbody>

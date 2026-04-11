@@ -160,7 +160,7 @@ function renderIDList(list) {
             <td class="px-8 py-5">
                 <div class="flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center font-black text-xs uppercase overflow-hidden shrink-0 shadow-sm">
-                        ${s.profile_photo_url ? `<img src="${s.profile_photo_url}" class="w-full h-full object-cover">` : s.full_name.charAt(0)}
+                        ${s.profile_photo_url ? `<img src="${s.profile_photo_url}" onerror="this.onerror=null;this.outerHTML='<div class=\\'w-full h-full flex items-center justify-center font-black text-xs\\'>"+s.full_name.charAt(0)+"</div>'" class="w-full h-full object-cover">` : s.full_name.charAt(0)}
                     </div>
                     <div>
                         <p class="font-bold text-gray-800 text-sm leading-tight mb-0.5">${s.full_name}</p>
@@ -281,6 +281,52 @@ async function viewID(dbId) {
     if (window.lucide) lucide.createIcons();
 }
 
+// Print the current ID from the drawer
+function printCurrentID() {
+    const previewContainer = document.getElementById('idPreviewContainer');
+    if (!previewContainer?.innerHTML?.trim()) {
+        showNotification('No ID card to print', 'error');
+        return;
+    }
+    
+    const content = previewContainer.innerHTML;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('Please allow pop-ups to print ID cards', 'error');
+        return;
+    }
+    
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Student ID Card</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                [class*="w-\\[2in\\]"] { width: 2in !important; }
+                [class*="h-\\[3in\\]"] { height: 3in !important; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                body { font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; margin: 0; padding: 20px; }
+                .flex { display: flex !important; }
+                .gap-6 { gap: 1.5rem !important; }
+                .w-\\[2in\\], .h-\\[3in\\] { page-break-inside: avoid; break-inside: avoid; }
+            </style>
+        </head>
+        <body>
+            <div class="flex gap-6 justify-center items-center flex-wrap">
+                ${content}
+            </div>
+            <script>
+                window.onload = () => { setTimeout(() => { window.print(); setTimeout(() => window.close(), 500); }, 200); };
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
 // Close View ID Drawer
 function closeViewIdDrawer() {
     document.getElementById('viewIdDrawer').classList.add('translate-x-full');
@@ -363,7 +409,7 @@ function generatePortraitIDHTML(u, config) {
             </div>
             <div class="flex-1 flex flex-col items-center pt-4 px-3 text-center">
                 <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden">
-                    <img src="${u.profile_photo_url ? u.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=f3f4f6&color=4b5563`}" class="w-full h-full object-cover rounded-lg ${u.profile_photo_url ? 'object-top' : ''}">
+                    <img src="${u.profile_photo_url ? u.profile_photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=f3f4f6&color=4b5563`}" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=f3f4f6&color=4b5563';" class="w-full h-full object-cover rounded-lg ${u.profile_photo_url ? 'object-top' : ''}">
                 </div>
                 <h2 class="text-[9px] font-black text-gray-900 uppercase leading-tight mt-2">${u.full_name}</h2>
                 <div class="w-full text-left mt-4 space-y-2 border-t pt-3 border-gray-50">
@@ -468,3 +514,4 @@ window.filterStudents = filterStudents;
 window.prevPage = prevPage;
 window.nextPage = nextPage;
 window.goToPage = goToPage;
+window.printCurrentID = printCurrentID;

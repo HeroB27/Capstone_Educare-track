@@ -57,7 +57,7 @@ async function calculateAttendanceStats(studentId, year, month) {
 
     const { data: logs, error } = await supabase
         .from('attendance_logs')
-        .select('log_date, status')
+        .select('log_date, status, morning_absent, afternoon_absent')
         .eq('student_id', studentId)
         .gte('log_date', start)
         .lte('log_date', end);
@@ -69,25 +69,39 @@ async function calculateAttendanceStats(studentId, year, month) {
     const schoolDaysList = getSchoolDaysList(start, end, today);
     const schoolDays = schoolDaysList.filter(d => !holidaySet.has(d));
 
-    let present = 0, late = 0, excused = 0, absent = 0;
+    let present = 0, late = 0, excused = 0, absent = 0, halfday = 0;
     for (const date of schoolDays) {
         const log = logs?.find(l => l.log_date === date);
         if (!log) {
             absent++;
         } else {
             const status = (log.status || '').toLowerCase();
-            if (status === 'late') late++;
-            else if (status === 'excused') excused++;
-            else if (status === 'absent') absent++;
-            else present++;
+            const morningAbsent = log.morning_absent || false;
+            const afternoonAbsent = log.afternoon_absent || false;
+            
+            // Check for half-day (one session absent, one present)
+            const isHalfDay = morningAbsent !== afternoonAbsent;
+            const isFullDayAbsent = morningAbsent && afternoonAbsent;
+            
+            if (isHalfDay) {
+                halfday++;
+            } else if (status === 'late') {
+                late++;
+            } else if (status === 'excused') {
+                excused++;
+            } else if (status === 'absent' || isFullDayAbsent) {
+                absent++;
+            } else {
+                present++;
+            }
         }
     }
 
     const percentage = schoolDays.length > 0
-        ? Math.round(((present + excused) / schoolDays.length) * 100)
+        ? Math.round(((present + excused + (halfday * 0.5)) / schoolDays.length) * 100)
         : 100;
 
-    return { present, late, excused, absent, percentage, totalSchoolDays: schoolDays.length };
+    return { present, late, excused, absent, halfday, percentage, totalSchoolDays: schoolDays.length };
 }
 
 function formatTime(timeStr) {

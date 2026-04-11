@@ -1182,7 +1182,7 @@ async function notifyParentChildInClinic(parentId, studentName) {
                 recipient_role: 'parent',
                 title: 'Child in Clinic',
                 message: `Your child ${studentName} is currently at the school clinic.`,
-                type: 'clinic_alert'
+                type: 'clinic'
             }]);
         
         if (error) {
@@ -1555,7 +1555,8 @@ function formatTime(dateString) {
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
     });
 }
 

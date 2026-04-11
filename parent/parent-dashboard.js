@@ -57,11 +57,11 @@ async function loadTodaySchedule() {
     todaySchedule = data;
     container.innerHTML = data.map(subj => `
         <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-            <div>
-                <p class="font-medium text-gray-800">${escapeHtml(subj.subject_name)}</p>
-                <p class="text-xs text-gray-500">${escapeHtml(subj.teachers?.full_name || 'Teacher')}</p>
+            <div class="flex-1 min-w-0">
+                <p class="font-medium text-gray-800 truncate">${escapeHtml(subj.subject_name)}</p>
+                <p class="text-xs text-gray-500 truncate">${escapeHtml(subj.teachers?.full_name || 'Teacher')}</p>
             </div>
-            <p class="text-sm font-mono text-gray-600">
+            <p class="text-sm font-mono text-gray-600 whitespace-nowrap ml-2">
                 ${formatTime(subj.schedule_time_start)} – ${formatTime(subj.schedule_time_end)}
             </p>
         </div>
@@ -96,21 +96,67 @@ async function loadClinicHistory() {
 
     container.innerHTML = data.map(visit => `
         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-            <div>
-                <p class="font-medium text-gray-800">${escapeHtml(visit.reason || 'Clinic visit')}</p>
+            <div class="flex-1 min-w-0">
+                <p class="font-medium text-gray-800 truncate">${escapeHtml(visit.reason || 'Clinic visit')}</p>
                 <p class="text-xs text-gray-500">${formatDate(visit.time_in)} at ${formatTime(visit.time_in)}</p>
             </div>
-            <span class="px-2 py-1 rounded-lg text-xs font-bold bg-${visit.status === 'Completed' ? 'green' : 'yellow'}-100 text-${visit.status === 'Completed' ? 'green' : 'yellow'}-700">
+            <span class="px-2 py-1 rounded-lg text-xs font-bold bg-${visit.status === 'Completed' ? 'green' : 'yellow'}-100 text-${visit.status === 'Completed' ? 'green' : 'yellow'}-700 whitespace-nowrap ml-2">
                 ${escapeHtml(visit.status)}
             </span>
         </div>
     `).join('');
 }
 
+// Show all clinic visits in modal
+async function showAllClinicVisits() {
+    const modal = document.getElementById('clinic-modal');
+    const content = document.getElementById('clinic-modal-content');
+    if (!modal || !content || !window.currentChild) return;
+    
+    modal.classList.remove('hidden');
+    
+    // Fetch all clinic visits (no limit)
+    const { data } = await supabase
+        .from('clinic_visits')
+        .select('*')
+        .eq('student_id', window.currentChild.id)
+        .order('time_in', { ascending: false });
+    
+    if (!data?.length) {
+        content.innerHTML = '<div class="text-center py-8 text-gray-400">No clinic visits</div>';
+        return;
+    }
+    
+    content.innerHTML = data.map(visit => `
+        <div class="p-4 bg-gray-50 rounded-xl">
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <p class="font-bold text-gray-800">${escapeHtml(visit.reason || 'Clinic visit')}</p>
+                    <p class="text-xs text-gray-500">${formatDate(visit.time_in)} at ${formatTime(visit.time_in)}</p>
+                </div>
+                <span class="px-2 py-1 rounded-lg text-xs font-bold bg-${visit.status === 'Completed' ? 'green' : 'yellow'}-100 text-${visit.status === 'Completed' ? 'green' : 'yellow'}-700">
+                    ${escapeHtml(visit.status)}
+                </span>
+            </div>
+            ${visit.nurse_notes ? `<p class="text-sm text-gray-600 mt-2"><span class="font-medium">Nurse notes:</span> ${escapeHtml(visit.nurse_notes)}</p>` : ''}
+            ${visit.action_taken ? `<p class="text-sm text-gray-600 mt-1"><span class="font-medium">Action:</span> ${escapeHtml(visit.action_taken)}</p>` : ''}
+            ${visit.time_out ? `<p class="text-xs text-gray-400 mt-2">Discharged: ${formatTime(visit.time_out)}</p>` : ''}
+        </div>
+    `).join('');
+}
+
+function closeClinicModal() {
+    const modal = document.getElementById('clinic-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
 async function loadAttendanceSummary() {
+    const percentageEl = document.getElementById('summary-percentage');
+    if (!percentageEl) return;
+    
     const now = new Date();
     const stats = await calculateAttendanceStats(window.currentChild.id, now.getFullYear(), now.getMonth());
-    document.getElementById('summary-percentage').innerText = `${stats.percentage}%`;
+    percentageEl.innerText = `${stats.percentage}%`;
 
     const ctx = document.getElementById('summary-pie-chart')?.getContext('2d');
     if (!ctx) return;
@@ -144,6 +190,8 @@ async function loadNotificationsPreview() {
 
 function updateNotificationsPreview() {
     const container = document.getElementById('notifications-preview');
+    if (!container) return; // Element not found, exit
+    
     const notifs = window.notificationsPreview || [];
     if (!notifs.length) {
         container.innerHTML = '<div class="text-center py-6 text-gray-400">No recent alerts</div>';
@@ -151,9 +199,9 @@ function updateNotificationsPreview() {
     }
     container.innerHTML = notifs.map(n => `
         <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-            <span class="text-2xl">${n.type === 'clinic' ? '🏥' : n.type === 'attendance' ? '📋' : '🔔'}</span>
-            <div class="flex-1">
-                <p class="font-medium text-gray-800">${escapeHtml(n.title)}</p>
+            <span class="text-2xl flex-shrink-0">${n.type === 'clinic' ? '🏥' : n.type === 'attendance' ? '📋' : '🔔'}</span>
+            <div class="flex-1 min-w-0">
+                <p class="font-medium text-gray-800 truncate">${escapeHtml(n.title)}</p>
                 <p class="text-xs text-gray-500 truncate">${escapeHtml(n.message)}</p>
                 <p class="text-xs text-gray-400 mt-1">${getRelativeTime(n.created_at)}</p>
             </div>
@@ -166,9 +214,24 @@ function updateUI() {
     const childClassEl = document.getElementById('child-class');
     const currentChildName = document.getElementById('current-child-name');
     const childAvatarHeader = document.getElementById('child-avatar-header');
+    const parentNameHeader = document.getElementById('parent-name-header');
+    
+    const grade = window.currentChild.classes?.grade_level || '';
+    const strand = window.currentChild.classes?.strand || '';
+    const dept = window.currentChild.classes?.department || '';
+    const isSHS = grade.includes('11') || grade.includes('12');
+    const classDisplay = isSHS && strand ? `${grade} - ${strand}` : (grade || dept);
+    
+    // Update parent name in header
+    if (parentNameHeader && window.currentUser) {
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+        parentNameHeader.textContent = `${greeting}, ${window.currentUser.full_name?.split(' ')[0] || 'Parent'}`;
+    }
+    
     if (childNameEl) childNameEl.innerText = window.currentChild.full_name;
     if (currentChildName) currentChildName.innerText = window.currentChild.full_name;
-    if (childClassEl) childClassEl.innerText = `${window.currentChild.classes?.grade_level || ''} ${window.currentChild.classes?.department || ''}`;
+    if (childClassEl) childClassEl.innerText = classDisplay;
     if (childAvatarHeader) childAvatarHeader.innerText = getInitials(window.currentChild.full_name);
     
     const alertDiv = document.getElementById('clinic-alert');
@@ -195,3 +258,5 @@ function escapeHtml(str) {
 
 window.refreshDashboard = refreshDashboard;
 window.loadClinicHistory = loadClinicHistory;
+window.showAllClinicVisits = showAllClinicVisits;
+window.closeClinicModal = closeClinicModal;

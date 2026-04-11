@@ -71,6 +71,8 @@ async function renderCalendar() {
     for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(year, month, d);
         const dateStr = getLocalDateString(date);
+        const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const isToday = dateStr === todayStr;
         const holiday = holidaysMap.get(dateStr);
         
@@ -78,19 +80,23 @@ async function renderCalendar() {
         dayDiv.className = 'calendar-day p-2 text-center border border-gray-100';
         dayDiv.style.minHeight = '80px';
         
-        // Apply background based on holiday type
+        // Apply background based on holiday type OR school day (Mon-Fri)
         if (holiday) {
             if (holiday.is_suspended) {
                 dayDiv.classList.add('bg-red-50', 'border-red-200');
             } else {
                 dayDiv.classList.add('bg-yellow-50', 'border-yellow-200');
             }
+        } else if (isWeekend) {
+            // Weekend - light gray background
+            dayDiv.classList.add('bg-gray-100');
         } else {
-            dayDiv.classList.add('bg-white');
+            // Regular school day (Mon-Fri) - light green background (matches legend!)
+            dayDiv.classList.add('bg-green-50', 'border-green-200');
         }
         
         if (isToday) {
-            dayDiv.classList.add('ring-2', 'ring-green-400', 'ring-inset');
+            dayDiv.classList.add('ring-2', 'ring-green-500', 'ring-inset');
         }
         
         // Day number

@@ -119,7 +119,7 @@ function renderAnnouncements(announcements) {
     container.innerHTML = announcements.map(announcement => {
         const date = new Date(announcement.created_at);
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         
         const priorityClass = announcement.priority === 'high' 
             ? 'border-l-yellow-500' 

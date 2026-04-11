@@ -86,7 +86,7 @@ async function saveThresholds(event) {
     const btn = event.currentTarget;
     setLoading(btn, true);
 
-    const keys = ['am_gate_open', 'am_late_threshold', 'am_absent_threshold', 'pm_dismissal_time', 'pm_early_cutoff'];
+    const keys = ['am_gate_open', 'am_late_threshold', 'am_absent_threshold', 'pm_dismissal_time', 'pm_early_cutoff', 'school_start_time', 'school_end_time'];
     
     try {
         await performBulkUpsert(keys);
