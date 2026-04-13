@@ -72,12 +72,76 @@ async function checkIsHoliday(dateStr, gradeLevel = null) {
             const studentGrade = gradeLevel.toString().toUpperCase();
             if (!affected.includes(studentGrade)) isSuspended = false;
         }
-        let timeCoverage = null;
-        if (data.time_coverage === 'Morning Only') timeCoverage = 'Morning';
-        else if (data.time_coverage === 'Afternoon Only') timeCoverage = 'Afternoon';
-        else if (data.time_coverage === 'Full Day') timeCoverage = 'Full Day';
+        let timeCoverage = 'Full Day';
+        if (data.time_coverage === 'Morning Only' || data.time_coverage === 'Morning') timeCoverage = 'Morning';
+        else if (data.time_coverage === 'Afternoon Only' || data.time_coverage === 'Afternoon') timeCoverage = 'Afternoon';
         return { isHoliday: true, isSuspended, description: data.description, timeCoverage };
     } catch (e) { return { isHoliday: false, isSuspended: false }; }
+}
+
+// Check if today is a weekend (Saturday or Sunday)
+function isWeekend(dateStr = null) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    return day === 0 || day === 6;
+}
+
+// Check suspensions table for active suspensions
+async function checkSuspension(gradeLevel = null) {
+    try {
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const todayStr = localDate.toISOString().split('T')[0];
+        const dayOfWeek = localDate.getDay();
+        
+        // Check if weekend (Saturday or Sunday)
+        if (dayOfWeek === 0) return { isSuspended: true, type: 'weekend', message: 'CAMPUS CLOSED (Sunday)' };
+        if (dayOfWeek === 6) return { isSuspended: true, type: 'weekend', message: 'CAMPUS CLOSED (Saturday)' };
+        
+        // Check suspensions table for pre-planned suspensions
+        const { data: suspensions, error } = await supabase
+            .from('suspensions')
+            .select('title, description, start_date, end_date, suspension_type, affected_grades, saturday_enabled')
+            .eq('is_active', true)
+            .lte('start_date', todayStr)
+            .gte('end_date', todayStr);
+        
+        if (error) throw error;
+        
+        if (suspensions && suspensions.length > 0) {
+            const sus = suspensions[0];
+            
+            // Check if this suspension applies to the student's grade
+            if (gradeLevel && sus.affected_grades && Array.isArray(sus.affected_grades) && sus.affected_grades.length > 0) {
+                const affectedGrades = sus.affected_grades.map(g => g.toString().toUpperCase());
+                const studentGrade = gradeLevel.toString().toUpperCase();
+                if (!affectedGrades.includes(studentGrade)) {
+                    return { isSuspended: false, type: null, message: null };
+                }
+            }
+            
+            // Check if it's a half-day suspension
+            let timeCoverage = 'Full Day';
+            if (sus.suspension_type) {
+                const typeLower = sus.suspension_type.toLowerCase();
+                if (typeLower.includes('morning')) timeCoverage = 'Morning';
+                else if (typeLower.includes('afternoon')) timeCoverage = 'Afternoon';
+            }
+            
+            return {
+                isSuspended: true,
+                type: 'suspension',
+                message: sus.title,
+                description: sus.description,
+                timeCoverage: timeCoverage
+            };
+        }
+        
+        return { isSuspended: false, type: null, message: null };
+    } catch (e) {
+        console.error('Error checking suspension:', e);
+        return { isSuspended: false, type: null, message: null };
+    }
 }
 
 function compareTimes(time1, time2) {
@@ -272,10 +336,34 @@ async function processScan(studentIdText) {
         if (student.status !== 'Enrolled') throw new Error('Student record is not active.');
 
         const gradeLevel = student.classes?.grade_level || null;
+        
+        // FIRST: Check if today is a weekend (Saturday/Sunday)
+        if (isWeekend(today)) {
+            showToast('No classes today (Weekend)', 'error');
+            return;
+        }
+        
+        // SECOND: Check suspensions table for school suspensions
+        const suspensionCheck = await checkSuspension(gradeLevel);
+        if (suspensionCheck.isSuspended && suspensionCheck.type === 'weekend') {
+            showToast(suspensionCheck.message, 'error');
+            return;
+        }
+        if (suspensionCheck.isSuspended && suspensionCheck.type === 'suspension') {
+            const hour = new Date().getHours();
+            if (!(suspensionCheck.timeCoverage === 'Morning' && hour >= 12) && 
+                !(suspensionCheck.timeCoverage === 'Afternoon' && hour < 12)) {
+                showToast(`School suspended: ${suspensionCheck.message}`, 'error');
+                return;
+            }
+        }
+        
+        // THIRD: Check holidays table for holidays/suspensions
         const holidayCheck = await checkIsHoliday(today, gradeLevel);
         const hour = new Date().getHours();
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
-            if (!(holidayCheck.timeCoverage === 'Morning' && hour >= 12) && !(holidayCheck.timeCoverage === 'Afternoon' && hour < 12)) {
+            if (!(holidayCheck.timeCoverage === 'Morning' && hour >= 12) && 
+                !(holidayCheck.timeCoverage === 'Afternoon' && hour < 12)) {
                 showToast(`School suspended: ${holidayCheck.description}`, 'error');
                 return;
             }

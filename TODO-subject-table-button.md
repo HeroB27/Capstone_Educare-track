@@ -1,1 +1,0 @@
-# Task: Add Table Button to teacher-subject-attendance.html&#10;&#10;## Steps:&#10;1. [ ] Create TODO.md (current)&#10;2. [ ] Edit teacher/teacher-subject-attendance.html to add button in header right div&#10;3. [ ] Update TODO.md with progress&#10;4. [ ] Test in browser&#10;5. [ ] Mark complete&#10;

@@ -410,10 +410,10 @@
                 }
                 
                 container.innerHTML = data.map(ann => `
-                    <div class="announcement-card bg-gray-50 rounded-2xl p-5 border-l-4 ${ann.priority === 'High' ? 'border-l-red-500 bg-red-50/30' : 'border-l-blue-500'} transition-all">
+                    <div class="announcement-card bg-gray-50 rounded-2xl p-5 border-l-4 ${(ann.priority || '').toLowerCase() === 'high' ? 'border-l-red-500 bg-red-50/30' : 'border-l-blue-500'} transition-all">
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="font-bold text-gray-800 text-lg">${escapeHtml(ann.title || 'Announcement')}</h4>
-                            ${ann.priority === 'High' ? '<span class="urgent-badge text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full">URGENT</span>' : ''}
+                            ${(ann.priority || '').toLowerCase() === 'high' ? '<span class="urgent-badge text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full">URGENT</span>' : ''}
                         </div>
                         <p class="text-gray-600 text-sm mb-3 whitespace-pre-line">${escapeHtml(ann.content || ann.message || 'No content')}</p>
                         ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mb-3 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : ''}
@@ -457,7 +457,7 @@
                         <div class="flex justify-between text-xs text-gray-400">
                             <span>📅 ${formatDate(ann.created_at)}</span>
                             ${ann.scheduled_at ? `<span>⏰ Scheduled: ${formatDate(ann.scheduled_at)}</span>` : ''}
-                            ${ann.priority === 'High' ? '<span class="text-red-500 font-semibold">⚠️ Urgent</span>' : ''}
+                            ${(ann.priority || '').toLowerCase() === 'high' ? '<span class="text-red-500 font-semibold">⚠️ Urgent</span>' : ''}
                         </div>
                     </div>
                 `).join('');
@@ -493,7 +493,7 @@
                         ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mb-3 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : ''}
                         <div class="flex justify-between text-xs">
                             <span class="text-amber-600 font-medium">📅 Scheduled: ${formatDate(ann.scheduled_at)}</span>
-                            ${ann.priority === 'High' ? '<span class="text-red-500">Urgent</span>' : ''}
+                            ${(ann.priority || '').toLowerCase() === 'high' ? '<span class="text-red-500">Urgent</span>' : ''}
                         </div>
                     </div>
                 `).join('');

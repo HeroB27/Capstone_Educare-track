@@ -140,11 +140,11 @@ function renderAnnouncements(announcements) {
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         
-        const priorityClass = announcement.type === 'Emergency' 
+        const priorityClass = (announcement.priority || '').toLowerCase() === 'high' 
             ? 'border-l-red-500' 
             : 'border-l-gray-300';
         
-        const badgeColor = announcement.type === 'Emergency' ? 'bg-red-100 text-red-600' : 
+        const badgeColor = (announcement.priority || '').toLowerCase() === 'high' ? 'bg-red-100 text-red-600' : 
                           announcement.type === 'Event' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600';
         
         const priorityBadge = `<span class="px-2 py-1 ${badgeColor} text-xs rounded-lg font-black uppercase tracking-wider">${announcement.type || 'General'}</span>`;
@@ -217,7 +217,7 @@ async function loadAnnouncementsFiltered(category) {
                 .eq('target_clinic', true);
         
         if (category === 'important') {
-            query = query.eq('priority', 'high');
+            query = query.eq('priority', 'High');
         }
         
         const { data: announcements, error } = await query

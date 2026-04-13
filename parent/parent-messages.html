@@ -238,7 +238,7 @@
                     category: 'announcement',
                     icon: '📢',
                     sender: ann.admins?.full_name || 'Administrator',
-                    isUrgent: ann.priority === 'High',
+                    isUrgent: (ann.priority || '').toLowerCase() === 'high',
                     imageUrl: ann.image_url,
                     read: readMessageIds.has(`ann_${ann.id}`)
                 }));

@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAnnouncements() {
+    const now = new Date().toISOString();
     const { data, error } = await supabase
         .from('announcements')
         .select('*, admins(full_name), teachers(full_name)')
         .or('target_parents.eq.true, target_students.eq.true')
+        .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
         .order('created_at', { ascending: false })
         .limit(30);
     if (error) console.error(error);

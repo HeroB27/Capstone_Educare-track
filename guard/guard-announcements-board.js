@@ -55,6 +55,7 @@ async function loadAnnouncements() {
     const container = document.getElementById('announcements-grid');
     
     try {
+        const now = new Date().toISOString();
         const { data: announcements, error } = await supabase
             .from('announcements')
             .select(`
@@ -62,6 +63,7 @@ async function loadAnnouncements() {
                 admins(full_name)
             `)
             .eq('target_guards', true)
+            .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
             .order('created_at', { ascending: false })
             .limit(20);
         
@@ -121,11 +123,11 @@ function renderAnnouncements(announcements) {
         const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         
-        const priorityClass = announcement.priority === 'high' 
+        const priorityClass = (announcement.priority || '').toLowerCase() === 'high' 
             ? 'border-l-yellow-500' 
             : 'border-l-gray-600';
         
-        const priorityBadge = announcement.priority === 'high'
+        const priorityBadge = (announcement.priority || '').toLowerCase() === 'high'
             ? '<span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-lg">Important</span>'
             : '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded-lg">General</span>';
         
@@ -191,7 +193,7 @@ async function loadAnnouncementsFiltered(category) {
             .eq('target_guards', true);
         
         if (category === 'important') {
-            query = query.eq('priority', 'high');
+            query = query.eq('priority', 'High');
         }
         
         const { data: announcements, error } = await query.order('created_at', { ascending: false });
