@@ -139,6 +139,7 @@ function renderAnnouncements(announcements) {
                 </div>
                 <h3 class="font-bold text-white text-lg mb-2">${escapeHtml(announcement.title)}</h3>
                 <p class="text-gray-400 text-sm line-clamp-2">${escapeHtml(announcement.content)}</p>
+                ${announcement.image_url ? `<img src="${announcement.image_url}" class="mt-3 mx-auto max-w-full h-auto rounded-lg border border-gray-600 max-h-48 object-contain">` : ''}
                 <div class="mt-4 flex items-center gap-2 text-xs text-gray-500">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>

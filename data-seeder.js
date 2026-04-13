@@ -47,10 +47,13 @@ function updateStep() {
 }
 
 // ---------- Helper Functions ----------
+// FIXED: Use timestamp + random for uniqueness (prevents duplicate IDs)
 function generateOfficialID(prefix, year, identifierSource) {
     const cleanSource = String(identifierSource).replace(/\D/g, '');
     const last4 = cleanSource.slice(-4).padStart(4, '0');
-    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const timestamp = Date.now().toString(36).slice(-2);
+    const random = Math.random().toString(36).substring(2, 4).toUpperCase();
+    const suffix = timestamp + random;
     return `${prefix}-${year}-${last4}-${suffix}`;
 }
 
@@ -255,13 +258,15 @@ async function seedSubjectLoads() {
         // each subject gets a random teacher (among all teachers)
         subjects.forEach((subj, idx) => {
             const teacher = seededData.teachers[Math.floor(Math.random() * seededData.teachers.length)];
+            const isMorning = idx % 2 === 0; // Even subjects = morning, odd = afternoon
             subjectLoads.push({
                 class_id: cls.id,
                 subject_name: subj,
                 teacher_id: teacher.id,
                 schedule_time_start: `0${8 + idx}:00:00`,
                 schedule_time_end: `0${9 + idx}:00:00`,
-                schedule_days: idx % 2 === 0 ? 'MWF' : 'TTH'
+                schedule_days: isMorning ? 'MWF' : 'TTH',
+                time_slot: isMorning ? 'morning' : 'afternoon'
             });
         });
     }
@@ -336,7 +341,7 @@ async function seedStudents() {
 }
 
 async function seedAttendanceAndExcuses() {
-    log('Generating attendance logs (Aug 2025 - Apr 2026) and excuse letters...');
+    log('Generating attendance logs (Aug 2025 - Apr 2026) with half-day support and excuse letters...');
     const allLogs = [];
     const excuseLetters = [];
 
@@ -347,34 +352,61 @@ async function seedAttendanceAndExcuses() {
             let timeIn = null;
             let timeOut = null;
             let isExcused = false;
+            let morningAbsent = false;
+            let afternoonAbsent = false;
 
-            if (rand < 0.70) { // 70% Present
+            // Updated distribution: Present(65%), Late(10%), HalfDay AM(5%), HalfDay PM(5%), Absent(10%), Excused(5%)
+            if (rand < 0.65) { 
+                // Present - full day
                 status = 'Present';
                 timeIn = new Date(day);
                 timeIn.setHours(7, Math.floor(Math.random() * 30), 0);
                 timeOut = new Date(day);
                 timeOut.setHours(16, 0, 0);
-            } else if (rand < 0.82) { // 12% Late
+            } else if (rand < 0.75) { 
+                // Late - full day
                 status = 'Late';
                 timeIn = new Date(day);
                 timeIn.setHours(8, Math.floor(Math.random() * 45) + 15, 0);
                 timeOut = new Date(day);
                 timeOut.setHours(16, 0, 0);
-            } else if (rand < 0.92) { // 10% Absent
+            } else if (rand < 0.80) {
+                // Half-Day AM - absent in morning, present in afternoon
+                status = 'Half Day';
+                morningAbsent = true;
+                afternoonAbsent = false;
+                timeIn = new Date(day);
+                timeIn.setHours(12, 30, 0); // Comes in afternoon
+                timeOut = new Date(day);
+                timeOut.setHours(16, 0, 0);
+            } else if (rand < 0.85) {
+                // Half-Day PM - present in morning, absent in afternoon
+                status = 'Half Day';
+                morningAbsent = false;
+                afternoonAbsent = true;
+                timeIn = new Date(day);
+                timeIn.setHours(7, Math.floor(Math.random() * 30), 0);
+                timeOut = new Date(day);
+                timeOut.setHours(11, 30, 0); // Leaves morning
+            } else if (rand < 0.95) { 
+                // Absent - full day
                 status = 'Absent';
-            } else { // 8% Excused
+            } else { 
+                // Excused - full day
                 status = 'Excused';
                 isExcused = true;
             }
 
-            // Create attendance log
+            // Create attendance log with half-day fields
             allLogs.push({
                 student_id: student.id,
                 log_date: day.toISOString().split('T')[0],
                 time_in: timeIn ? timeIn.toISOString() : null,
                 time_out: timeOut ? timeOut.toISOString() : null,
                 status: status,
-                remarks: status === 'Absent' ? 'No scan' : (status === 'Excused' ? 'Parent notified' : '')
+                morning_absent: morningAbsent,
+                afternoon_absent: afternoonAbsent,
+                remarks: status === 'Absent' ? 'No scan' : (status === 'Excused' ? 'Parent notified' : (status === 'Half Day' ? 'Half day absence' : ''))
             });
 
             // Create excuse letter for excused absences
@@ -449,6 +481,59 @@ async function seedExtras() {
     log(`✓ Extras seeded`, 'success');
 }
 
+// ================== TRUNCATE FUNCTION ==================
+// Clears existing seeded data to allow clean reseed
+async function truncateSeededTables() {
+    log('🗑️ Clearing existing seeded data (keeping system tables)...', 'info');
+    
+    // Order matters due to foreign keys - delete child tables first
+    try {
+        // Attendance-related (child tables)
+        await supabase.from('attendance_logs').delete().neq('id', 0);
+        log('  ✓ Cleared attendance_logs', 'info');
+        await supabase.from('excuse_letters').delete().neq('id', 0);
+        log('  ✓ Cleared excuse_letters', 'info');
+        await supabase.from('clinic_visits').delete().neq('id', 0);
+        log('  ✓ Cleared clinic_visits', 'info');
+        await supabase.from('announcements').delete().neq('id', 0);
+        log('  ✓ Cleared announcements', 'info');
+        
+        // Students (has foreign keys to parents)
+        await supabase.from('students').delete().neq('id', 0);
+        log('  ✓ Cleared students', 'info');
+        
+        // Subject loads (depends on classes)
+        await supabase.from('subject_loads').delete().neq('id', 0);
+        log('  ✓ Cleared subject_loads', 'info');
+        
+        // Classes (depends on teachers)
+        await supabase.from('classes').delete().neq('id', 0);
+        log('  ✓ Cleared classes', 'info');
+        
+        // Parents (no dependencies)
+        await supabase.from('parents').delete().neq('id', 0);
+        log('  ✓ Cleared parents', 'info');
+        
+        // Staff/Users (base tables)
+        await supabase.from('teachers').delete().neq('id', 0);
+        log('  ✓ Cleared teachers', 'info');
+        await supabase.from('guards').delete().neq('id', 0);
+        log('  ✓ Cleared guards', 'info');
+        await supabase.from('clinic_staff').delete().neq('id', 0);
+        log('  ✓ Cleared clinic_staff', 'info');
+        await supabase.from('admins').delete().neq('id', 0);
+        log('  ✓ Cleared admins', 'info');
+        
+        // Holidays (upserted, but clear for clean slate)
+        await supabase.from('holidays').delete().neq('id', 0);
+        log('  ✓ Cleared holidays', 'info');
+        
+        log('✅ All seeded tables cleared - ready for fresh seeding', 'success');
+    } catch (error) {
+        log('Warning during truncation: ' + error.message, 'error');
+    }
+}
+
 // ================== MAIN SEQUENCE ==================
 async function startSeeding() {
     const confirmCheck = document.getElementById('confirmClear');
@@ -466,7 +551,14 @@ async function startSeeding() {
 
     try {
         log('=== STARTING SEEDING (REAL NAMES, BAGUIO ADDRESSES, FULL SY ATTENDANCE) ===', 'info');
-        let p = updateStep(); updateProgress(p, 'Admins...'); await seedAdmins();
+        
+        // TRUNCATE FIRST - Clear existing data for clean reseed
+        log('=== STEP 0: CLEARING EXISTING DATA ===', 'info');
+        let p = updateStep(); updateProgress(p, 'Clearing existing data...');
+        await truncateSeededTables();
+        
+        // Now seed fresh data
+        p = updateStep(); updateProgress(p, 'Admins...'); await seedAdmins();
         p = updateStep(); updateProgress(p, 'Clinic Staff...'); await seedClinicStaff();
         p = updateStep(); updateProgress(p, 'Guards...'); await seedGuards();
         p = updateStep(); updateProgress(p, 'Teachers...'); await seedTeachers();

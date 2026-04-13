@@ -1,5 +1,5 @@
 // teacher-homeroom-table.js - Month view + per-student stats + YTD absences + DepEd warning + gate scan lock
-// UPDATED: SF2-style AM/PM cells per date (half-day support)
+// UPDATED: Uses school-year-core.js for dynamic dates
 let classId = null;
 let students = [];
 let attendanceData = {};       // { studentId: { date: { id, status, time_in, morning_absent, afternoon_absent } } }
@@ -44,11 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     document.getElementById('month-year-display').innerText = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    let schoolYearStartYear = currentMonth >= 8 ? currentYear : currentYear - 1;
-    schoolYearStart = `${schoolYearStartYear}-08-01`;
+    // Use school-year-core.js for dynamic school year start
+    schoolYearStart = await getSchoolYearStart();
 
     await loadMonthData();
     await loadYtdAbsences();
@@ -139,37 +136,51 @@ function renderTable() {
     const dates = getAllDatesInMonth();
     const studentStats = students.map(student => {
         let present = 0, late = 0, absent = 0, halfday = 0, excused = 0;
+        let totalPresentFraction = 0;      // accumulates (AM_present + PM_present)/2 per day
+        let schoolDaysCount = 0;
+
         for (let date of dates) {
             if (holidaysMap.has(date)) continue;
             if (isWeekend(date)) continue;
             if (date > todayStr) continue;
-            
-            const original = attendanceData[student.id]?.[date] || { status: 'Absent' };
+            schoolDaysCount++;
+
+            const original = attendanceData[student.id]?.[date] || {};
             const pending = pendingUpdates[student.id]?.[date];
-            const status = pending?.status !== undefined ? pending.status : original.status;
-            const morningAbsent = pending?.morning_absent !== undefined ? pending.morning_absent : (original.morning_absent || false);
-            const afternoonAbsent = pending?.afternoon_absent !== undefined ? pending.afternoon_absent : (original.afternoon_absent || false);
-            
-            const isFullDayAbsent = morningAbsent && afternoonAbsent;
-            const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
-            
-            if (isHalfDay) {
-                halfday++;
-            } else if (isFullDayAbsent) {
+
+            // Get period statuses (PR / LTE / ABS / EXC)
+            const morningStatus = pending?.morning_status ?? (original.morning_absent ? 'ABS' : 'PR');
+            const afternoonStatus = pending?.afternoon_status ?? (original.afternoon_absent ? 'ABS' : 'PR');
+
+            const amPresent = morningStatus !== 'ABS';
+            const pmPresent = afternoonStatus !== 'ABS';
+            const dayFraction = (amPresent + pmPresent) / 2;
+            totalPresentFraction += dayFraction;
+
+            // Count whole‑day stats for display (optional, but kept for UI consistency)
+            const amAbsent = morningStatus === 'ABS';
+            const pmAbsent = afternoonStatus === 'ABS';
+            if (amAbsent && pmAbsent) {
                 absent++;
+            } else if (amAbsent || pmAbsent) {
+                halfday++;
             } else {
-                switch (status) {
-                    case 'On Time': present++; break;
-                    case 'Late': late++; break;
-                    case 'Absent': absent++; break;
-                    case 'Excused': excused++; break;
-                    default: present++;
-                }
+                // Both periods present – check for late/excused
+                const hasLate = (morningStatus === 'LTE' || afternoonStatus === 'LTE');
+                const hasExcused = (morningStatus === 'EXC' || afternoonStatus === 'EXC');
+                if (hasLate && !hasExcused) late++;
+                else if (hasExcused && !hasLate) excused++;
+                else if (hasLate && hasExcused) excused++;  // excused takes precedence
+                else present++;
             }
         }
-        const totalSchoolDays = dates.filter(d => !holidaysMap.has(d) && !isWeekend(d) && d <= todayStr).length;
-        const attendanceRate = totalSchoolDays > 0 ? Math.round(((present + late + halfday * 0.5) / totalSchoolDays) * 100) : 0;
+
+        // Attendance rate based on actual period‑by‑period presence
+        const attendanceRate = schoolDaysCount > 0
+            ? Math.round((totalPresentFraction / schoolDaysCount) * 100)
+            : 0;
         const ytdAbs = ytdAbsences.get(student.id) || 0;
+
         return { student, present, late, absent, halfday, excused, attendanceRate, ytdAbs };
     });
 
@@ -239,31 +250,40 @@ function renderTable() {
                 continue;
             }
 
-            const originalRecord = attendanceData[student.id]?.[date] || { status: 'Absent', time_in: null, morning_absent: false, afternoon_absent: false };
+            const originalRecord = attendanceData[student.id]?.[date] || { status: '', time_in: null, morning_absent: false, afternoon_absent: false };
             const isLocked = !!originalRecord.time_in;
             
             const pending = pendingUpdates[student.id]?.[date];
-            const morningAbsent = pending?.morning_absent !== undefined ? pending.morning_absent : (originalRecord.morning_absent || false);
-            const afternoonAbsent = pending?.afternoon_absent !== undefined ? pending.afternoon_absent : (originalRecord.afternoon_absent || false);
+            // Get period-specific status or fall back to absent flags
+            const morningStatus = pending?.morning_status || (originalRecord.morning_absent ? 'ABS' : 'PR');
+            const afternoonStatus = pending?.afternoon_status || (originalRecord.afternoon_absent ? 'ABS' : 'PR');
             
-            const amBgColor = morningAbsent ? 'bg-red-500' : 'bg-green-500';
-            const pmBgColor = afternoonAbsent ? 'bg-red-500' : 'bg-green-500';
-            const amDisplay = morningAbsent ? 'ABS' : 'PR';
-            const pmDisplay = afternoonAbsent ? 'ABS' : 'PR';
+            // Get color based on status
+            function getPeriodColor(status) {
+                switch (status) {
+                    case 'PR': return 'bg-green-500';
+                    case 'LTE': return 'bg-orange-500';
+                    case 'ABS': return 'bg-red-500';
+                    case 'EXC': return 'bg-blue-500';
+                    default: return 'bg-green-500';
+                }
+            }
+            const amBgColor = getPeriodColor(morningStatus);
+            const pmBgColor = getPeriodColor(afternoonStatus);
             
             // Allow editing even if locked (gate scanner may malfunction)
             const lockedStyle = isLocked ? 'ring-2 ring-yellow-400' : '';
 
             cellsHtml += `<td class="border-b px-0.5 py-1 text-center border-l border-gray-200">
                             <div class="attendance-cell ${amBgColor} text-white rounded py-1 text-[8px] font-bold ${lockedStyle}"
-                                 data-student="${student.id}" data-date="${date}" data-period="am" data-current="${morningAbsent}" data-locked="${isLocked}">
-                                ${amDisplay}
+                                 data-student="${student.id}" data-date="${date}" data-period="am" data-status="${morningStatus}" data-locked="${isLocked}">
+                                ${morningStatus}
                             </div>
                           </td>
                           <td class="border-b px-0.5 py-1 text-center border-r border-gray-200">
                             <div class="attendance-cell ${pmBgColor} text-white rounded py-1 text-[8px] font-bold ${lockedStyle}"
-                                 data-student="${student.id}" data-date="${date}" data-period="pm" data-current="${afternoonAbsent}" data-locked="${isLocked}">
-                                ${pmDisplay}
+                                 data-student="${student.id}" data-date="${date}" data-period="pm" data-status="${afternoonStatus}" data-locked="${isLocked}">
+                                ${afternoonStatus}
                             </div>
                           </td>`;
         }
@@ -301,12 +321,12 @@ function renderTable() {
             const studentId = cell.dataset.student;
             const date = cell.dataset.date;
             const period = cell.dataset.period;
-            const currentValue = cell.dataset.current === 'true';
-            const nextValue = !currentValue;
+            const currentStatus = cell.dataset.status || 'PR';
+            const nextStatus = getNextPeriodStatus(currentStatus);
             
             if (!pendingUpdates[studentId]) pendingUpdates[studentId] = {};
             if (!pendingUpdates[studentId][date]) {
-                const original = attendanceData[studentId]?.[date] || { status: 'Absent', morning_absent: false, afternoon_absent: false };
+                const original = attendanceData[studentId]?.[date] || { status: '', morning_absent: false, afternoon_absent: false };
                 pendingUpdates[studentId][date] = {
                     status: original.status || 'On Time',
                     morning_absent: original.morning_absent || false,
@@ -314,10 +334,13 @@ function renderTable() {
                 };
             }
             
+            // Update period-specific status and absence flags
             if (period === 'am') {
-                pendingUpdates[studentId][date].morning_absent = nextValue;
+                pendingUpdates[studentId][date].morning_status = nextStatus;
+                pendingUpdates[studentId][date].morning_absent = (nextStatus === 'ABS');
             } else if (period === 'pm') {
-                pendingUpdates[studentId][date].afternoon_absent = nextValue;
+                pendingUpdates[studentId][date].afternoon_status = nextStatus;
+                pendingUpdates[studentId][date].afternoon_absent = (nextStatus === 'ABS');
             }
             renderTable();
         });
@@ -337,14 +360,23 @@ function getAllDatesInMonth() {
 }
 
 function getNextStatus(current) {
-    const order = ['On Time', 'Late', 'Absent', 'Excused'];
+    // Cycle: blank -> Present (On Time) -> Late -> Absent -> Excused -> Excused Absent -> blank
+    const order = ['', 'On Time', 'Late', 'Absent', 'Excused', 'Excused Absent'];
     let idx = order.indexOf(current);
-    if (idx === -1) idx = 0;
+    if (idx === -1) idx = 0; // Default to start (blank)
     return order[(idx + 1) % order.length];
 }
 
 function getNextHalfDayStatus(isAbsent) {
     return !isAbsent;
+}
+
+// Cycle through per-period statuses: PR -> LTE -> ABS -> EXC -> PR
+function getNextPeriodStatus(current) {
+    const statusOrder = ['PR', 'LTE', 'ABS', 'EXC'];
+    let idx = statusOrder.indexOf(current);
+    if (idx === -1) idx = 0;
+    return statusOrder[(idx + 1) % statusOrder.length];
 }
 
 async function saveAllPending() {
@@ -361,20 +393,39 @@ async function saveAllPending() {
             // Allow editing even if record has time_in (gate scanner may have malfunctioned)
 
             const updateData = pendingUpdates[studentId][date];
+            
+            // Get period-specific statuses
+            const morningStatus = updateData.morning_status || 'PR';
+            const afternoonStatus = updateData.afternoon_status || 'PR';
+            
+            // Derive absent flags from status strings
+            const morningAbsent = (morningStatus === 'ABS');
+            const afternoonAbsent = (afternoonStatus === 'ABS');
+            
+            // Determine overall status - use Late if any period is late but none are absent
+            let finalStatus = 'On Time';
+            if (morningStatus === 'LTE' || afternoonStatus === 'LTE') {
+                finalStatus = 'Late';
+            } else if (morningStatus === 'EXC' || afternoonStatus === 'EXC') {
+                finalStatus = 'Excused';
+            } else if (morningAbsent && afternoonAbsent) {
+                finalStatus = 'Absent';
+            }
+            
             const payload = {
                 student_id: parseInt(studentId),
                 log_date: date,
-                status: updateData.status || 'On Time',
-                morning_absent: updateData.morning_absent || false,
-                afternoon_absent: updateData.afternoon_absent || false,
+                status: finalStatus,
+                morning_absent: morningAbsent,
+                afternoon_absent: afternoonAbsent,
                 time_in: originalRecord.time_in || null
             };
             if (originalRecord.id) {
                 updates.push({ 
                     id: originalRecord.id, 
-                    status: updateData.status || 'On Time',
-                    morning_absent: updateData.morning_absent || false,
-                    afternoon_absent: updateData.afternoon_absent || false
+                    status: finalStatus,
+                    morning_absent: morningAbsent,
+                    afternoon_absent: afternoonAbsent
                 });
             } else {
                 upserts.push(payload);
@@ -491,14 +542,15 @@ function escapeHtml(str) {
 
 // Use general-core showNotification (has modal support)
 
-// ========== SF2 EXPORT FUNCTION ==========
+// ========== EXPORT FUNCTION (AM/PM Matrix Format) ==========
+// UPDATED: Exports two columns per date (AM/PM) with PR/ABS codes for easy SF2 transcription
 async function exportHomeroomAttendanceToCSV() {
     if (!students.length || !currentYearMonth) {
         showNotification('No data to export', 'info');
         return;
     }
 
-    // 1. Get class details (grade, section, school name)
+    // 1. Get school & class details
     let gradeLevel = '', section = '', schoolName = '', schoolId = '';
     try {
         const { data: classData } = await supabase
@@ -511,7 +563,6 @@ async function exportHomeroomAttendanceToCSV() {
             section = classData.department || '';
             schoolId = classData.school_id || '';
         }
-        // Fetch school name if school_id exists
         if (schoolId) {
             const { data: school } = await supabase
                 .from('schools')
@@ -520,155 +571,119 @@ async function exportHomeroomAttendanceToCSV() {
                 .single();
             if (school) schoolName = school.name;
         }
-    } catch (err) { console.warn('Could not fetch school details', err); }
+    } catch (err) { console.warn(err); }
 
-    // 2. Prepare dates (only school days – no weekends, no holidays, not future)
+    // 2. Get all dates in month (including weekends/holidays – we'll mark them)
     const allDates = getAllDatesInMonth();
-    const schoolDays = allDates.filter(date => {
-        if (date > todayStr) return false;
-        if (isWeekend(date)) return false;
-        if (holidaysMap.has(date)) return false;
-        return true;
-    });
     const monthYear = new Date(currentYearMonth + '-01');
     const monthName = monthYear.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const schoolYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
-    // 3. Helper: get final status for a student on a given date
-    function getFinalStatus(studentId, date) {
-        // pending takes precedence
+    // 3. Helper: get final AM/PM status for a student on a given date
+    function getPeriodStatus(studentId, date, period) {
         const pending = pendingUpdates[studentId]?.[date];
-        if (pending && pending.status !== undefined) return pending.status;
-
         const original = attendanceData[studentId]?.[date] || {};
-        // If we have half‑day info, we might treat a single missed session as "Tardy"
-        const morningAbsent = pending?.morning_absent !== undefined ? pending.morning_absent : (original.morning_absent || false);
-        const afternoonAbsent = pending?.afternoon_absent !== undefined ? pending.afternoon_absent : (original.afternoon_absent || false);
-        const halfDayAbsent = (morningAbsent && !afternoonAbsent) || (!morningAbsent && afternoonAbsent);
         
-        let status = original.status || 'On Time';
-        if (pending && pending.status !== undefined) status = pending.status;
-        
-        // If half‑day absent but status is not already Late/Absent, treat as Tardy
-        if (halfDayAbsent && status === 'On Time') return 'Late';
-        return status;
-    }
-
-    // 4. Map internal status to SF2 codes
-    function statusToSF2Code(status) {
-        switch (status) {
-            case 'On Time': return '';      // blank = Present
-            case 'Late':    return 'T';     // Tardy
-            case 'Absent':  return 'X';     // Absent
-            case 'Excused': return 'E';
-            default:        return '';
+        // Get period-specific status from pending or derive from absent flags
+        let periodStatus;
+        if (period === 'am') {
+            periodStatus = pending?.morning_status || (original.morning_absent ? 'ABS' : 'PR');
+        } else {
+            periodStatus = pending?.afternoon_status || (original.afternoon_absent ? 'ABS' : 'PR');
         }
+        
+return periodStatus;
     }
 
-    // 5. Build CSV rows
-    let csvRows = [];
+    // 4. Build CSV rows
+    const csvRows = [];
 
-    // --- Header block (SF2 style) ---
-    csvRows.push(['"School Form 2 (SF2) Daily Attendance Report of Learners"', '', '', '', '', '', '', '', '', '']);
-    csvRows.push(['(This replaced Form 1, Form 2 & STS Form 4 - Absenteeism and Dropout Profile)', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([]);
-    csvRows.push([`"School ID: ${schoolId}"`, '', '', '', '', `"School Year: ${schoolYear}"`, '', '', `"Report for the Month of: ${monthName}"`, '']);
-    csvRows.push([`"School Name: ${schoolName}"`, '', '', '', '', '', '', '', `"Grade Level: ${gradeLevel}"`, `"Section: ${section}"`]);
-    csvRows.push([]);
+    // ---- Header (simple, easy to read) ----
+    csvRows.push([`"School: ${schoolName}"`, `"School ID: ${schoolId}"`, `"Grade: ${gradeLevel}"`, `"Section: ${section}"`]);
+    csvRows.push([`"Month: ${monthName}"`, `"School Year: ${schoolYear}"`, `"Report generated: ${new Date().toLocaleString()}"`]);
+    csvRows.push([]); // blank line
 
-    // Column headers: Learner's Name, then each day's date (day number)
-    const dayColumns = schoolDays.map(d => new Date(d).getDate().toString());
-    const headerRow = [
-        'LEARNER\'S NAME (Last Name, First Name, Middle Name)',
-        ...dayColumns,
-        'ABSENT', 'TARDY', 'REMARK/S'
-    ];
-    csvRows.push(headerRow);
+    // ---- Column headers: Learner Name, then for each date: "Date (AM)", "Date (PM)" ----
+    const headers = ['LEARNER\'S NAME'];
+    for (const date of allDates) {
+        const displayDate = new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        headers.push(`${displayDate} AM`, `${displayDate} PM`);
+    }
+    headers.push('FULL DAY ABSENT', 'HALF DAYS', 'YTD ABSENCES');
+    csvRows.push(headers);
 
-    // 6. Per‑student data
-    let totalAbsentAll = 0;
-    let totalTardyAll = 0;
-    const dailyPresentCount = new Array(schoolDays.length).fill(0);
-
+    // ---- Per‑student data ----
     for (const student of students) {
         const fullName = student.full_name || '';
-        // Parse name: assume "Last, First Middle" or simple
-        let formattedName = fullName;
-        if (fullName.includes(',')) {
-            formattedName = fullName; // already last, first
-        } else {
-            const parts = fullName.split(' ');
-            if (parts.length >= 2) {
-                formattedName = `${parts[parts.length-1]}, ${parts.slice(0, -1).join(' ')}`;
+        const row = [fullName];
+        let fullDayAbsent = 0;
+        let halfDays = 0;
+
+        for (const date of allDates) {
+            // Skip future dates, weekends, holidays? We'll still export but mark clearly.
+            if (date > todayStr) {
+                row.push('--', '--');
+                continue;
             }
-        }
-        
-        let absentCount = 0;
-        let tardyCount = 0;
-        const dailyCodes = [];
+            if (isWeekend(date)) {
+                row.push('W/E', 'W/E');
+                continue;
+            }
+            if (holidaysMap.has(date)) {
+                const holiday = holidaysMap.get(date);
+                const label = holiday.isSuspended ? 'SUSP' : 'HOL';
+                row.push(label, label);
+                continue;
+            }
 
-        for (let idx = 0; idx < schoolDays.length; idx++) {
-            const date = schoolDays[idx];
-            const status = getFinalStatus(student.id, date);
-            const code = statusToSF2Code(status);
-            dailyCodes.push(code);
-            
-            if (code === 'X') absentCount++;
-            if (code === 'T') tardyCount++;
-            // For daily present count: count if present (blank) or excused (E)
-            if (code === '' || code === 'E') dailyPresentCount[idx]++;
+            const amStatus = getPeriodStatus(student.id, date, 'am');
+            const pmStatus = getPeriodStatus(student.id, date, 'pm');
+            row.push(amStatus, pmStatus);
+
+            // Count full‑day absent (both AM & PM = ABS)
+            if (amStatus === 'ABS' && pmStatus === 'ABS') fullDayAbsent++;
+            // Count half‑day (exactly one ABS)
+            if ((amStatus === 'ABS' && pmStatus === 'PR') || (amStatus === 'PR' && pmStatus === 'ABS')) halfDays++;
         }
-        
-        totalAbsentAll += absentCount;
-        totalTardyAll += tardyCount;
-        
-        const studentRow = [formattedName, ...dailyCodes, absentCount, tardyCount, ''];
-        csvRows.push(studentRow);
+
+        const ytdAbs = ytdAbsences.get(student.id) || 0;
+        row.push(fullDayAbsent, halfDays, ytdAbs);
+        csvRows.push(row);
     }
 
-    // 7. Summary rows (MALE/FEMALE totals – we skip gender if not available)
-    // Add daily total row
-    const totalPresentRow = ['TOTAL Present (Daily)'];
-    for (let idx = 0; idx < schoolDays.length; idx++) {
-        totalPresentRow.push(dailyPresentCount[idx]);
-    }
-    totalPresentRow.push('', '', '');
-    csvRows.push(totalPresentRow);
+    // ---- Summary row (totals) ----
+    const totalFullDay = csvRows.slice(4).reduce((sum, row) => sum + (parseInt(row[row.length-3]) || 0), 0);
+    const totalHalfDays = csvRows.slice(4).reduce((sum, row) => sum + (parseInt(row[row.length-2]) || 0), 0);
     csvRows.push([]);
+    csvRows.push(['TOTALS', '', '', '', '', '', '', '', '', `Full-day: ${totalFullDay}`, `Half-day: ${totalHalfDays}`, '']);
 
-    // Enrolment & attendance summary
-    const enrolledMale = 0;   // not tracked – leave 0
-    const enrolledFemale = 0;
-    const enrolledTotal = students.length;
-    const endOfMonthEnrolled = students.length; // assuming no transfers
-    const percentageEnrolment = ((endOfMonthEnrolled / enrolledTotal) * 100).toFixed(1);
-    const totalSchoolDays = schoolDays.length;
-    const avgDailyAttendance = (dailyPresentCount.reduce((a,b) => a+b,0) / totalSchoolDays).toFixed(1);
-    const attendancePercent = ((avgDailyAttendance / endOfMonthEnrolled) * 100).toFixed(1);
-
-    csvRows.push(['Summary for the Month', '', '', '', '', '', '', '', '', '']);
-    csvRows.push(['', 'M', 'F', 'TOTAL', '', '', '', '', '', '']);
-    csvRows.push([`Enrolment as of 1st Friday of June`, enrolledMale, enrolledFemale, enrolledTotal, '', '', '', '', '', '']);
-    csvRows.push([`Registered Learner as of end of the month`, '', '', endOfMonthEnrolled, '', '', '', '', '', '']);
-    csvRows.push([`Percentage of Enrolment as of end of the month`, `${percentageEnrolment}%`, '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Average Daily Attendance`, avgDailyAttendance, '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Percentage of Attendance for the month`, `${attendancePercent}%`, '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Number of students with 5 consecutive days of absences:`, '', '', '', '', '', '', '', '', '', '']); // optional
-    csvRows.push([`Drop out`, '', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Transferred out`, '', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Transferred in`, '', '', '', '', '', '', '', '', '', '']);
+    // ---- Instructions for DepEd SF2 transcription ----
     csvRows.push([]);
-    csvRows.push([`I certify that this is a true and correct report.`, '', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`(Signature of Teacher over Printed Name)`, '', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`Attested by:`, '', '', '', '', '', '', '', '', '', '']);
-    csvRows.push([`(Signature of School Head over Printed Name)`, '', '', '', '', '', '', '', '', '', '']);
+    csvRows.push(['HOW TO USE THIS EXPORT:']);
+    csvRows.push(['1. "PR" = Present (leave blank in official SF2)']);
+    csvRows.push(['2. "ABS" = Absent (mark X in official SF2)']);
+    csvRows.push(['3. For half‑day absences (one ABS, one PR): shade half of the SF2 cell (upper for AM absent, lower for PM absent)']);
+    csvRows.push(['4. Use "FULL DAY ABSENT" column to quickly fill the "ABSENT" total in SF2']);
+    csvRows.push(['5. Use "HALF DAYS" column to count tardy interventions if needed']);
 
-    // 8. Create and download CSV
-    const csvContent = csvRows.map(row => 
+    // ---- Legend ----
+    csvRows.push([]);
+    csvRows.push(['LEGEND:']);
+    csvRows.push(['CODE', 'MEANING']);
+    csvRows.push(['PR', 'Present']);
+    csvRows.push(['ABS', 'Absent (excused and not excused)']);
+    csvRows.push(['LTE', 'Late']);
+    csvRows.push(['EXC', 'Excused']);
+    csvRows.push(['W/E', 'Weekend']);
+    csvRows.push(['SUSP', 'Class suspended (no classes)']);
+    csvRows.push(['HOL', 'Holiday']);
+    csvRows.push(['--', 'Future date / Not recorded']);
+
+    // ---- Create and download CSV ----
+    const csvContent = csvRows.map(row =>
         row.map(cell => {
             if (cell === undefined || cell === null) return '';
             const str = String(cell);
-            // Escape quotes and wrap if contains comma or newline
             if (str.includes(',') || str.includes('"') || str.includes('\n')) {
                 return `"${str.replace(/"/g, '""')}"`;
             }
@@ -680,13 +695,13 @@ async function exportHomeroomAttendanceToCSV() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.setAttribute('download', `SF2_${gradeLevel}_${section}_${currentYearMonth}.csv`);
+    link.setAttribute('download', `Attendance_${gradeLevel}_${section}_${currentYearMonth}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showNotification('SF2 CSV exported successfully', 'success');
+    showNotification('CSV exported – easy to read & transfer to SF2', 'success');
 }
 
-// Overwrite the old function
+// Expose to global scope for button onclick
 window.exportHomeroomAttendanceToCSV = exportHomeroomAttendanceToCSV;

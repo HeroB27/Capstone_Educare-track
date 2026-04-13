@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadAnnouncements() {
     const { data, error } = await supabase
         .from('announcements')
-        .select('*, teachers(full_name)')
-        .eq('target_parents', true)
+        .select('*, admins(full_name), teachers(full_name)')
+        .or('target_parents.eq.true, target_students.eq.true')
         .order('created_at', { ascending: false })
         .limit(30);
     if (error) console.error(error);
@@ -29,16 +29,19 @@ function renderAnnouncements() {
         container.innerHTML = '<div class="text-center py-8 text-gray-400">No announcements yet</div>';
         return;
     }
-    container.innerHTML = announcements.map(a => `
+    container.innerHTML = announcements.map(a => {
+        const postedBy = a.admins?.full_name || a.teachers?.full_name || 'Administrator';
+        return `
         <div class="bg-white rounded-xl shadow-md p-4 cursor-pointer" onclick="showDetail(${a.id})">
             <h3 class="font-bold text-gray-800">${escapeHtml(a.title)}</h3>
             <p class="text-sm text-gray-500 mt-1">${escapeHtml(a.content.substring(0, 100))}${a.content.length > 100 ? '...' : ''}</p>
+            ${a.image_url ? `<img src="${a.image_url}" class="mt-2 mx-auto max-w-full h-auto rounded-lg border border-gray-200 max-h-32 object-contain">` : ''}
             <div class="flex justify-between mt-3 text-xs text-gray-400">
-                <span>${escapeHtml(a.teachers?.full_name || 'Admin')}</span>
+                <span>${escapeHtml(postedBy)}</span>
                 <span>${getRelativeTime(a.created_at)}</span>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 window.showDetail = (id) => {
@@ -49,10 +52,11 @@ window.showDetail = (id) => {
         alert(`${a.title}\n\n${a.content}`);
         return;
     }
+    const postedBy = a.admins?.full_name || a.teachers?.full_name || 'Administrator';
     document.getElementById('modal-title').innerText = a.title;
     document.getElementById('modal-date').innerText = formatDate(a.created_at);
-    document.getElementById('modal-posted-by').innerText = a.teachers?.full_name || 'Admin';
-    document.getElementById('modal-content').innerHTML = escapeHtml(a.content);
+    document.getElementById('modal-posted-by').innerText = postedBy;
+    document.getElementById('modal-content').innerHTML = escapeHtml(a.content) + (a.image_url ? `<img src="${a.image_url}" class="mt-4 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : '');
     modal.classList.remove('hidden');
 };
 

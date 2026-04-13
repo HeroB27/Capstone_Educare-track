@@ -1189,40 +1189,85 @@ async function approveExcuseLetter(letterId) {
         // FIX: Update attendance log to mark student as excused for that date
         if (letter?.student_id && letter?.date_absent) {
             const dateAbsent = new Date(letter.date_absent).toISOString().split('T')[0];
+            const absenceType = letter.absence_type || 'whole_day';
+            const period = letter.period || 'whole_day';
             
-            // Check if attendance log exists for that date
+            // Check if attendance log exists for that date (homeroom record - no subject_load_id)
             const { data: existingLog } = await supabase
                 .from('attendance_logs')
-                .select('id')
+                .select('id, status, morning_absent, afternoon_absent')
                 .eq('student_id', letter.student_id)
                 .eq('log_date', dateAbsent)
+                .is('subject_load_id', null)
                 .maybeSingle();
             
-            if (existingLog) {
-                // Update existing log to Excused
-                await supabase
-                    .from('attendance_logs')
-                    .update({ status: 'Excused', remarks: 'Excused via approved letter' })
-                    .eq('id', existingLog.id);
+            if (absenceType === 'whole_day' || period === 'whole_day') {
+                // Whole day excused absent
+                if (existingLog) {
+                    // Update existing log to Excused Absent
+                    await supabase
+                        .from('attendance_logs')
+                        .update({ 
+                            status: 'Excused Absent', 
+                            morning_absent: false,
+                            afternoon_absent: false,
+                            remarks: 'Excused via approved letter (whole day)' 
+                        })
+                        .eq('id', existingLog.id);
+                } else {
+                    // Create new excused log
+                    await supabase
+                        .from('attendance_logs')
+                        .insert({
+                            student_id: letter.student_id,
+                            log_date: dateAbsent,
+                            status: 'Excused Absent',
+                            remarks: 'Excused via approved letter (whole day)'
+                        });
+                }
             } else {
-                // Create new excused log
-                await supabase
-                    .from('attendance_logs')
-                    .insert({
-                        student_id: letter.student_id,
-                        log_date: dateAbsent,
-                        status: 'Excused',
-                        remarks: 'Excused via approved letter'
-                    });
+                // Half-day excused - update morning or afternoon absent flags
+                const updateData = { 
+                    remarks: `Excused via approved letter (${period})` 
+                };
+                
+                if (period === 'morning' || absenceType === 'half_day_morning') {
+                    updateData.morning_absent = false; // Not absent - excused
+                } else if (period === 'afternoon' || absenceType === 'half_day_afternoon') {
+                    updateData.afternoon_absent = false; // Not absent - excused
+                }
+                
+                if (existingLog) {
+                    await supabase
+                        .from('attendance_logs')
+                        .update(updateData)
+                        .eq('id', existingLog.id);
+                } else {
+                    // Create new log with half-day excused
+                    await supabase
+                        .from('attendance_logs')
+                        .insert({
+                            student_id: letter.student_id,
+                            log_date: dateAbsent,
+                            status: 'On Time',
+                            morning_absent: (period === 'afternoon' || absenceType === 'half_day_afternoon'),
+                            afternoon_absent: (period === 'morning' || absenceType === 'half_day_morning'),
+                            ...updateData
+                        });
+                }
             }
             
             // Notify parent about approval
+            const periodText = (absenceType === 'whole_day' || period === 'whole_day') 
+                ? 'whole day' 
+                : `half day (${period === 'morning' || absenceType === 'half_day_morning' ? 'morning' : 'afternoon'})`;
+                
             if (letter.parents?.id) {
                 await supabase.from('notifications').insert({
                     recipient_id: letter.parents.id,
                     recipient_role: 'parent',
                     title: 'Excuse Letter Approved',
-                    message: `The excuse letter for ${letter.students?.full_name} on ${dateAbsent} has been approved.`,
+                    message: `The excuse letter for ${letter.students?.full_name} on ${dateAbsent} (${periodText}) has been approved.`,
                     type: 'excuse_approved'
                 });
             }
@@ -1325,10 +1370,12 @@ async function postAnnouncement() {
     const titleInput = document.getElementById('announcement-title');
     const contentInput = document.getElementById('announcement-content');
     const prioritySelect = document.getElementById('announcement-priority');
+    const photoInput = document.getElementById('announcement-photo');
 
     const title = titleInput?.value?.trim();
     const content = contentInput?.value?.trim();
     const priority = prioritySelect?.value || 'normal';
+    const photoFile = photoInput?.files[0];
 
     if (!title || !content) {
         showToast('Please fill in both title and content', 'error');
@@ -1336,23 +1383,49 @@ async function postAnnouncement() {
     }
 
     try {
+        const payload = {
+            title: title,
+            content: content,
+            posted_by_teacher_id: currentUser.id,
+            target_teachers: true,
+            target_students: true,
+            priority: priority,
+            type: 'Teacher'
+        };
+        
+        // Upload photo if selected
+        if (photoFile) {
+            const ext = photoFile.name.split('.').pop() || 'jpg';
+            const fileName = `announcement_teacher_${Date.now()}.${ext}`;
+            const { error: uploadErr } = await supabase.storage
+                .from('announcement-photos')
+                .upload(fileName, photoFile, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+            
+            if (uploadErr) {
+                console.error('Photo upload error:', uploadErr);
+                showToast('Photo upload failed: ' + uploadErr.message, 'error');
+                return;
+            }
+            
+            const { data: urlData } = supabase.storage
+                .from('announcement-photos')
+                .getPublicUrl(fileName);
+            payload.image_url = urlData.publicUrl;
+        }
+
         const { error } = await supabase
             .from('announcements')
-            .insert({
-                title: title,
-                content: content,
-                posted_by_teacher_id: currentUser.id,
-                target_teachers: true,
-                target_students: true,
-                priority: priority,
-                type: 'Teacher'
-            });
+            .insert(payload);
 
         if (error) throw error;
 
         showToast('Announcement posted successfully!', 'success');
         titleInput.value = '';
         contentInput.value = '';
+        if (photoInput) photoInput.value = '';
 
         if (typeof loadAnnouncementsInterface === 'function') loadAnnouncementsInterface();
 

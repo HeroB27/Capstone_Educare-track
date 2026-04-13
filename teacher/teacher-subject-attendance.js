@@ -33,7 +33,7 @@ async function loadSubjectList() {
 }
 
 function setupEvents() {
-    document.getElementById('load-subject').addEventListener('click', async () => {
+    document.getElementById('subject-select').addEventListener('change', async () => {
         currentSubjectId = document.getElementById('subject-select').value;
         if (!currentSubjectId) return;
         const { data: subj } = await supabase.from('subject_loads').select('subject_name, class_id').eq('id', currentSubjectId).single();
@@ -87,6 +87,7 @@ function renderSubjectChecklist() {
             case 'Late': statusClass = 'status-late'; displayText = 'Late'; break;
             case 'Absent': statusClass = 'status-absent'; displayText = 'Absent'; break;
             case 'Excused': statusClass = 'status-excused'; displayText = 'Excused'; break;
+            case 'Excused Absent': statusClass = 'status-excused-absent'; displayText = 'Excused Absent'; break;
         }
         return `<tr class="hover:bg-gray-50 transition-colors"><td class="px-4 py-2 font-medium sticky left-0 bg-white">${escapeHtml(student.full_name)}</td>
                 <td class="px-4 py-2"><div class="status-square ${statusClass}" data-student="${student.id}">${displayText}</div></td></tr>`;
@@ -104,32 +105,51 @@ function renderSubjectChecklist() {
 }
 
 function getNextStatus(current) { 
-    // Cycle: blank -> Present -> Late -> Absent -> Excused -> blank
-    const order = ['', 'On Time', 'Late', 'Absent', 'Excused']; 
+    // Cycle: blank -> Present (On Time) -> Late -> Absent -> Excused -> Excused Absent -> blank
+    const order = ['', 'On Time', 'Late', 'Absent', 'Excused', 'Excused Absent']; 
     let idx = order.indexOf(current); 
-    if (idx === -1) idx = 0; 
+    if (idx === -1) idx = 0; // Default to start (blank)
     return order[(idx + 1) % order.length]; 
 }
 
 async function saveAllPending() {
     if (Object.keys(pendingUpdates).length === 0) { showNotification('No changes to save', 'info'); return; }
     if (selectedDate > todayStr) { showNotification('Cannot mark attendance for future dates', 'error'); return; }
+    
     const updates = [];
     const inserts = [];
+    
+    // First, check which records already exist for this date
+    const studentIds = Object.keys(pendingUpdates).map(id => parseInt(id));
+    const { data: existingRecords } = await supabase
+        .from('attendance_logs')
+        .select('id, student_id, status, subject_load_id')
+        .in('student_id', studentIds)
+        .eq('log_date', selectedDate);
+    
+    const existingMap = {};
+    existingRecords?.forEach(rec => {
+        existingMap[rec.student_id] = rec;
+    });
+    
     for (const [studentId, newStatus] of Object.entries(pendingUpdates)) {
-        const original = subjectAttendance[studentId] || {};
-        // ALL can be edited now - removed gate scan lock
-        const payload = { student_id: parseInt(studentId), log_date: selectedDate, status: newStatus || null, time_in: original.time_in || null, subject_load_id: parseInt(currentSubjectId), remarks: newStatus ? `[${currentSubjectName}: ${newStatus}]` : null };
-        if (original.id) {
-            updates.push({ id: original.id, status: newStatus, remarks: payload.remarks });
+        const studentIdInt = parseInt(studentId);
+        const existing = existingMap[studentIdInt];
+        
+        if (existing) {
+            // Record exists - update it
+            updates.push({ id: existing.id, status: newStatus, subject_load_id: parseInt(currentSubjectId) });
         } else {
+            // No record - insert new
+            const payload = { student_id: studentIdInt, log_date: selectedDate, status: newStatus, subject_load_id: parseInt(currentSubjectId), remarks: newStatus ? `[${currentSubjectName}: ${newStatus}]` : null };
             inserts.push(payload);
         }
     }
+    
     if (updates.length === 0 && inserts.length === 0) { showNotification('No changes to save', 'info'); return; }
     try {
         for (const upd of updates) {
-            const { error } = await supabase.from('attendance_logs').update({ status: upd.status, remarks: upd.remarks }).eq('id', upd.id);
+            const { error } = await supabase.from('attendance_logs').update({ status: upd.status, subject_load_id: upd.subject_load_id }).eq('id', upd.id);
             if (error) throw error;
         }
         if (inserts.length) {
@@ -191,7 +211,8 @@ async function recomputeHomeroomAttendance(studentId, date) {
     
     for (const log of logs) {
         const timeSlot = loadMap.get(log.subject_load_id) || 'morning';
-        if (log.status === 'Absent') {
+        // Both Absent and Late count as not present for half-day calculation
+        if (log.status === 'Absent' || log.status === 'Late') {
             if (timeSlot === 'morning') morningAbsent = true;
             if (timeSlot === 'afternoon') afternoonAbsent = true;
         }

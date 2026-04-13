@@ -187,6 +187,27 @@
     <!-- Hidden input for USB scanner -->
     <input type="text" id="usb-scanner-input" class="opacity-0 absolute -z-10" autofocus>
 
+    <!-- Scanner Focus Indicator -->
+    <div id="scanner-focus-indicator" class="hidden fixed top-4 right-4 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full z-50">
+        Scanner Active
+    </div>
+
+    <!-- Manual Entry Fallback -->
+    <div class="fixed bottom-4 right-4">
+        <button type="button" onclick="toggleManualEntry()" class="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-slate-900 font-bold rounded-lg hover:bg-yellow-400 shadow-lg">
+            <i data-lucide="keyboard" class="w-4 h-4"></i>
+            Manual Entry
+        </button>
+        <div id="manual-entry-section" class="hidden absolute bottom-14 right-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4">
+            <input type="text" id="manual-verify-id" placeholder="Enter Student ID" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 focus:outline-none focus:border-yellow-500">
+            <button type="button" onclick="submitManualVerify()" 
+                class="w-full px-3 py-2 bg-yellow-500 text-slate-900 font-bold rounded-lg hover:bg-yellow-400">
+                Verify
+            </button>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const user = checkSession('guards');
@@ -199,12 +220,41 @@
             setupScannerInput();
             
             if (window.lucide) window.lucide.createIcons();
-        });
-
-        function setupScannerInput() {
-            const hiddenInput = document.getElementById('usb-scanner-input');
-            if (!hiddenInput) return;
             
+            // Manual entry functions
+            window.toggleManualEntry = function() {
+                const section = document.getElementById('manual-entry-section');
+                section.classList.toggle('hidden');
+                if (!section.classList.contains('hidden')) {
+                    document.getElementById('manual-verify-id').focus();
+                }
+            };
+            
+            window.submitManualVerify = function() {
+                const input = document.getElementById('manual-verify-id');
+                const studentId = input.value.trim();
+                if (studentId) {
+                    document.getElementById('verify-student-id').value = studentId;
+                    verifyPass();
+                    input.value = '';
+                    document.getElementById('manual-entry-section').classList.add('hidden');
+                }
+            };
+            
+            // Enter key support
+            document.getElementById('manual-verify-id')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') submitManualVerify();
+            });
+            
+            // Scanner focus indicator
+            const hiddenInput = document.getElementById('usb-scanner-input');
+            const focusIndicator = document.getElementById('scanner-focus-indicator');
+            if (hiddenInput && focusIndicator) {
+                hiddenInput.addEventListener('focus', () => focusIndicator.classList.remove('hidden'));
+                hiddenInput.addEventListener('blur', () => focusIndicator.classList.add('hidden'));
+            }
+            
+            // Setup USB scanner input handlers
             hiddenInput.addEventListener('input', (e) => {
                 const val = e.target.value.trim();
                 if (val) {
@@ -227,7 +277,7 @@
             
             hiddenInput.focus();
             document.addEventListener('click', () => hiddenInput.focus());
-        }
+        });
     </script>
 </body>
 </html>

@@ -337,12 +337,14 @@ function closeViewIdModal() {
     closeViewIdDrawer();
 }
 
-// FIXED: Helper function for consistent ID generation across all files (4-character suffix)
+// FIXED: Helper function for consistent ID generation (timestamp + random for uniqueness)
 function generateOfficialID(prefix, year, identifierSource) {
     const cleanSource = String(identifierSource).replace(/\D/g, '');
     const last4 = cleanSource.slice(-4).padStart(4, '0');
-    // Generate exactly 4 alphanumeric characters
-    const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    // Use timestamp + random for uniqueness (prevents duplicate IDs when adding multiple students quickly)
+    const timestamp = Date.now().toString(36).slice(-2);
+    const random = Math.random().toString(36).substring(2, 4).toUpperCase();
+    const suffix = timestamp + random;
     return `${prefix}-${year}-${last4}-${suffix}`;
 }
 

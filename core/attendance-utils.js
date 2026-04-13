@@ -253,11 +253,14 @@ async function recomputeHalfDayStatus(studentId, date) {
         const hour = subj.schedule_time_start ? parseInt(subj.schedule_time_start.split(':')[0]) : 12;
         const log = logs.find(l => l.subject_load_id === subj.id);
         const status = log ? log.status : 'Absent';
+        // Both Absent and Late count as not present for half-day
         const isPresent = (status === 'On Time' || status === 'Late');
-        if (hour < 12) {
-            if (!isPresent) morningAbsent = true;
-        } else {
-            if (!isPresent) afternoonAbsent = true;
+        if (!isPresent) {
+            if (hour < 12) {
+                morningAbsent = true;
+            } else {
+                afternoonAbsent = true;
+            }
         }
     }
 

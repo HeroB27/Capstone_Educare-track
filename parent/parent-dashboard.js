@@ -8,6 +8,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.currentChild) await refreshDashboard();
     document.addEventListener('childChanged', () => refreshDashboard());
     window.addEventListener('notificationsUpdated', () => loadNotificationsPreview());
+    
+    // Auto-refresh clinic status every 30 seconds to detect discharges
+    setInterval(async () => {
+        if (window.currentChild) {
+            await loadClinicStatus();
+            updateUI();
+        }
+    }, 30000);
 });
 
 async function refreshDashboard() {
@@ -22,7 +30,8 @@ async function refreshDashboard() {
         loadClinicStatus(),
         loadClinicHistory(),
         loadAttendanceSummary(),
-        loadNotificationsPreview()
+        loadNotificationsPreview(),
+        loadSuspensionStatus()
     ]);
 
     updateUI();
@@ -68,12 +77,51 @@ async function loadTodaySchedule() {
     `).join('');
 }
 
+async function loadSuspensionStatus() {
+    const alertContainer = document.getElementById('suspension-alert');
+    if (!alertContainer) return;
+    
+    const localDate = new Date();
+    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+    const today = localDate.toISOString().split('T')[0];
+    const gradeLevel = window.currentChild.classes?.grade_level;
+    
+    if (!gradeLevel) {
+        alertContainer.classList.add('hidden');
+        return;
+    }
+    
+    const { data: suspension } = await supabase
+        .from('holidays')
+        .select('*')
+        .eq('holiday_date', today)
+        .eq('is_suspended', true)
+        .maybeSingle();
+    
+    if (suspension && (suspension.target_grades === 'All' || suspension.target_grades?.includes(gradeLevel))) {
+        alertContainer.innerHTML = `
+            <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-start gap-3">
+                <span class="text-2xl">🚫</span>
+                <div>
+                    <h4 class="font-bold text-red-700">Classes Suspended</h4>
+                    <p class="text-sm text-red-600">${escapeHtml(suspension.description)}</p>
+                </div>
+            </div>
+        `;
+        alertContainer.classList.remove('hidden');
+    } else {
+        alertContainer.classList.add('hidden');
+    }
+}
+
 async function loadClinicStatus() {
+    // Only show active visits where time_out is null AND status is NOT Completed
     const { data } = await supabase
         .from('clinic_visits')
         .select('*')
         .eq('student_id', window.currentChild.id)
         .is('time_out', null)
+        .neq('status', 'Completed')
         .order('time_in', { ascending: false })
         .limit(1);
     clinicStatus = data?.[0] || null;
@@ -178,13 +226,56 @@ async function loadAttendanceSummary() {
 
 async function loadNotificationsPreview() {
     if (!window.currentUser) return;
-    const { data } = await supabase
+    
+    let notifications = [];
+    
+    // 1. Fetch admin announcements
+    const now = new Date().toISOString();
+    const { data: announcements } = await supabase
+        .from('announcements')
+        .select('id, title, content, created_at, priority, target_parents, target_students, posted_by_admin_id, admins(full_name), image_url')
+        .or('target_parents.eq.true,target_students.eq.true')
+        .order('created_at', { ascending: false })
+        .limit(3);
+    
+    // Filter and format announcements
+    const formattedAnnouncements = (announcements || [])
+        .filter(ann => !ann.scheduled_at || ann.scheduled_at <= now)
+        .map(ann => ({
+            id: ann.id,
+            title: ann.title,
+            message: ann.content,
+            created_at: ann.created_at,
+            type: 'announcement',
+            is_urgent: ann.priority === 'High',
+            sender: ann.admins?.full_name || 'Administrator',
+            image_url: ann.image_url
+        }));
+    
+    notifications = [...formattedAnnouncements];
+    
+    // 2. Fetch regular notifications
+    const { data: notifs } = await supabase
         .from('notifications')
         .select('*')
         .eq('recipient_id', window.currentUser.id)
         .order('created_at', { ascending: false })
         .limit(5);
-    window.notificationsPreview = data || [];
+    
+    const formattedNotifs = (notifs || []).map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        created_at: n.created_at,
+        type: n.type,
+        is_urgent: n.is_urgent
+    }));
+    
+    notifications = [...notifications, ...formattedNotifs];
+    notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    notifications = notifications.slice(0, 5);
+    
+    window.notificationsPreview = notifications;
     updateNotificationsPreview();
 }
 
@@ -197,16 +288,24 @@ function updateNotificationsPreview() {
         container.innerHTML = '<div class="text-center py-6 text-gray-400">No recent alerts</div>';
         return;
     }
-    container.innerHTML = notifs.map(n => `
-        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-            <span class="text-2xl flex-shrink-0">${n.type === 'clinic' ? '🏥' : n.type === 'attendance' ? '📋' : '🔔'}</span>
+    container.innerHTML = notifs.map(n => {
+        const icon = n.type === 'announcement' ? '📢' : n.type === 'clinic' ? '🏥' : n.type === 'attendance' ? '📋' : '🔔';
+        const sender = n.sender ? `by ${n.sender}` : '';
+        return `
+        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100" onclick="viewNotificationDetail(${n.id}, '${n.type}')">
+            <span class="text-2xl flex-shrink-0">${icon}</span>
             <div class="flex-1 min-w-0">
                 <p class="font-medium text-gray-800 truncate">${escapeHtml(n.title)}</p>
-                <p class="text-xs text-gray-500 truncate">${escapeHtml(n.message)}</p>
-                <p class="text-xs text-gray-400 mt-1">${getRelativeTime(n.created_at)}</p>
+                <p class="text-xs text-gray-500 truncate">${escapeHtml(n.message || '').substring(0, 60)}${(n.message?.length || 0) > 60 ? '...' : ''}</p>
+                <p class="text-xs text-gray-400 mt-1">${getRelativeTime(n.created_at)} ${sender}</p>
             </div>
         </div>
-    `).join('');
+    `}).join('');
+}
+
+function viewNotificationDetail(id, type) {
+    // Navigate to messages page
+    window.location.href = 'parent-messages.html';
 }
 
 function updateUI() {

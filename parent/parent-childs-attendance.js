@@ -80,7 +80,7 @@ function getDayStatus(log, holiday, dateStr) {
     const today = getLocalDateString();
     if (dateStr > today) return { class: 'bg-gray-100 text-gray-400' };
     if (holiday?.is_suspended) return { class: 'bg-gray-200 text-gray-400' };
-    if (holiday) return { class: 'bg-purple-200 text-purple-800' };
+    if (holiday) return { class: 'bg-sky-200 text-sky-800' };
     if (isWeekend(dateStr)) return { class: 'bg-gray-100 text-gray-400' };
     if (!log) return { class: 'bg-red-200 text-red-800' };
     
@@ -88,13 +88,14 @@ function getDayStatus(log, holiday, dateStr) {
     const morningAbsent = log.morning_absent || false;
     const afternoonAbsent = log.afternoon_absent || false;
     
-    // Check for half-day (one session absent, one present)
-    const isHalfDay = morningAbsent !== afternoonAbsent;
+    // Check for half-day: one session absent only (or explicit 'Half Day' status)
+    const isFullDayAbsent = morningAbsent && afternoonAbsent;
+    const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
     
     if (isHalfDay) return { class: 'bg-orange-200 text-orange-800' };
     if (status === 'late') return { class: 'bg-yellow-200 text-yellow-800' };
     if (status === 'excused') return { class: 'bg-purple-200 text-purple-800' };
-    if (status === 'absent') return { class: 'bg-red-200 text-red-800' };
+    if (status === 'absent' || isFullDayAbsent) return { class: 'bg-red-200 text-red-800' };
     return { class: 'bg-green-200 text-green-800' }; // present / on time
 }
 
@@ -103,13 +104,14 @@ function showDayDetails(dateStr, log, holiday) {
     const contentDiv = document.getElementById('day-content');
     detailsDiv.classList.remove('hidden');
     if (holiday) {
-        contentDiv.innerHTML = `<div class="font-bold text-purple-700">${escapeHtml(holiday.description)}</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
+        contentDiv.innerHTML = `<div class="font-bold text-sky-700">${escapeHtml(holiday.description)}</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
     } else if (!log) {
         contentDiv.innerHTML = `<div class="font-bold text-gray-700">No record</div><div class="text-gray-600">${formatDate(dateStr)}</div>`;
     } else {
         const morningAbsent = log.morning_absent || false;
         const afternoonAbsent = log.afternoon_absent || false;
-        const isHalfDay = morningAbsent !== afternoonAbsent;
+        const isFullDayAbsent = morningAbsent && afternoonAbsent;
+        const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
         
         let icon = '✅';
         if (log.status?.toLowerCase() === 'late') icon = '⏰';
@@ -152,8 +154,8 @@ function renderTrendChart(stats) {
     attendanceChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Present', 'Late', 'Excused', 'Absent'],
-            datasets: [{ label: 'Days', data: [stats.present, stats.late, stats.excused, stats.absent], backgroundColor: ['#22c55e', '#f59e0b', '#3b82f6', '#ef4444'] }]
+            labels: ['Present', 'Late', 'Excused', 'Half Day', 'Absent'],
+            datasets: [{ label: 'Days', data: [stats.present, stats.late, stats.excused, stats.halfday || 0, stats.absent], backgroundColor: ['#22c55e', '#f59e0b', '#3b82f6', '#f97316', '#ef4444'] }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
     });

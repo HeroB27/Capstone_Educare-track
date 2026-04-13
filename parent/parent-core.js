@@ -203,12 +203,13 @@ function navigateTo(page) {
     const pages = {
         dashboard: 'parent-dashboard.html',
         children: 'parent-children.html',
-        announcements: 'parent-announcements-board.html',
+        announcements: 'parent-messages.html',
         excuse: 'parent-excuse-letter-template.html',
         schedule: 'parent-schedule.html',
         calendar: 'parent-calendar.html',
         attendance: 'parent-childs-attendance.html',
-        notifications: 'parent-notifications.html',
+        notifications: 'parent-messages.html',
+        messages: 'parent-messages.html',
         settings: 'parent-settings.html'
     };
     const url = pages[page];

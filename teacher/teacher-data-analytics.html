@@ -14,6 +14,7 @@
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/school-year-core.js"></script>
     <script src="teacher-core.js"></script>
     <script src="teacher-data-analytics.js"></script>
     
@@ -135,20 +136,10 @@
                             <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Over time</p>
                         </div>
                         <div class="flex items-center gap-3">
-                            <button onclick="switchTrendGrouping('quarter')" id="btnQuarter" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold">Quarter</button>
-                            <button onclick="switchTrendGrouping('month')" id="btnMonth" class="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300">Month</button>
+                            <button onclick="switchTrendGrouping('month')" id="btnMonth" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold">Month</button>
                             <button onclick="switchTrendGrouping('week')" id="btnWeek" class="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300">Week</button>
                             <select id="weekMonthFilter" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-gray-50 hidden" onchange="handleWeekMonthChange()">
                                 <option value="">Select Month</option>
-                                <option value="2025-08">August 2025</option>
-                                <option value="2025-09">September 2025</option>
-                                <option value="2025-10">October 2025</option>
-                                <option value="2025-11">November 2025</option>
-                                <option value="2025-12">December 2025</option>
-                                <option value="2026-01">January 2026</option>
-                                <option value="2026-02">February 2026</option>
-                                <option value="2026-03">March 2026</option>
-                                <option value="2026-04">April 2026</option>
                             </select>
                         </div>
                     </div>
@@ -386,8 +377,29 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             lucide.createIcons();
+            
+            // Initialize and load analytics data
+            if (typeof supabase !== 'undefined') {
+                // Wait for currentUser to be available
+                const checkUser = () => new Promise(resolve => {
+                    if (typeof currentUser !== 'undefined' && currentUser) return resolve();
+                    const interval = setInterval(() => {
+                        if (typeof currentUser !== 'undefined' && currentUser) {
+                            clearInterval(interval);
+                            resolve();
+                        }
+                    }, 200);
+                });
+                
+                await checkUser();
+                
+                // Load analytics
+                if (typeof loadAnalyticsData === 'function') {
+                    loadAnalyticsData();
+                }
+            }
         });
     </script>
 </body>

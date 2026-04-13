@@ -1,4 +1,5 @@
 // teacher-subject-attendance-table.js - Month view, batch save, holiday detection, per-student stats, YTD absences, DepEd warning, gate scan lock
+// UPDATED: Uses school-year-core.js for dynamic dates
 let currentSubjectId = null;
 let currentClassId = null;
 let students = [];
@@ -14,10 +15,12 @@ const todayStr = new Date().toISOString().split('T')[0];
 document.addEventListener('DOMContentLoaded', async () => {
     if (!window.currentUser) { const user = checkSession('teachers'); if (!user) return (location.href = '../index.html'); window.currentUser = user; }
     document.getElementById('teacher-name').innerText = `Hi, ${window.currentUser.full_name?.split(' ')[0] || 'Teacher'}`;
+    
+    // Use school-year-core.js for dynamic school year start
+    schoolYearStart = await getSchoolYearStart();
+    
     await loadSubjectList();
     setupEventListeners();
-    const now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth() + 1;
-    schoolYearStart = `${currentMonth >= 8 ? currentYear : currentYear - 1}-08-01`;
 });
 
 async function loadSubjectList() {
@@ -60,9 +63,9 @@ async function loadMonthData() {
     const { data: holidays } = await supabase.from('holidays').select('holiday_date, is_suspended, description').gte('holiday_date', currentStart).lte('holiday_date', currentEnd);
     holidaysMap.clear(); holidays?.forEach(h => holidaysMap.set(h.holiday_date, { isSuspended: h.is_suspended, description: h.description }));
     const studentIds = students.map(s => s.id);
-    const { data: logs } = await supabase.from('attendance_logs').select('id, student_id, log_date, status, time_in').in('student_id', studentIds).gte('log_date', currentStart).lte('log_date', currentEnd);
+    const { data: logs } = await supabase.from('attendance_logs').select('id, student_id, log_date, status, time_in, subject_load_id').in('student_id', studentIds).gte('log_date', currentStart).lte('log_date', currentEnd);
     attendanceData = {}; students.forEach(s => { attendanceData[s.id] = {}; });
-    logs?.forEach(log => { attendanceData[log.student_id][log.log_date] = { id: log.id, status: log.status || 'Absent', time_in: log.time_in }; });
+    logs?.forEach(log => { attendanceData[log.student_id][log.log_date] = { id: log.id, status: log.status || 'Absent', time_in: log.time_in, subject_load_id: log.subject_load_id }; });
 }
 async function loadYtdAbsences() { if (!students.length) return; const studentIds = students.map(s => s.id); const { data: logs } = await supabase.from('attendance_logs').select('student_id, status').in('student_id', studentIds).eq('status', 'Absent').gte('log_date', schoolYearStart); ytdAbsences.clear(); logs?.forEach(log => { const current = ytdAbsences.get(log.student_id) || 0; ytdAbsences.set(log.student_id, current + 1); }); }
 function isWeekend(dateStr) { const day = new Date(dateStr).getDay(); return day === 0 || day === 6; }
@@ -75,12 +78,14 @@ function renderTable() {
         for (let date of dates) {
             if (holidaysMap.has(date) || isWeekend(date) || date > todayStr) continue;
             const pending = pendingUpdates[student.id]?.[date];
-            const original = attendanceData[student.id]?.[date] || { status: 'Absent' };
+            const original = attendanceData[student.id]?.[date] || { status: '' };
             const status = pending !== undefined ? pending : original.status;
-            switch (status) { case 'On Time': present++; break; case 'Late': late++; break; case 'Absent': absent++; break; case 'Excused': excused++; break; }
+            switch (status) { case 'On Time': present++; break; case 'Late': late++; break; case 'Absent': absent++; break; case 'Excused': excused++; break; case 'Excused Absent': excused++; break; }
         }
         const totalSchoolDays = dates.filter(d => !holidaysMap.has(d) && !isWeekend(d) && d <= todayStr).length;
-        const attendanceRate = totalSchoolDays > 0 ? Math.round(((present + late) / totalSchoolDays) * 100) : 0;
+        // For subject attendance: formula is (Present + Late + Excused) / SchoolDays
+        // Note: Subject attendance doesn't track half-days (that's for homeroom/daily attendance)
+        const attendanceRate = totalSchoolDays > 0 ? Math.round(((present + late + excused) / totalSchoolDays) * 100) : 0;
         const ytdAbs = ytdAbsences.get(student.id) || 0;
         return { student, present, late, absent, excused, attendanceRate, ytdAbs };
     });
@@ -100,12 +105,20 @@ function renderTable() {
             const holiday = holidaysMap.get(date);
             if (holiday) { const label = holiday.isSuspended ? 'SUSPENDED' : 'HOLIDAY'; const bgColor = holiday.isSuspended ? 'bg-red-200 text-red-800' : 'bg-amber-100 text-amber-800'; cellsHtml += `<td class="border-b px-2 py-2 text-center"><div class="attendance-cell disabled-cell ${bgColor} rounded-lg px-2 py-2 text-[10px] font-black uppercase">${label}</div></td>`; continue; }
             if (isWeekend(date)) { cellsHtml += `<td class="border-b px-2 py-2 text-center"><div class="attendance-cell disabled-cell bg-gray-200 text-gray-500 rounded-lg py-2 px-1 text-xs font-bold">WEEKEND</div></td>`; continue; }
-            const originalRecord = attendanceData[student.id]?.[date] || { status: 'Absent', time_in: null };
+            const originalRecord = attendanceData[student.id]?.[date] || { status: '', time_in: null };
             const isLocked = !!originalRecord.time_in;
             const pendingStatus = pendingUpdates[student.id]?.[date];
             const status = pendingStatus !== undefined ? pendingStatus : originalRecord.status;
             let bgColor = '', displayText = '';
-            switch (status) { case 'On Time': bgColor = 'bg-green-500'; displayText = 'Present'; break; case 'Late': bgColor = 'bg-orange-500'; displayText = 'Late'; break; case 'Absent': bgColor = 'bg-red-500'; displayText = 'Absent'; break; case 'Excused': bgColor = 'bg-blue-500'; displayText = 'Excused'; break; default: bgColor = 'bg-gray-300'; displayText = '—'; }
+            // Use short codes matching CSV format
+            switch (status) { 
+                case 'On Time': bgColor = 'bg-green-500'; displayText = 'PR'; break; 
+                case 'Late': bgColor = 'bg-orange-500'; displayText = 'LTE'; break; 
+                case 'Absent': bgColor = 'bg-red-500'; displayText = 'ABS'; break; 
+                case 'Excused': bgColor = 'bg-blue-500'; displayText = 'EXC'; break; 
+                case 'Excused Absent': bgColor = 'bg-teal-500'; displayText = 'EXC'; break; 
+                default: bgColor = 'bg-gray-300'; displayText = '—'; 
+            }
             // Allow editing even if locked (gate scanner may malfunction) - show indicator but allow click
             const lockIndicator = isLocked ? '<span class="text-[8px] block opacity-75">🔒</span>' : '';
             const lockedStyle = isLocked ? 'ring-2 ring-yellow-400' : '';
@@ -132,7 +145,13 @@ function renderTable() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 function getAllDatesInMonth() { const dates = []; let current = new Date(currentStart); const last = new Date(currentEnd); while (current <= last) { dates.push(current.toISOString().split('T')[0]); current.setDate(current.getDate() + 1); } return dates; }
-function getNextStatus(current) { const order = ['On Time', 'Late', 'Absent', 'Excused']; let idx = order.indexOf(current); if (idx === -1) idx = 0; return order[(idx + 1) % order.length]; }
+function getNextStatus(current) { 
+    // Cycle: blank -> Present (On Time) -> Late -> Absent -> Excused -> Excused Absent -> blank
+    const order = ['', 'On Time', 'Late', 'Absent', 'Excused', 'Excused Absent']; 
+    let idx = order.indexOf(current); 
+    if (idx === -1) idx = 0; // Default to start (blank)
+    return order[(idx + 1) % order.length]; 
+}
 async function saveAllPending() {
     const updates = [];
     const inserts = [];
@@ -140,11 +159,17 @@ async function saveAllPending() {
         for (let date in pendingUpdates[studentId]) {
             if (date > todayStr || holidaysMap.has(date) || isWeekend(date)) continue;
             const originalRecord = attendanceData[studentId]?.[date] || {};
-            // Allow editing even if record has time_in (gate scanner may have malfunctioned)
             const newStatus = pendingUpdates[studentId][date];
-            if (originalRecord.id) {
+            
+            // Check if record exists for this specific subject
+            if (originalRecord.id && originalRecord.subject_load_id == currentSubjectId) {
+                // Update existing record for this subject
                 updates.push({ id: originalRecord.id, student_id: parseInt(studentId), date: date, status: newStatus });
+            } else if (originalRecord.id && originalRecord.subject_load_id != currentSubjectId) {
+                // Record exists but for different subject - update it
+                updates.push({ id: originalRecord.id, student_id: parseInt(studentId), date: date, status: newStatus, subject_load_id: parseInt(currentSubjectId) });
             } else {
+                // No record exists - insert new one
                 inserts.push({ student_id: parseInt(studentId), log_date: date, status: newStatus, subject_load_id: parseInt(currentSubjectId) });
             }
         }
@@ -152,7 +177,9 @@ async function saveAllPending() {
     if (updates.length === 0 && inserts.length === 0) { showNotification('No changes to save', 'info'); return; }
     try {
         for (const upd of updates) {
-            const { error } = await supabase.from('attendance_logs').update({ status: upd.status }).eq('id', upd.id);
+            const payload = { status: upd.status };
+            if (upd.subject_load_id) payload.subject_load_id = upd.subject_load_id;
+            const { error } = await supabase.from('attendance_logs').update(payload).eq('id', upd.id);
             if (error) throw error;
         }
         if (inserts.length) {

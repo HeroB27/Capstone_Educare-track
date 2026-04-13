@@ -1,5 +1,5 @@
-// teacher/teacher-data-analytics.js - Teacher Data Analytics (FULL)
-// Enhanced: Student Performance Chart, Homeroom Table, Student Modals
+// teacher/teacher-data-analytics.js - Teacher Data Analytics
+// UPDATED: Uses school-year-core.js for dynamic dates
 
 let analyticsCharts = {};
 let trendChart, pieChart, barChart, studentChart;
@@ -9,66 +9,69 @@ let dateStart = null;
 let dateEnd = null;
 let currentSelectedStudentId = null;
 let currentSelectedStudentName = null;
-let currentTrendGrouping = 'quarter';
+let currentTrendGrouping = 'month';
+let currentWeekMonth = '';
+let dynamicSchoolYearStart = null;
+let dynamicSchoolYearEnd = null;
+let dynamicQuarters = null;
+let isLoadingAnalytics = false;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof supabase === 'undefined') {
-        console.error('Supabase client not loaded!');
-        showErrorMessage('Supabase client failed to load. Refresh the page.');
-        return;
+// Helper functions for loading modal
+function showLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    if (modal) {
+        modal.style.display = 'flex';
     }
-    await waitForCurrentUser();
-    setupDateFilters();
-    await loadAnalytics();
-});
-
-function setupDateFilters() {
-    const startInput = document.getElementById('dateStart');
-    const endInput = document.getElementById('dateEnd');
-    const today = new Date();
-    
-    // Default to quarter (last 3 months)
-    const quarterAgo = new Date();
-    quarterAgo.setMonth(today.getMonth() - 3);
-    
-    if (startInput) {
-        startInput.value = quarterAgo.toISOString().split('T')[0];
-    }
-    if (endInput) {
-        endInput.value = today.toISOString().split('T')[0];
-    }
-    
-    dateStart = startInput?.value || quarterAgo.toISOString().split('T')[0];
-    dateEnd = endInput?.value || today.toISOString().split('T')[0];
 }
 
-function waitForCurrentUser() {
-    return new Promise((resolve) => {
-        if (typeof currentUser !== 'undefined' && currentUser) return resolve();
-        const checkInterval = setInterval(() => {
-            if (typeof currentUser !== 'undefined' && currentUser) {
-                clearInterval(checkInterval);
-                resolve();
-            }
-        }, 200);
+function hideLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Main entry point - loads all analytics data
+async function loadAnalyticsData(event) {
+    // Prevent concurrent loads
+    if (isLoadingAnalytics) return;
+    isLoadingAnalytics = true;
+
+    // STEP 1: Show modal FIRST, before any async operations
+    showLoadingModal();
+    
+    // STEP 2: Force browser to paint the modal
+    // Use setTimeout to push to next tick, then requestAnimationFrame
+    await new Promise(resolve => {
+        setTimeout(() => {
+            requestAnimationFrame(resolve);
+        }, 100);
     });
-}
 
-async function loadAnalytics() {
     try {
+        // Initialize settings if not already done
+        if (!dynamicQuarters) {
+            dynamicSchoolYearStart = await getSchoolYearStart();
+            dynamicSchoolYearEnd = await getSchoolYearEnd();
+            dynamicQuarters = await getQuarters();
+        }
+        
+        // Set up date filters
         const startInput = document.getElementById('dateStart');
         const endInput = document.getElementById('dateEnd');
-        dateStart = startInput?.value || dateStart;
-        dateEnd = endInput?.value || dateEnd;
         
         if (!dateStart || !dateEnd) {
             const today = new Date();
             const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
             dateStart = thirtyDaysAgo.toISOString().split('T')[0];
             dateEnd = today.toISOString().split('T')[0];
         }
+        
+        if (startInput) dateStart = startInput.value || dateStart;
+        if (endInput) dateEnd = endInput.value || dateEnd;
 
+        // Get homeroom class
         const { data: homeroom, error: homeroomError } = await supabase
             .from('classes')
             .select('id, grade_level, department')
@@ -76,12 +79,14 @@ async function loadAnalytics() {
             .single();
 
         if (homeroomError || !homeroom) {
-            console.log('No homeroom class found for this teacher');
             showNoHomeroomMessage();
+            hideLoadingModal();
+            isLoadingAnalytics = false;
             return;
         }
         currentHomeroomClass = homeroom;
 
+        // Get students
         const { data: students, error: studentsError } = await supabase
             .from('students')
             .select('id')
@@ -89,12 +94,14 @@ async function loadAnalytics() {
             .eq('status', 'Enrolled');
 
         if (studentsError || !students || students.length === 0) {
-            console.log('No students found in homeroom');
             showNoStudentsMessage();
+            hideLoadingModal();
+            isLoadingAnalytics = false;
             return;
         }
         studentIdsInHomeroom = students.map(s => Number(s.id));
 
+        // Load all data in parallel
         await Promise.all([
             loadPeriodStats(dateStart, dateEnd),
             loadTrendData(dateStart, dateEnd),
@@ -103,35 +110,23 @@ async function loadAnalytics() {
             loadCommonReasons(dateStart, dateEnd),
             loadCriticalAbsences(dateStart, dateEnd)
         ]);
-
+        
     } catch (err) {
-        console.error('Error in loadAnalytics:', err);
+        console.error('Error in loadAnalyticsData:', err);
         showErrorMessage('Failed to load analytics data.');
+    } finally {
+        hideLoadingModal();
+        isLoadingAnalytics = false;
     }
-}
-
-async function loadAnalyticsData(event) {
-    if (event) event.preventDefault();
-    
-    const startInput = document.getElementById('dateStart');
-    const endInput = document.getElementById('dateEnd');
-    if (startInput) dateStart = startInput.value;
-    if (endInput) dateEnd = endInput.value;
-    
-    await loadAnalytics();
 }
 
 async function switchTrendGrouping(mode) {
     currentTrendGrouping = mode;
     
     // Update button styles
-    const btnQuarter = document.getElementById('btnQuarter');
     const btnMonth = document.getElementById('btnMonth');
     const btnWeek = document.getElementById('btnWeek');
     
-    if (btnQuarter) btnQuarter.className = mode === 'quarter' 
-        ? 'px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold' 
-        : 'px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300';
     if (btnMonth) btnMonth.className = mode === 'month' 
         ? 'px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold' 
         : 'px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300';
@@ -140,39 +135,26 @@ async function switchTrendGrouping(mode) {
         : 'px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300';
     
     const weekFilter = document.getElementById('weekMonthFilter');
-    if (weekFilter) weekFilter.classList.toggle('hidden', mode !== 'week');
-    
-    // Adjust date range based on mode
-    const today = new Date();
-    let startDate = new Date();
-    
-    if (mode === 'quarter') {
-        // Last 3 months (school quarter)
-        startDate.setMonth(today.getMonth() - 3);
-    } else if (mode === 'month') {
-        // Last 30 days
-        startDate.setDate(today.getDate() - 30);
-    } else if (mode === 'week') {
-        // Last 7 days
-        startDate.setDate(today.getDate() - 7);
+    if (weekFilter) {
+        weekFilter.classList.toggle('hidden', mode !== 'week');
+        if (mode === 'week' && !currentWeekMonth) {
+            const now = new Date();
+            currentWeekMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            weekFilter.value = currentWeekMonth;
+        }
     }
     
-    // Update date inputs
-    const dateStartInput = document.getElementById('dateStart');
-    const dateEndInput = document.getElementById('dateEnd');
-    
-    if (dateStartInput) dateStartInput.value = startDate.toISOString().split('T')[0];
-    if (dateEndInput) dateEndInput.value = today.toISOString().split('T')[0];
-    
-    // Update global date variables
-    dateStart = startDate.toISOString().split('T')[0];
-    dateEnd = today.toISOString().split('T')[0];
-    
-    await loadAnalytics();
+    // Reload trend data
+    await loadTrendData(dateStart, dateEnd);
 }
 
 function handleWeekMonthChange() {
-    loadAnalytics();
+    const filter = document.getElementById('weekMonthFilter');
+    if (!filter) return;
+    currentWeekMonth = filter.value;
+    if (currentWeekMonth && currentTrendGrouping === 'week') {
+        loadTrendData(dateStart, dateEnd);
+    }
 }
 
 function showNoHomeroomMessage() {
@@ -200,6 +182,16 @@ async function loadPeriodStats(startDate, endDate) {
             .lte('log_date', endDate);
 
         if (error) throw error;
+        
+        // Fetch holidays for the period
+        const { data: holidays } = await supabase
+            .from('holidays')
+            .select('holiday_date')
+            .gte('holiday_date', startDate)
+            .lte('holiday_date', endDate);
+        
+        const holidaySet = new Set(holidays?.map(h => h.holiday_date) || []);
+        
         if (!logs?.length) {
             // No records - show empty
             const avgEl = document.getElementById('avgAttendanceRate');
@@ -252,9 +244,15 @@ async function loadPeriodStats(startDate, endDate) {
             }
         });
 
-        // Calculate average attendance rate - same as admin: present / totalRecords
-        const totalRecords = logs.length;
-        const presentPercent = Math.round((counts.Present / totalRecords) * 100);
+        // Calculate average attendance rate using the same fraction method as homeroom table
+        // Each day contributes (AM_present + PM_present) / 2 to the total
+        const schoolDays = countSchoolDays(startDate, endDate);
+        const holidayCount = holidaySet.size;
+        const actualSchoolDays = Math.max(1, schoolDays - holidayCount);
+        
+        const totalPresentFraction = counts.Present; // Already includes half-day (0.5) contributions
+        const totalPossible = actualSchoolDays * studentIdsInHomeroom.length;
+        const presentPercent = Math.round((totalPresentFraction / totalPossible) * 100);
         
         const avgEl = document.getElementById('avgAttendanceRate');
         if (avgEl) avgEl.innerText = presentPercent + '%';
@@ -285,173 +283,312 @@ function countSchoolDays(startDate, endDate) {
 }
 
 async function loadTrendData(startDate, endDate) {
-    if (!studentIdsInHomeroom.length) return;
-    const totalStudents = studentIdsInHomeroom.length;
+    if (!studentIdsInHomeroom.length) {
+        renderEmptyTrendChart();
+        return;
+    }
+
     try {
-        // Fetch attendance logs
-        const { data: logs, error } = await supabase
-            .from('attendance_logs')
-            .select('student_id, log_date, status, morning_absent, afternoon_absent')
-            .in('student_id', studentIdsInHomeroom)
-            .gte('log_date', startDate)
-            .lte('log_date', endDate);
+        // Fetch all attendance logs for homeroom students with pagination
+        let allLogs = [];
+        let from = 0;
+        const pageSize = 1000;
+        let hasMore = true;
 
-        if (error) throw error;
+        while (hasMore) {
+            const { data: logs, error } = await supabase
+                .from('attendance_logs')
+                .select('student_id, log_date, status, morning_absent, afternoon_absent')
+                .in('student_id', studentIdsInHomeroom)
+                .gte('log_date', startDate)
+                .lte('log_date', endDate)
+                .range(from, from + pageSize - 1);
 
-        // Fetch holidays to exclude suspended dates
-        const { data: holidays } = await supabase
-            .from('holidays')
-            .select('holiday_date')
-            .eq('is_suspended', true)
-            .gte('holiday_date', startDate)
-            .lte('holiday_date', endDate);
+            if (error) throw error;
+            if (!logs || logs.length === 0) break;
+            allLogs = allLogs.concat(logs);
+            from += pageSize;
+            hasMore = logs.length === pageSize;
+        }
 
-        const holidaySet = new Set(holidays?.map(h => h.holiday_date) || []);
+        if (allLogs.length === 0) {
+            renderEmptyTrendChart();
+            return;
+        }
 
-        // Fetch excused letters
+        // Fetch approved excuse letters for these students in date range
+        let effectiveDateStart = startDate;
+        let effectiveDateEnd = endDate;
+        if (currentTrendGrouping === 'week' && currentWeekMonth) {
+            effectiveDateStart = `${currentWeekMonth}-01`;
+            const [year, month] = currentWeekMonth.split('-');
+            const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+            effectiveDateEnd = `${currentWeekMonth}-${String(lastDay).padStart(2, '0')}`;
+        }
+
         const { data: excuses } = await supabase
             .from('excuse_letters')
             .select('student_id, date_absent')
             .eq('status', 'Approved')
             .in('student_id', studentIdsInHomeroom)
-            .gte('date_absent', startDate)
-            .lte('date_absent', endDate);
-
+            .gte('date_absent', effectiveDateStart)
+            .lte('date_absent', effectiveDateEnd);
+        
         const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
 
-        // Create date groups for all dates (including weekends for tracking) - will filter out holidays
-        const dateGroups = {};
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            // Skip if holiday is suspended
-            if (holidaySet.has(dateStr)) continue;
-            dateGroups[dateStr] = { present: 0, absent: 0, late: 0, halfday: 0, excused: 0, total: 0 };
-        }
+        // School year month mapping (matching admin exactly)
+        const schoolYearMonthMap = { '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec', '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr' };
 
-        // Group logs by date
-        const logMap = {};
-        (logs || []).forEach(log => {
-            // Skip holidays
-            if (holidaySet.has(log.log_date)) return;
-            if (!logMap[log.log_date]) logMap[log.log_date] = {};
-            logMap[log.log_date][log.student_id] = log;
-        });
+        // Group logs matching admin's fetchAttendanceTrend logic exactly
+        let result = { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
 
-        // Count all attendance records
-        for (const dateStr in dateGroups) {
-            const dayLogs = logMap[dateStr] || {};
+        if (currentTrendGrouping === 'month') {
+            const monthGroups = {};
             
-            for (const studentId of studentIdsInHomeroom) {
-                const log = dayLogs[studentId];
+            allLogs.forEach(log => {
+                const logDate = new Date(log.log_date);
+                const monthKey = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthGroups[monthKey]) {
+                    monthGroups[monthKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
+                }
                 
-                // If no record, skip (not counted as absent)
-                if (!log) continue;
-                
-                dateGroups[dateStr].total++;
-                
-                const status = log.status || '';
                 const morningAbsent = log.morning_absent || false;
                 const afternoonAbsent = log.afternoon_absent || false;
                 const isFullDayAbsent = morningAbsent && afternoonAbsent;
-                const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
-                const isExcused = excusedSet.has(`${studentId}-${dateStr}`);
-
+                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+                
+                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
                 if (isExcused) {
-                    dateGroups[dateStr].excused++;
-                    dateGroups[dateStr].present++;
+                    monthGroups[monthKey].Excused++;
                 } else if (isHalfDay) {
-                    dateGroups[dateStr].halfday++;
-                    dateGroups[dateStr].present += 0.5;
+                    monthGroups[monthKey].HalfDay++;
+                    monthGroups[monthKey].Present += 0.5;
                 } else if (isFullDayAbsent) {
-                    dateGroups[dateStr].absent++;
-                } else if (status === 'Late') {
-                    dateGroups[dateStr].late++;
-                    dateGroups[dateStr].present++;
-                } else if (status === 'Absent') {
-                    dateGroups[dateStr].absent++;
-                } else if (status === 'Present' || status === 'On Time' || status === '') {
-                    dateGroups[dateStr].present++;
-                } else {
-                    // Any other status - treat as present
-                    dateGroups[dateStr].present++;
+                    monthGroups[monthKey].Absent++;
+                } else if (log.status === 'Present' || log.status === 'On Time') {
+                    monthGroups[monthKey].Present++;
+                } else if (log.status === 'Late') {
+                    monthGroups[monthKey].Late++;
+                } else if (log.status === 'Absent') {
+                    monthGroups[monthKey].Absent++;
                 }
-            }
+            });
+
+            const sortedMonths = Object.keys(monthGroups).sort((a, b) => {
+                const [yearA, monthA] = a.split('-');
+                const [yearB, monthB] = b.split('-');
+                const orderA = (yearA === '2026' ? 100 : 0) + parseInt(monthA);
+                const orderB = (yearB === '2026' ? 100 : 0) + parseInt(monthB);
+                return orderA - orderB;
+            });
+            
+            const monthLabels = sortedMonths.map(m => {
+                const [, month] = m.split('-');
+                return schoolYearMonthMap[month] || month;
+            });
+
+            result = {
+                labels: monthLabels,
+                present: sortedMonths.map(m => monthGroups[m].Present),
+                late: sortedMonths.map(m => monthGroups[m].Late),
+                absent: sortedMonths.map(m => monthGroups[m].Absent),
+                excused: sortedMonths.map(m => monthGroups[m].Excused),
+                halfday: sortedMonths.map(m => monthGroups[m].HalfDay)
+            };
+        }
+        else if (currentTrendGrouping === 'week') {
+            const weekGroups = {};
+            const weekLabelsMap = {};
+            
+            const selectedMonth = currentWeekMonth || '';
+            const [selectedYear, selectedMonthNum] = selectedMonth.split('-');
+            
+            allLogs.forEach(log => {
+                const logDate = new Date(log.log_date);
+                const logMonth = String(logDate.getMonth() + 1).padStart(2, '0');
+                const logYear = String(logDate.getFullYear());
+                
+                if (logMonth !== selectedMonthNum || logYear !== selectedYear) return;
+                
+                const day = logDate.getDate();
+                const weekNum = Math.ceil(day / 7);
+                const weekKey = `Week ${weekNum}`;
+                
+                if (!weekGroups[weekKey]) {
+                    weekGroups[weekKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
+                    const startDay = (weekNum - 1) * 7 + 1;
+                    const endDay = Math.min(weekNum * 7, new Date(parseInt(selectedYear), parseInt(selectedMonthNum), 0).getDate());
+                    weekLabelsMap[weekKey] = `${startDay}-${endDay}`;
+                }
+                
+                const morningAbsent = log.morning_absent || false;
+                const afternoonAbsent = log.afternoon_absent || false;
+                const isFullDayAbsent = morningAbsent && afternoonAbsent;
+                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+                
+                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+                if (isExcused) {
+                    weekGroups[weekKey].Excused++;
+                } else if (isHalfDay) {
+                    weekGroups[weekKey].HalfDay++;
+                    weekGroups[weekKey].Present += 0.5;
+                } else if (isFullDayAbsent) {
+                    weekGroups[weekKey].Absent++;
+                } else if (log.status === 'Present' || log.status === 'On Time') {
+                    weekGroups[weekKey].Present++;
+                } else if (log.status === 'Late') {
+                    weekGroups[weekKey].Late++;
+                } else if (log.status === 'Absent') {
+                    weekGroups[weekKey].Absent++;
+                }
+            });
+
+            const sortedWeeks = Object.keys(weekGroups).sort((a, b) => {
+                const numA = parseInt(a.replace('Week ', ''));
+                const numB = parseInt(b.replace('Week ', ''));
+                return numA - numB;
+            });
+            
+            const weekLabels = sortedWeeks.map(w => `${w} (${weekLabelsMap[w]})`);
+
+            result = {
+                labels: weekLabels,
+                present: sortedWeeks.map(w => weekGroups[w].Present),
+                late: sortedWeeks.map(w => weekGroups[w].Late),
+                absent: sortedWeeks.map(w => weekGroups[w].Absent),
+                excused: sortedWeeks.map(w => weekGroups[w].Excused),
+                halfday: sortedWeeks.map(w => weekGroups[w].HalfDay)
+            };
+        }
+        else {
+            // Default (year) - single aggregate
+            const yearGroup = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
+            
+            allLogs.forEach(log => {
+                const morningAbsent = log.morning_absent || false;
+                const afternoonAbsent = log.afternoon_absent || false;
+                const isFullDayAbsent = morningAbsent && afternoonAbsent;
+                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+                
+                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+                if (isExcused) {
+                    yearGroup.Excused++;
+                } else if (isHalfDay) {
+                    yearGroup.HalfDay++;
+                    yearGroup.Present += 0.5;
+                } else if (isFullDayAbsent) {
+                    yearGroup.Absent++;
+                } else if (log.status === 'Present' || log.status === 'On Time') {
+                    yearGroup.Present++;
+                } else if (log.status === 'Late') {
+                    yearGroup.Late++;
+                } else if (log.status === 'Absent') {
+                    yearGroup.Absent++;
+                }
+            });
+
+            result = {
+                labels: ['Year'],
+                present: [yearGroup.Present],
+                late: [yearGroup.Late],
+                absent: [yearGroup.Absent],
+                excused: [yearGroup.Excused],
+                halfday: [yearGroup.HalfDay]
+            };
         }
 
-        const sortedDates = Object.keys(dateGroups).sort();
+        // Render using admin's exact updateTrendChart format (raw counts, not percentages)
+        renderTrendChart(result.labels, result);
         
-        // If no data, show empty chart
-        if (sortedDates.length === 0 || dateGroups[sortedDates[0]]?.total === 0) {
-            renderTrendChart([], { present: [], absent: [], late: [], halfday: [], excused: [] });
-            return;
-        }
-
-        const labels = sortedDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        
-        // Calculate percentages based on TOTAL records (same as admin)
-        const dataPoints = {
-            present: sortedDates.map(d => {
-                const total = dateGroups[d].total || 1;
-                return Math.round((dateGroups[d].present / total) * 100);
-            }),
-            absent: sortedDates.map(d => {
-                const total = dateGroups[d].total || 1;
-                return Math.round((dateGroups[d].absent / total) * 100);
-            }),
-            late: sortedDates.map(d => {
-                const total = dateGroups[d].total || 1;
-                return Math.round((dateGroups[d].late / total) * 100);
-            }),
-            halfday: sortedDates.map(d => {
-                const total = dateGroups[d].total || 1;
-                return Math.round((dateGroups[d].halfday / total) * 100);
-            }),
-            excused: sortedDates.map(d => {
-                const total = dateGroups[d].total || 1;
-                return Math.round((dateGroups[d].excused / total) * 100);
-            })
-        };
-        
-        console.log('[loadTrendData] dateGroups:', dateGroups);
-        console.log('[loadTrendData] dataPoints:', dataPoints);
-        
-        renderTrendChart(labels, dataPoints);
     } catch (err) {
         console.error('Error in loadTrendData:', err);
+        renderEmptyTrendChart();
     }
+}
+
+function renderEmptyTrendChart() {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+    if (trendChart) trendChart.destroy();
+    const ctx = canvas.getContext('2d');
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['No Data'],
+            datasets: [{ label: 'No attendance records', data: [0], borderColor: '#cbd5e1', borderDash: [5, 5] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
 }
 
 function renderTrendChart(labels, data) {
     const canvas = document.getElementById('trendChart');
     if (!canvas) return;
     if (trendChart) trendChart.destroy();
-    
-    // Build datasets - only include non-empty ones
+
+    if (!labels || labels.length === 0) {
+        renderEmptyTrendChart();
+        return;
+    }
+
+    // Match admin's exact format: raw counts (not percentages)
     const datasets = [];
-    
-    if (data.present?.some(v => v > 0)) {
-        datasets.push({ label: 'Present', data: data.present, borderColor: '#22c55e', backgroundColor: '#22c55e20', fill: true, tension: 0.4 });
-    }
-    if (data.absent?.some(v => v > 0)) {
-        datasets.push({ label: 'Absent', data: data.absent, borderColor: '#ef4444', backgroundColor: '#ef444420', fill: true, tension: 0.4 });
-    }
-    if (data.late?.some(v => v > 0)) {
-        datasets.push({ label: 'Late', data: data.late, borderColor: '#eab308', backgroundColor: '#eab30820', fill: true, tension: 0.4 });
-    }
-    if (data.halfday?.some(v => v > 0)) {
-        datasets.push({ label: 'Half Day', data: data.halfday, borderColor: '#f59e0b', backgroundColor: '#f59e0b20', fill: true, tension: 0.4 });
-    }
-    if (data.excused?.some(v => v > 0)) {
-        datasets.push({ label: 'Excused', data: data.excused, borderColor: '#3b82f6', backgroundColor: '#3b82f620', fill: true, tension: 0.4 });
-    }
-    
-    // If no data, show empty message
-    if (datasets.length === 0) {
-        datasets.push({ label: 'No Data', data: [], borderColor: '#9ca3af', backgroundColor: '#9ca3af20', fill: true, tension: 0.4 });
-    }
-    
+    datasets.push({ 
+        label: 'Present', 
+        data: data.present || [], 
+        borderColor: '#22c55e', 
+        backgroundColor: 'rgba(34,197,94,0.15)', 
+        fill: true, 
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+    });
+    datasets.push({ 
+        label: 'Late', 
+        data: data.late || [], 
+        borderColor: '#eab308', 
+        backgroundColor: 'rgba(234,179,8,0.15)', 
+        fill: true, 
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+    });
+    datasets.push({ 
+        label: 'Absent', 
+        data: data.absent || [], 
+        borderColor: '#ef4444', 
+        backgroundColor: 'rgba(239,68,68,0.15)', 
+        fill: true, 
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+    });
+    datasets.push({ 
+        label: 'Excused', 
+        data: data.excused || [], 
+        borderColor: '#3b82f6', 
+        backgroundColor: 'rgba(59,130,246,0.15)', 
+        fill: true, 
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+    });
+    datasets.push({ 
+        label: 'Half Day', 
+        data: data.halfday || [], 
+        borderColor: '#f59e0b', 
+        backgroundColor: 'rgba(245,158,11,0.15)', 
+        fill: true, 
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+    });
+
     const ctx = canvas.getContext('2d');
     trendChart = new Chart(ctx, {
         type: 'line',
@@ -459,7 +596,7 @@ function renderTrendChart(labels, data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true, max: 100, ticks: { callback: (value) => value + '%' } } },
+            scales: { y: { beginAtZero: true } },
             plugins: { legend: { position: 'bottom' } }
         }
     });
@@ -473,7 +610,7 @@ function renderPieChart(counts) {
     pieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Present', 'Absent', 'Late', 'Excused', 'Half Day'],
+            labels: ['PR (Present)', 'ABS (Absent)', 'LTE (Late)', 'EXC (Excused)', 'Half Day'],
             datasets: [{
                 data: [counts.Present, counts.Absent, counts.Late, counts.Excused, counts.HalfDay || 0],
                 backgroundColor: ['#22c55e', '#ef4444', '#eab308', '#3b82f6', '#f59e0b'],
@@ -672,15 +809,15 @@ async function populateStudentAttendanceTable() {
 
         tbody.innerHTML = (logs || []).map(log => {
             const isExcused = excusedDates.has(log.log_date);
-            const status = isExcused ? 'Excused' : (log.status || 'Unknown');
+            const status = isExcused ? 'Excused' : ((log.status === 'Present' || log.status === 'On Time') ? 'PR' : (log.status || 'Unknown'));
             return `
                 <tr class="border-b border-gray-50">
                     <td class="py-3 px-4 text-gray-800">${new Date(log.log_date).toLocaleDateString()}</td>
                     <td class="text-center py-3 px-4">
-                        <span class="px-2 py-1 rounded-full text-xs font-bold ${status === 'Present' || status === 'On Time' ? 'bg-green-100 text-green-700' : status === 'Late' ? 'bg-yellow-100 text-yellow-700' : status === 'Excused' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}">${status}</span>
+                        <span class="px-2 py-1 rounded-full text-xs font-bold ${status === 'PR' ? 'bg-green-100 text-green-700' : status === 'Late' ? 'bg-yellow-100 text-yellow-700' : status === 'Excused' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}">${status}</span>
                     </td>
-                    <td class="text-center py-3 px-4 ${log.morning_absent ? 'text-red-600 font-bold' : 'text-green-600'}">${log.morning_absent ? 'Absent' : 'Present'}</td>
-                    <td class="text-center py-3 px-4 ${log.afternoon_absent ? 'text-red-600 font-bold' : 'text-green-600'}">${log.afternoon_absent ? 'Absent' : 'Present'}</td>
+                    <td class="text-center py-3 px-4 ${log.morning_absent ? 'text-red-600 font-bold' : 'text-green-600'}">${log.morning_absent ? 'ABS' : 'PR'}</td>
+                    <td class="text-center py-3 px-4 ${log.afternoon_absent ? 'text-red-600 font-bold' : 'text-green-600'}">${log.afternoon_absent ? 'ABS' : 'PR'}</td>
                     <td class="text-center py-3 px-4">${isExcused ? '<i data-lucide="check" class="w-4 h-4 text-green-500 inline"></i>' : '-'}</td>
                 </tr>
             `;
@@ -1220,4 +1357,4 @@ window.alertParent = alertParent;
 window.closeAlertParentModal = closeAlertParentModal;
 window.confirmSendAlert = confirmSendAlert;
 
-console.log('[TeacherAnalytics] Teacher data analytics loaded (FULL)');
+console.log('[TeacherAnalytics] Teacher data analytics loaded');

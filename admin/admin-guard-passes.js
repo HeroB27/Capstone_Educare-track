@@ -62,17 +62,7 @@ async function loadAllPasses() {
             teachers?.forEach(t => teacherMap[t.id] = t);
         }
         
-        // Also load advisers
-        const adviserIds = [...new Set(Object.values(classMap).map(c => c.adviser_id).filter(Boolean))];
-        if (adviserIds.length > 0) {
-            const { data: advisers } = await supabase
-                .from('teachers')
-                .select('id, full_name')
-                .in('id', adviserIds);
-            advisers?.forEach(a => teacherMap[a.id] = a);
-        }
-
-        // Load class data for grade levels
+        // Load class data for grade levels (moved before adviser lookup)
         const classMap = {};
         if (classIds.size > 0) {
             const { data: classes } = await supabase
@@ -81,7 +71,17 @@ async function loadAllPasses() {
                 .in('id', [...classIds]);
             classes?.forEach(c => classMap[c.id] = c);
         }
-
+        
+        // Also load advisers (now extracted from loaded class data)
+        const adviserIds = [...new Set(Object.values(classMap).map(c => c.adviser_id).filter(Boolean))];
+        if (adviserIds.length > 0) {
+            const { data: advisers } = await supabase
+                .from('teachers')
+                .select('id, full_name')
+                .in('id', adviserIds);
+            advisers?.forEach(a => teacherMap[a.id] = a);
+        }
+        
         // Map all data to passes
         filteredPasses = filteredPasses.map(p => {
             const student = studentMap[p.student_id];

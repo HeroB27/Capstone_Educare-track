@@ -87,6 +87,7 @@ function renderChecklist() {
             case 'Late': statusClass = 'status-late'; displayText = 'Late'; break;
             case 'Absent': statusClass = 'status-absent'; displayText = 'Absent'; break;
             case 'Excused': statusClass = 'status-excused'; displayText = 'Excused'; break;
+            case 'Excused Absent': statusClass = 'status-excused-absent'; displayText = 'Excused Absent'; break;
         }
         return `
             <tr class="hover:bg-gray-50 transition-colors">
@@ -115,10 +116,10 @@ function renderChecklist() {
 }
 
 function getNextStatus(current) { 
-    // Cycle: blank -> Present -> Late -> Absent -> Excused -> blank
-    const order = ['', 'On Time', 'Late', 'Absent', 'Excused']; 
+    // Cycle: blank -> Present (On Time) -> Late -> Absent -> Excused -> Excused Absent -> blank
+    const order = ['', 'On Time', 'Late', 'Absent', 'Excused', 'Excused Absent']; 
     let idx = order.indexOf(current); 
-    if (idx === -1) idx = 0; 
+    if (idx === -1) idx = 0; // Default to start (blank)
     return order[(idx + 1) % order.length]; 
 }
 

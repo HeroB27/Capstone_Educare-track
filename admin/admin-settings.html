@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/school-year-core.js"></script>
     <script src="admin-core.js" defer></script>
     <script src="admin-settings.js" defer></script>
     <style>
@@ -94,6 +95,9 @@
                     <button onclick="switchTab(event, 'theme')" id="btn-theme" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
                         Theme
                     </button>
+                    <button onclick="switchTab(event, 'school-year')" id="btn-school-year" class="relative tab-btn px-2 py-4 border-b-4 border-transparent text-gray-400 font-black uppercase tracking-widest transition-all hover:text-gray-600">
+                        School Year
+                    </button>
                 </nav>
             </div>
 
@@ -164,6 +168,42 @@
                             </div>
                         </div>
                         <button onclick="saveThemePreferences()" class="px-8 py-3 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-200">Save Theme Settings</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: School Year Configuration -->
+            <section id="section-school-year" class="settings-section hidden">
+                <div class="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+                        <h3 class="font-black text-gray-800">School Year Configuration</h3>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Set the start and end dates for the academic year. This affects analytics, attendance tracking, and reports.</p>
+                    </div>
+                    <div class="p-8">
+                        <div class="max-w-lg mx-auto space-y-6">
+                            <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div class="flex items-start gap-3">
+                                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 mt-0.5"></i>
+                                    <div>
+                                        <p class="font-bold text-amber-800 text-sm">Current Default</p>
+                                        <p class="text-amber-700 text-xs">If no dates are set, the system uses: Aug 11 - Apr 28</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">School Year Start Date</label>
+                                <input type="date" id="school-year-start" class="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">School Year End Date</label>
+                                <input type="date" id="school-year-end" class="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl font-bold text-gray-800 focus:outline-none focus:border-violet-500 transition-all">
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <button onclick="saveSchoolYearSettings()" id="save-school-year-btn" class="flex-1 py-4 bg-violet-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-violet-700 transition-all shadow-lg shadow-violet-200 hover:scale-[1.02] active:scale-[0.98]">Save School Year Dates</button>
+                                <button onclick="loadSchoolYearSettings()" class="px-6 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold text-xs uppercase hover:bg-gray-200 transition-all">Refresh</button>
+                            </div>
+                            <div id="school-year-status" class="hidden p-4 rounded-xl"></div>
+                        </div>
                     </div>
                 </div>
             </section>

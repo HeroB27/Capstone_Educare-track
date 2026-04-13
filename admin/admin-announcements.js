@@ -1,4 +1,5 @@
 let currentAnnTab = 'active';
+let existingImageUrl = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof checkSession === 'function') {
@@ -58,7 +59,8 @@ async function loadAnnouncements() {
                         <span class="px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest mt-0.5 ${typeColor}">${ann.type || 'General'}</span>
                         <div>
                             <p class="font-bold text-gray-800 text-sm mb-1">${escapeHtml(ann.title)}</p>
-                            <p class="text-xs text-gray-500 line-clamp-1 max-w-md">${escapeHtml(ann.content)}</p>
+                            <p class="text-xs text-gray-500 line-clamp-2 max-w-md">${escapeHtml(ann.content)}</p>
+                            ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mx-auto h-20 w-auto rounded-lg object-cover border border-gray-100">` : ''}
                         </div>
                     </div>
                 </td>
@@ -102,6 +104,13 @@ async function editAnnouncement(id) {
         document.getElementById('annTitle').value = data.title;
         document.getElementById('annType').value = data.type || 'General';
         document.getElementById('annContent').value = data.content;
+
+        // Store existing image URL and show preview
+        existingImageUrl = data.image_url || null;
+        const photoPreview = document.getElementById('annPhotoPreview');
+        if (photoPreview) {
+            photoPreview.innerHTML = data.image_url ? `<img src="${data.image_url}" class="w-24 h-24 rounded-lg object-cover border border-gray-200">` : '';
+        }
 
         // Set checkbox states safely using querySelector
         const setChecked = (id, val) => {
@@ -228,6 +237,12 @@ function closeAnnouncementModal() {
     document.getElementById('annTitle').value = '';
     document.getElementById('annType').value = 'General';
     document.getElementById('annContent').value = '';
+    document.getElementById('annPhoto').value = '';
+    existingImageUrl = null;
+    
+    // Clear photo preview
+    const photoPreview = document.getElementById('annPhotoPreview');
+    if (photoPreview) photoPreview.innerHTML = '';
     
     // Clear checkboxes using querySelector for safer element selection
     const checkboxes = ['targetTeachers', 'targetParents', 'targetClinic', 'targetGuards'];
@@ -259,6 +274,7 @@ async function saveAnnouncement(event) {
         const annContent = document.getElementById('annContent').value.trim();
         const annDate = document.getElementById('annDate').value;
         const annTime = document.getElementById('annTime').value;
+        const photoFile = document.getElementById('annPhoto').files[0];
         
         const targetTeachers = document.getElementById('targetTeachers')?.checked || false;
         const targetParents = document.getElementById('targetParents')?.checked || false;
@@ -291,6 +307,32 @@ async function saveAnnouncement(event) {
             target_guards: targetGuards,
             posted_by_admin_id: adminUser.id
         };
+        
+        // Upload photo if selected
+        if (photoFile) {
+            const ext = photoFile.name.split('.').pop() || 'jpg';
+            const fileName = `announcement_${Date.now()}.${ext}`;
+            const { error: uploadErr } = await supabase.storage
+                .from('announcement-photos')
+                .upload(fileName, photoFile, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+            
+            if (uploadErr) {
+                console.error('Photo upload error:', uploadErr);
+                showNotification('Photo upload failed: ' + uploadErr.message, 'error');
+                return;
+            }
+            
+            const { data: urlData } = supabase.storage
+                .from('announcement-photos')
+                .getPublicUrl(fileName);
+            payload.image_url = urlData.publicUrl;
+        } else if (annId && existingImageUrl) {
+            // Keep existing image when editing and no new photo uploaded
+            payload.image_url = existingImageUrl;
+        }
         
         if (annDate) {
             const timeStr = annTime || '00:00';

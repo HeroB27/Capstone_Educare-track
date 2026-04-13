@@ -281,30 +281,20 @@
             
             const now = new Date().toISOString();
             
-            // 1. Admin announcements targeting parents (no scheduled or already sent)
-            let query = supabaseClient
+            // 1. Admin announcements targeting parents - get both target_parents AND target_students
+            const { data: adminAnn, error: adminErr } = await supabaseClient
                 .from('announcements')
-                .select('id, title, content, created_at, scheduled_at, type, priority, target_students')
-                .eq('target_parents', true);
+                .select('id, title, content, created_at, scheduled_at, type, priority, target_students, target_parents, posted_by_admin_id, admins(full_name), image_url')
+                .or('target_parents.eq.true,target_students.eq.true')
+                .order('created_at', { ascending: false })
+                .limit(50);
             
-            // Try to filter scheduled_at (if column exists), otherwise fetch all
-            try {
-                query = query.or(`scheduled_at.is.null,scheduled_at.lte.${now}`);
-            } catch (e) {
-                // Fallback: just get all announcements targeting parents
-                console.log('Using fallback announcement query');
-            }
-            
-            const { data: adminAnn, error: adminErr } = await query.order('created_at', { ascending: false });
             if (adminErr) console.error('Admin announcements error:', adminErr);
             
-            // Filter: only show announcements that target ALL students OR are relevant to my children's grades
-            // Also filter out announcements that are specifically for other students only
+            // Filter: exclude scheduled future announcements
             const filteredAdmin = (adminAnn || []).filter(ann => {
-                // If announcement targets all students, show it
-                if (ann.target_students === true) return true;
-                // Otherwise, show it only if it has specific targeting (parents would see it)
-                return true; // Already filtered by target_parents=true
+                if (ann.scheduled_at && ann.scheduled_at > now) return false;
+                return true;
             });
             
             const formattedAdmin = filteredAdmin.map(ann => ({
@@ -315,7 +305,8 @@
                 createdAt: ann.created_at,
                 type: ann.type || 'General',
                 isUrgent: ann.priority === 'High',
-                sender: 'School Administration',
+                sender: ann.admins?.full_name || 'School Administration',
+                imageUrl: ann.image_url,
                 read: readAnnouncementIds.has(ann.id)
             }));
             
@@ -405,6 +396,8 @@
                     ? '<span class="bg-blue-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">New</span>'
                     : '<span class="bg-gray-200 text-gray-600 text-[9px] font-bold px-2 py-0.5 rounded-full">✓ Read</span>';
                 
+                const imageHtml = item.imageUrl ? `<img src="${item.imageUrl}" class="mt-2 max-w-full h-auto rounded-lg border border-gray-200 max-h-32 object-contain">` : '';
+                
                 return `
                     <div class="announcement-card ${unreadClass} rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer" onclick="showDetail('${item.source}', ${item.id})">
                         <div class="p-4">
@@ -418,6 +411,7 @@
                             </div>
                             <h3 class="font-bold text-gray-800 text-base mb-1">${escapeHtml(item.title)}</h3>
                             <p class="text-gray-600 text-xs line-clamp-2">${escapeHtml(item.content.substring(0, 120))}${item.content.length > 120 ? '...' : ''}</p>
+                            ${imageHtml}
                             <div class="flex items-center gap-1 mt-3 text-[10px] text-gray-400">
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                                 <span>${escapeHtml(item.sender)}</span>
@@ -485,10 +479,11 @@
             }
             
             // Fill modal
+            const imageHtml = item.imageUrl ? `<img src="${item.imageUrl}" class="mt-4 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : '';
             document.getElementById('modal-title').innerText = item.title;
             document.getElementById('modal-date').innerText = new Date(item.createdAt).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' });
             document.getElementById('modal-sender').innerText = item.sender;
-            document.getElementById('modal-content').innerHTML = escapeHtml(item.content).replace(/\n/g, '<br>');
+            document.getElementById('modal-content').innerHTML = escapeHtml(item.content).replace(/\n/g, '<br>') + imageHtml;
             document.getElementById('announcement-modal').classList.remove('hidden');
         }
         

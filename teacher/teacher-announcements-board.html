@@ -136,6 +136,10 @@
                                 <textarea id="announcement-content" rows="5" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200 resize-none" placeholder="Enter the announcement details..." maxlength="500"></textarea>
                                 <p class="text-xs text-right mt-1 text-gray-500">Characters: <span id="char-counter">0</span>/500</p>
                             </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Photo / Poster (Optional)</label>
+                                <input type="file" id="announcement-photo" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all">
+                            </div>
                             <div class="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
                                 <input type="checkbox" id="target-parents" checked disabled class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
                                 <label for="target-parents" class="text-sm text-gray-700 font-medium">Send to Parents</label>
@@ -234,8 +238,7 @@
 
     <!-- Custom script for announcements board with adviser restriction -->
     <script>
-        // Global variables for current user and supabase
-        let currentUser = null;
+        // Global variable for supabase - currentUser is already defined in teacher-core.js
         let supabaseClient = null;
         
         // Helper: load user data and check adviser status
@@ -253,14 +256,16 @@
                 
                 // Get current session (expecting teacher-core or general-core provides getCurrentUser)
                 let user = null;
-                if (typeof getCurrentUser === 'function') {
-                    user = await getCurrentUser();
-                } else if (typeof window.currentUser !== 'undefined') {
+                
+                // First check if currentUser is already set by teacher-core.js
+                if (typeof window.currentUser !== 'undefined' && window.currentUser) {
                     user = window.currentUser;
+                    console.log('Using existing window.currentUser:', user.id, user.full_name);
+                } else if (typeof getCurrentUser === 'function') {
+                    user = await getCurrentUser();
                 } else if (supabaseClient) {
                     const { data: { session } } = await supabaseClient.auth.getSession();
                     if (session?.user) {
-                        // fetch teacher profile
                         const { data: teacherData } = await supabaseClient
                             .from('teachers')
                             .select('id, full_name, email')
@@ -271,19 +276,21 @@
                 }
                 
                 if (!user && supabaseClient) {
-                    // fallback: try to get from localStorage
                     const cached = localStorage.getItem('teacherUser');
                     if (cached) user = JSON.parse(cached);
                 }
                 
+                console.log('Final user for announcements:', user);
+                
                 if (user) {
-                    currentUser = user;
+                    window.currentUser = user;
                     document.getElementById('teacher-name').innerText = user.full_name || user.name || 'Teacher';
                     const avatarEl = document.getElementById('user-avatar');
                     if (avatarEl) avatarEl.innerText = (user.full_name?.[0] || user.email?.[0] || 'T').toUpperCase();
                     
                     // ADVISER CHECK: hide post column if not homeroom adviser
-                    await checkAdviserAndTogglePostForm(user);
+                    console.log('User loaded, checking adviser status for:', user.id, user.full_name);
+                    await checkAdviserAndTogglePostForm();
                 } else {
                     document.getElementById('teacher-name').innerText = 'Teacher';
                 }
@@ -317,7 +324,7 @@
         }
         
         // Check if teacher is homeroom adviser by looking up classes table
-        async function checkAdviserAndTogglePostForm(teacher) {
+        async function checkAdviserAndTogglePostForm() {
             const postColumn = document.getElementById('post-announcement-column');
             if (!postColumn) return;
             
@@ -326,13 +333,27 @@
                     console.warn('Supabase client not available');
                     return;
                 }
+                
+                // Get teacher ID from window.currentUser (set by teacher-core.js)
+                const teacherId = window.currentUser?.id;
+                console.log('Checking adviser status for teacher ID:', teacherId, 'Name:', window.currentUser?.full_name);
+                
+                if (!teacherId) {
+                    console.warn('No teacher ID found');
+                    return;
+                }
+                
                 const { data: classData, error } = await supabaseClient
                     .from('classes')
-                    .select('id, class_name')
-                    .eq('adviser_id', teacher.id)
-                    .maybeSingle();  // using maybeSingle to avoid error if none
+                    .select('id, grade_level, department, strand')
+                    .eq('adviser_id', teacherId)
+                    .maybeSingle();
+                
+                console.log('Class data found:', classData, 'Error:', error);
                 
                 const isAdviser = classData && !error;
+                console.log('Is adviser:', isAdviser);
+                
                 if (!isAdviser) {
                     // Replace post column content with non-adviser message
                     postColumn.innerHTML = `
@@ -371,12 +392,13 @@
                 return;
             }
             try {
-                // Fetch announcements where sender_type = 'admin' OR target_role = 'teacher'
+                const now = new Date().toISOString();
+                // Fetch admin announcements targeting teachers
                 const { data, error } = await supabaseClient
                     .from('announcements')
-                    .select('*')
-                    .or('sender_type.eq.admin, target_role.eq.teacher')
-                    .eq('status', 'sent')
+                    .select('*, admins(full_name)')
+                    .eq('target_teachers', true)
+                    .or('scheduled_at.is.null,scheduled_at.lte.' + now)
                     .order('created_at', { ascending: false })
                     .limit(30);
                     
@@ -388,15 +410,16 @@
                 }
                 
                 container.innerHTML = data.map(ann => `
-                    <div class="announcement-card bg-gray-50 rounded-2xl p-5 border-l-4 ${ann.is_urgent ? 'border-l-red-500 bg-red-50/30' : 'border-l-blue-500'} transition-all">
+                    <div class="announcement-card bg-gray-50 rounded-2xl p-5 border-l-4 ${ann.priority === 'High' ? 'border-l-red-500 bg-red-50/30' : 'border-l-blue-500'} transition-all">
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="font-bold text-gray-800 text-lg">${escapeHtml(ann.title || 'Announcement')}</h4>
-                            ${ann.is_urgent ? '<span class="urgent-badge text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full">URGENT</span>' : ''}
+                            ${ann.priority === 'High' ? '<span class="urgent-badge text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full">URGENT</span>' : ''}
                         </div>
                         <p class="text-gray-600 text-sm mb-3 whitespace-pre-line">${escapeHtml(ann.content || ann.message || 'No content')}</p>
+                        ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mb-3 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : ''}
                         <div class="flex items-center justify-between text-xs text-gray-400">
                             <span>📅 ${formatDate(ann.created_at)}</span>
-                            <span>🏫 School Administration</span>
+                            <span>🏫 ${ann.admins?.full_name || 'School Administration'}</span>
                         </div>
                     </div>
                 `).join('');
@@ -409,14 +432,13 @@
         // Load sent announcements by current teacher
         async function loadSentAnnouncements() {
             const container = document.getElementById('sent-announcements-list');
-            if (!container || !currentUser) return;
+            if (!container || !window.currentUser) return;
             if (!supabaseClient) return;
             try {
                 const { data, error } = await supabaseClient
                     .from('announcements')
                     .select('*')
-                    .eq('sender_id', currentUser.id)
-                    .eq('sender_type', 'teacher')
+                    .eq('posted_by_teacher_id', window.currentUser.id)
                     .order('created_at', { ascending: false });
                     
                 if (error) throw error;
@@ -428,13 +450,14 @@
                     <div class="announcement-card bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
                         <div class="flex justify-between items-start mb-2">
                             <h4 class="font-semibold text-gray-800">${escapeHtml(ann.title || 'No Title')}</h4>
-                            <span class="text-xs px-2 py-1 rounded-full ${ann.status === 'scheduled' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">${ann.status === 'scheduled' ? 'Scheduled' : 'Sent'}</span>
+                            <span class="text-xs px-2 py-1 rounded-full ${ann.scheduled_at ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">${ann.scheduled_at ? 'Scheduled' : 'Sent'}</span>
                         </div>
                         <p class="text-gray-600 text-sm mb-3 line-clamp-2">${escapeHtml(ann.content || ann.message || '')}</p>
+                        ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mb-3 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : ''}
                         <div class="flex justify-between text-xs text-gray-400">
                             <span>📅 ${formatDate(ann.created_at)}</span>
-                            ${ann.scheduled_for ? `<span>⏰ Scheduled: ${formatDate(ann.scheduled_for)}</span>` : ''}
-                            ${ann.is_urgent ? '<span class="text-red-500 font-semibold">⚠️ Urgent</span>' : ''}
+                            ${ann.scheduled_at ? `<span>⏰ Scheduled: ${formatDate(ann.scheduled_at)}</span>` : ''}
+                            ${ann.priority === 'High' ? '<span class="text-red-500 font-semibold">⚠️ Urgent</span>' : ''}
                         </div>
                     </div>
                 `).join('');
@@ -447,18 +470,16 @@
         // Load scheduled announcements (future)
         async function loadScheduledAnnouncements() {
             const container = document.getElementById('scheduled-announcements-list');
-            if (!container || !currentUser) return;
+            if (!container || !window.currentUser) return;
             if (!supabaseClient) return;
             try {
                 const now = new Date().toISOString();
                 const { data, error } = await supabaseClient
                     .from('announcements')
                     .select('*')
-                    .eq('sender_id', currentUser.id)
-                    .eq('sender_type', 'teacher')
-                    .eq('status', 'scheduled')
-                    .gt('scheduled_for', now)
-                    .order('scheduled_for', { ascending: true });
+                    .eq('posted_by_teacher_id', window.currentUser.id)
+                    .gt('scheduled_at', now)
+                    .order('scheduled_at', { ascending: true });
                     
                 if (error) throw error;
                 if (!data || data.length === 0) {
@@ -469,9 +490,10 @@
                     <div class="announcement-card bg-amber-50/40 rounded-2xl p-5 border border-amber-100">
                         <h4 class="font-bold text-gray-800">${escapeHtml(ann.title || 'Scheduled Post')}</h4>
                         <p class="text-gray-600 text-sm mt-1 mb-2">${escapeHtml(ann.content || '').substring(0, 100)}${(ann.content?.length || 0) > 100 ? '...' : ''}</p>
+                        ${ann.image_url ? `<img src="${ann.image_url}" class="mt-2 mb-3 mx-auto max-w-full h-auto rounded-lg border border-gray-200">` : ''}
                         <div class="flex justify-between text-xs">
-                            <span class="text-amber-600 font-medium">📅 Scheduled: ${formatDate(ann.scheduled_for)}</span>
-                            ${ann.is_urgent ? '<span class="text-red-500">Urgent</span>' : ''}
+                            <span class="text-amber-600 font-medium">📅 Scheduled: ${formatDate(ann.scheduled_at)}</span>
+                            ${ann.priority === 'High' ? '<span class="text-red-500">Urgent</span>' : ''}
                         </div>
                     </div>
                 `).join('');
@@ -483,24 +505,26 @@
         
         // Post announcement (used by teacher-core.js or local)
         window.postAnnouncement = async function() {
-            if (!currentUser) {
+            if (!window.currentUser) {
                 showNotification?.('Please login to post announcement', 'error');
                 return;
             }
             const title = document.getElementById('announcement-title')?.value.trim();
             const content = document.getElementById('announcement-content')?.value.trim();
+            const photoInput = document.getElementById('announcement-photo');
             const isUrgent = document.getElementById('announcement-urgent')?.checked || false;
             const scheduledDate = document.getElementById('announcement-date')?.value;
             const scheduledTime = document.getElementById('announcement-time')?.value;
+            const photoFile = photoInput?.files[0];
             
             if (!title) { showNotification?.('Please enter a title', 'warning'); return; }
             if (!content) { showNotification?.('Please enter announcement content', 'warning'); return; }
             if (content.length > 500) { showNotification?.('Content exceeds 500 characters', 'error'); return; }
             
-            let scheduledFor = null;
+            let scheduledAt = null;
             if (scheduledDate && scheduledTime) {
-                scheduledFor = `${scheduledDate}T${scheduledTime}:00`;
-                if (new Date(scheduledFor) <= new Date()) {
+                scheduledAt = `${scheduledDate}T${scheduledTime}:00`;
+                if (new Date(scheduledAt) <= new Date()) {
                     showNotification?.('Schedule time must be in the future', 'error');
                     return;
                 }
@@ -508,19 +532,42 @@
             
             try {
                 if (!supabaseClient) throw new Error('Supabase not ready');
-                const announcementData = {
+                
+                const payload = {
                     title: title,
                     content: content,
-                    message: content,
-                    sender_id: currentUser.id,
-                    sender_type: 'teacher',
-                    target_role: 'parent',
-                    is_urgent: isUrgent,
-                    status: scheduledFor ? 'scheduled' : 'sent',
-                    scheduled_for: scheduledFor,
-                    created_at: new Date().toISOString()
+                    posted_by_teacher_id: window.currentUser.id,
+                    target_teachers: true,
+                    target_students: true,
+                    priority: isUrgent ? 'High' : 'Normal',
+                    type: 'Teacher',
+                    scheduled_at: scheduledAt
                 };
-                const { error } = await supabaseClient.from('announcements').insert([announcementData]);
+                
+                // Upload photo if selected
+                if (photoFile) {
+                    const ext = photoFile.name.split('.').pop() || 'jpg';
+                    const fileName = `announcement_teacher_${Date.now()}.${ext}`;
+                    const { error: uploadErr } = await supabaseClient.storage
+                        .from('announcement-photos')
+                        .upload(fileName, photoFile, {
+                            cacheControl: '3600',
+                            upsert: false
+                        });
+                    
+                    if (uploadErr) {
+                        console.error('Photo upload error:', uploadErr);
+                        showNotification?.('Photo upload failed: ' + uploadErr.message, 'error');
+                        return;
+                    }
+                    
+                    const { data: urlData } = supabaseClient.storage
+                        .from('announcement-photos')
+                        .getPublicUrl(fileName);
+                    payload.image_url = urlData.publicUrl;
+                }
+                
+                const { error } = await supabaseClient.from('announcements').insert([payload]);
                 if (error) throw error;
                 
                 showNotification?.('Announcement posted successfully!', 'success');
@@ -528,6 +575,7 @@
                 document.getElementById('announcement-title').value = '';
                 document.getElementById('announcement-content').value = '';
                 document.getElementById('announcement-urgent').checked = false;
+                if (photoInput) photoInput.value = '';
                 if (document.getElementById('char-counter')) document.getElementById('char-counter').innerText = '0';
                 // reload lists
                 await loadSentAnnouncements();

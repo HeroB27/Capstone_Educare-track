@@ -1,22 +1,27 @@
-# Supabase API Error Fixes - COMPLETED ✓
+# Guard Core.js Update - Phase 4 Complete
+## Status: In Progress
 
-## Status: Completed ✓
+### Step 1: Replace guard-core.js [PENDING]
+- Replace full contents of `guard/guard-core.js` with corrected Phase 4 code
+- File path: `c:/Users/Lenovo/Desktop/Educare Track/guard/guard-core.js`
 
-### Step 1: ✓ Create TODO.md
-### Step 2: ✓ Read teacher-gatekeeper-mode.js  
-### Step 3: ✓ Edit teacher-core.js 
-   - Fixed checkIsHoliday(): Added .maybeSingle().preferReturnObject(true)
-   - Fixed loadClinicApprovalRequests(): created_at → time_in
-### Step 4: ✓ Edit teacher-gatekeeper-mode.js (duplicate checkIsHoliday fixed)
-### Step 5: ✓ Test teacher-dashboard.html opened & fixes deployed
-### Step 6: ✓ Task complete - Dashboard loads cleanly
+### Step 2: Verify Update [PENDING]
+- Read file to confirm replacement
+- Check for syntax errors
 
-**Result:** 
-- ✅ Fixed holidays 406 "Not Acceptable" (2026-04-11 date handling)
-- ✅ Fixed clinic_visits 400 "column created_at does not exist" 
-- ✅ Queries now use .maybeSingle() for graceful no-data handling
-- ✅ teacher-dashboard.html loads without console errors
+### Step 3: Test Scanner [PENDING]
+- Test hybrid scanner (camera + USB) in `guard/scanner.html`
+- Verify tap direction, status calculation, notifications
 
-**Verification:** Open teacher/teacher-dashboard.html - no more supabase.js errors!
+### Step 4: Validate Phase 4 Features [PENDING]
+- Test partial absence detection
+- Test pattern detection and admin alerts
+- Verify database writes (attendance_logs, notifications, attendance_patterns)
 
-Updated: $(date)
+### Step 5: Test Dependencies [PENDING]
+- Check guard-dashboard.html, guard-basic-analytics.html
+- Verify no console errors
+
+### Step 6: Mark Complete [PENDING]
+- Update TODO.md
+- Run attempt_completion

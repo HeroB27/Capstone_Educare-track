@@ -66,7 +66,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <!-- Notification Bell -->
-                <button onclick="navigateTo('notifications')" class="relative p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-green-600 hover:border-green-200 transition-colors">
+                <button onclick="navigateTo('messages')" class="relative p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-green-600 hover:border-green-200 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                     </svg>
@@ -99,6 +99,9 @@
 
             <!-- Content (hidden until loaded) -->
             <div id="dashboard-content" class="hidden space-y-4">
+                
+                <!-- Suspension Alert -->
+                <div id="suspension-alert" class="hidden"></div>
                 
                 <!-- Today's Schedule Card -->
                 <div class="bg-white rounded-3xl shadow-sm p-6 relative overflow-hidden border border-gray-100">
@@ -170,31 +173,34 @@
                         </div>
                         <span class="text-sm font-semibold text-gray-700">Attendance</span>
                     </button>
-                    <button onclick="navigateTo('notifications')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                    <button onclick="navigateTo('messages')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center relative">
                             <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                             </svg>
                     <span id="notif-badge-quick-action-2" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">0</span>
                         </div>
-                        <span class="text-sm font-semibold text-gray-700">Alerts</span>
+                        <span class="text-sm font-semibold text-gray-700">Messages</span>
                     </button>
-                    <button onclick="navigateTo('announcements')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
-                        <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
-                            </svg>
-                        </div>
-                        <span class="text-sm font-semibold text-gray-700">Updates</span>
-                    </button>
-                    <button onclick="navigateTo('schedule')" class="col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex items-center gap-4 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
+                    <button onclick="navigateTo('schedule')" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center gap-3 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5">
                         <div class="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
                             <svg class="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM12 12h.01"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                             </svg>
                         </div>
-                        <span class="text-lg font-semibold text-gray-700">View Class Schedule</span>
+                        <span class="text-sm font-semibold text-gray-700">Schedule</span>
                     </button>
+                </div>
+
+                <!-- Latest Announcements Section -->
+                <div class="mt-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-gray-700 text-lg">📢 Latest Announcements</h3>
+                        <button onclick="navigateTo('messages')" class="text-sm text-green-600 font-medium hover:text-green-700">View All →</button>
+                    </div>
+                    <div id="notifications-preview" class="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 space-y-3">
+                        <div class="text-center py-6 text-gray-400">Loading...</div>
+                    </div>
                 </div>
 
                 <!-- Clinic History Section -->

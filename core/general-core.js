@@ -175,14 +175,12 @@ async function getDismissalTime(gradeLevel) {
     }
 }
 
-// 4. Check if Date is a Holiday/Suspended
-// Used by Guard Scanner and Teacher Attendance before marking absences
-// UPDATED: Now includes time_coverage for half-day suspension support
-async function checkIsHoliday(date) {
+// FIXED: Added gradeLevel parameter and target_grades filtering
+async function checkIsHoliday(date, gradeLevel = null) {
     try {
         const { data, error } = await supabase
             .from('holidays')
-            .select('id, is_suspended, description, time_coverage')
+            .select('id, is_suspended, description, time_coverage, target_grades')
             .eq('holiday_date', date)
             .single();
         
@@ -192,7 +190,16 @@ async function checkIsHoliday(date) {
         }
         
         if (data) {
-            // Map time_coverage to return value
+            let isSuspended = data.is_suspended === true;
+            // Grade-level filtering
+            if (isSuspended && data.target_grades && data.target_grades !== 'All' && gradeLevel) {
+                const affected = data.target_grades.split(',').map(g => g.trim().toUpperCase());
+                const studentGrade = gradeLevel.toString().toUpperCase();
+                if (!affected.includes(studentGrade)) {
+                    isSuspended = false;
+                }
+            }
+            
             let timeCoverage = null;
             if (data.time_coverage === 'Morning Only') {
                 timeCoverage = 'Morning';
@@ -202,9 +209,9 @@ async function checkIsHoliday(date) {
                 timeCoverage = 'Full Day';
             }
             
-            return { 
-                isHoliday: true, 
-                isSuspended: data.is_suspended, 
+            return {
+                isHoliday: true,
+                isSuspended: isSuspended,
                 description: data.description,
                 timeCoverage: timeCoverage
             };
@@ -217,23 +224,6 @@ async function checkIsHoliday(date) {
     }
 }
 
-// 5. Check if Student is Late
-// scanTime: time string (HH:MM), gradeLevel: string, threshold: time string (optional)
-function isLate(scanTime, gradeLevel, customThreshold = null) {
-    const threshold = customThreshold || '08:15';
-    
-    // Parse times
-    const [scanHour, scanMin] = scanTime.split(':').map(Number);
-    const [thresholdHour, thresholdMin] = threshold.split(':').map(Number);
-    
-    const scanMinutes = scanHour * 60 + scanMin;
-    const thresholdMinutes = thresholdHour * 60 + thresholdMin;
-    
-    return scanMinutes > thresholdMinutes;
-}
-
-// 7. Check if Early Exit
-// scanTime: time string (HH:MM), dismissalTime: time string (HH:MM)
 function isEarlyExit(scanTime, dismissalTime) {
     const [scanHour, scanMin] = scanTime.split(':').map(Number);
     const [dismissHour, dismissMin] = dismissalTime.split(':').map(Number);
@@ -241,25 +231,7 @@ function isEarlyExit(scanTime, dismissalTime) {
     const scanMinutes = scanHour * 60 + scanMin;
     const dismissMinutes = dismissHour * 60 + dismissMin;
     
-    // If scanning out BEFORE dismissal time = early exit
     return scanMinutes < dismissMinutes;
-}
-
-// 8. Get Dismissal Time for Grade Level
-// Returns dismissal time based on grade level
-function getDismissalTime(gradeLevel) {
-    // Default dismissal times by grade level
-    if (gradeLevel.includes('Kinder') || gradeLevel === 'K') {
-        return '11:30'; // Kinder dismisses at 11:30 AM
-    } else if (['1', '2', '3', '4', '5', '6'].some(g => gradeLevel.includes(g))) {
-        return '15:00'; // Elementary dismisses at 3:00 PM
-    } else if (['7', '8', '9', '10'].some(g => gradeLevel.includes(g))) {
-        return '16:00'; // Junior High dismisses at 4:00 PM
-    } else if (['11', '12'].some(g => gradeLevel.includes(g))) {
-        return '16:30'; // Senior High dismisses at 4:30 PM
-    }
-    
-    return '15:00'; // Default
 }
 
 /**
@@ -673,5 +645,6 @@ window.getLateThreshold = getLateThreshold;
 window.getDismissalTime = getDismissalTime;
 window.isLate = isLate;
 window.isEarlyExit = isEarlyExit;
+window.checkIsHoliday = checkIsHoliday; // export the fixed version
 
-console.log('[GeneralCore] Utilities loaded: formatDate, formatTime, getSettings, showConfirm, showModal, grade schedule caching');
+console.log('[GeneralCore] Utilities loaded (including grade-filtered holidays)');

@@ -85,7 +85,7 @@ async function renderCalendar() {
             if (holiday.is_suspended) {
                 dayDiv.classList.add('bg-red-50', 'border-red-200');
             } else {
-                dayDiv.classList.add('bg-yellow-50', 'border-yellow-200');
+                dayDiv.classList.add('bg-sky-50', 'border-sky-200');
             }
         } else if (isWeekend) {
             // Weekend - light gray background
@@ -113,7 +113,7 @@ async function renderCalendar() {
                 badge.className += ' bg-red-200 text-red-800';
                 badge.innerHTML = `<i data-lucide="ban" class="w-3 h-3 inline mr-1"></i> Suspension`;
             } else {
-                badge.className += ' bg-yellow-200 text-yellow-800';
+                badge.className += ' bg-sky-200 text-sky-800';
                 badge.innerHTML = `<i data-lucide="cake" class="w-3 h-3 inline mr-1"></i> Holiday`;
             }
             dayDiv.appendChild(badge);

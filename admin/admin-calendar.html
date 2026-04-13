@@ -288,15 +288,15 @@
 
     <!-- Announce Suspension Modal -->
     <div id="announce-suspension-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-8 text-center transform transition-all">
-            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i data-lucide="megaphone" class="w-8 h-8 text-blue-600"></i>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden p-5 text-center transform transition-all">
+            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="megaphone" class="w-6 h-6 text-blue-600"></i>
             </div>
-            <h3 class="text-xl font-black text-gray-800 mb-2">Announce Suspension?</h3>
-            <p class="text-sm text-gray-500 mb-6">Would you like to automatically notify parents, students, and staff about this suspension?</p>
-            <div class="flex gap-3">
-                <button onclick="closeAnnounceModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">No, Thanks</button>
-                <button onclick="confirmAndAnnounceSuspension()" id="confirm-announce-btn" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Yes, Announce</button>
+            <h3 class="text-lg font-black text-gray-800 mb-2">Announce Suspension?</h3>
+            <p class="text-sm text-gray-500 mb-4">Would you like to automatically notify parents, students, and staff about this suspension?</p>
+            <div class="flex gap-2">
+                <button onclick="closeAnnounceModal()" class="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-all">No, Thanks</button>
+                <button onclick="confirmAndAnnounceSuspension()" id="confirm-announce-btn" class="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Yes, Announce</button>
             </div>
         </div>
     </div>

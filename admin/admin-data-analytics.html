@@ -14,6 +14,7 @@
     
     <script src="../assets/supabase-client.js"></script>
     <script src="../core/general-core.js"></script>
+    <script src="../core/school-year-core.js"></script>
     <script src="admin-core.js" defer></script>
     <script src="admin-data-analytics.js" defer></script>
     
@@ -116,21 +117,11 @@
                         <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Present vs Late vs Absent over time</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <button onclick="switchTrendGrouping('quarter')" id="btnQuarter" class="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold">Quarter</button>
-                        <button onclick="switchTrendGrouping('month')" id="btnMonth" class="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300">Month</button>
+                        <button onclick="switchTrendGrouping('month')" id="btnMonth" class="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold">Month</button>
                         <button onclick="switchTrendGrouping('week')" id="btnWeek" class="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300">Week</button>
                         <!-- Month selector for Week filter -->
                         <select id="weekMonthFilter" class="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold bg-gray-50 hidden" onchange="handleWeekMonthChange()">
                             <option value="">Select Month</option>
-                            <option value="2025-08">August 2025</option>
-                            <option value="2025-09">September 2025</option>
-                            <option value="2025-10">October 2025</option>
-                            <option value="2025-11">November 2025</option>
-                            <option value="2025-12">December 2025</option>
-                            <option value="2026-01">January 2026</option>
-                            <option value="2026-02">February 2026</option>
-                            <option value="2026-03">March 2026</option>
-                            <option value="2026-04">April 2026</option>
                         </select>
                     </div>
                 </div>
@@ -139,7 +130,7 @@
                 </div>
             </div>
 
-            <!-- Three Cards Row -->
+            <!-- Two Cards Row -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 <div class="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex flex-col">
@@ -268,12 +259,12 @@
         </div>
     </div>
 
-    <!-- Loading Modal -->
-    <div id="loadingModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center">
+    <!-- Loading Modal - VISIBLE FROM THE START -->
+    <div id="loadingModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" style="display: flex;">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center min-w-[300px]">
             <div class="w-16 h-16 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-4"></div>
             <h3 class="font-black text-xl text-gray-800">Loading Analytics...</h3>
-            <p class="text-sm text-gray-500 mt-2">Fetching attendance data</p>
+            <p class="text-sm text-gray-500 mt-2">Please wait while data is being loaded</p>
         </div>
     </div>
 

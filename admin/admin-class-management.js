@@ -2,6 +2,7 @@
 // FIXED: Class loading, pagination, modal references, and error handling
 // ADDED: View students in class feature with pagination and search
 // IMPROVED: Card layout – responsive, flexible height, better button grid
+// UPDATED: Uses school-year-core.js for dynamic dates
 
 let allClasses = [];
 let currentClassPage = 1;
@@ -39,14 +40,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadTeachers();
         await loadClasses();
 
-        // Initialize school year start and default date range
+        // Use school-year-core.js for dynamic school year start
+        schoolYearStart = await getSchoolYearStart();
+
+        // Set default date range (first day of current month to today)
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-        let schoolYearStartYear = currentMonth >= 8 ? currentYear : currentYear - 1;
-        schoolYearStart = `${schoolYearStartYear}-08-01`;
-
-        // Set default date range (first day of current month to today)
         const startOfMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
         const today = now.toISOString().split('T')[0];
         document.getElementById('attendanceStartDate').value = startOfMonth;
@@ -757,8 +757,12 @@ async function refreshAttendanceSummary() {
         }), { present: 0, late: 0, absent: 0, excused: 0, morningAbsences: 0, afternoonAbsences: 0, ytdAbsences: 0 });
 
         const avgRate = studentStats.length > 0 ? Math.round(studentStats.reduce((sum, s) => {
-            const total = s.present + s.late + s.absent + s.excused;
-            const rate = total > 0 ? ((s.present + s.late) / total) * 100 : 0;
+            const total = s.present + s.late + s.absent + s.excused + (s.morningAbsences + s.afternoonAbsences);
+            // UNIFORM FORMULA: (Present + Late + Excused + HalfDay*0.5) / Total
+            // For this section, morningAbsences + afternoonAbsences represent half-days
+            const halfDays = s.morningAbsences + s.afternoonAbsences;
+            const effectivePresent = s.present + s.late + s.excused + (halfDays * 0.5);
+            const rate = total > 0 ? (effectivePresent / total) * 100 : 0;
             return sum + rate;
         }, 0) / studentStats.length) : 0;
 

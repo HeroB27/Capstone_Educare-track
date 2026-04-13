@@ -79,9 +79,9 @@ async function calculateAttendanceStats(studentId, year, month) {
             const morningAbsent = log.morning_absent || false;
             const afternoonAbsent = log.afternoon_absent || false;
             
-            // Check for half-day (one session absent, one present)
-            const isHalfDay = morningAbsent !== afternoonAbsent;
+            // Check for half-day: one session absent only (or explicit 'Half Day' status)
             const isFullDayAbsent = morningAbsent && afternoonAbsent;
+            const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
             
             if (isHalfDay) {
                 halfday++;
@@ -98,7 +98,7 @@ async function calculateAttendanceStats(studentId, year, month) {
     }
 
     const percentage = schoolDays.length > 0
-        ? Math.round(((present + excused + (halfday * 0.5)) / schoolDays.length) * 100)
+        ? Math.round(((present + late + excused + (halfday * 0.5)) / schoolDays.length) * 100)
         : 100;
 
     return { present, late, excused, absent, halfday, percentage, totalSchoolDays: schoolDays.length };

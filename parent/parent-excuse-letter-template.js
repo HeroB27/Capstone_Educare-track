@@ -5,6 +5,7 @@ let uploadedFile = null;
 let excuseHistory = [];
 let excuseChannel = null;
 let allMyChildren = [];
+let selectedAbsenceType = 'whole_day'; // Default to whole day
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Max date = today (no future dates)
@@ -152,7 +153,9 @@ async function submitExcuse(event) {
             reason,
             date_absent: date,
             image_proof_url: proofUrl,
-            status: 'Pending'
+            status: 'Pending',
+            absence_type: selectedAbsenceType === 'whole_day' ? 'whole_day' : (selectedAbsenceType === 'morning' ? 'half_day_morning' : 'half_day_afternoon'),
+            period: selectedAbsenceType
         });
         if (error) throw error;
 
@@ -185,10 +188,16 @@ function renderHistory(filter = 'all') {
         container.innerHTML = '<div class="text-center py-8 text-gray-400">No excuse letters</div>';
         return;
     }
-    container.innerHTML = filtered.map(item => `
+    container.innerHTML = filtered.map(item => {
+        // Determine absence type text
+        const absenceType = item.period || item.absence_type || 'whole_day';
+        const typeText = absenceType === 'morning' || absenceType === 'half_day_morning' ? ' (Morning)' :
+                        absenceType === 'afternoon' || absenceType === 'half_day_afternoon' ? ' (Afternoon)' : '';
+        
+        return `
         <div class="bg-white rounded-xl p-4 shadow-sm border">
             <div class="flex justify-between items-start">
-                <div class="min-w-0 flex-1"><span class="font-bold truncate block">${escapeHtml(item.students?.full_name)}</span><span class="text-xs text-gray-500">${formatDate(item.date_absent)}${item.students?.classes ? ` • Grade ${item.students.classes.grade_level}${item.students.classes.strand ? ' - ' + item.students.classes.strand : ''}` : ''}</span></div>
+                <div class="min-w-0 flex-1"><span class="font-bold truncate block">${escapeHtml(item.students?.full_name)}</span><span class="text-xs text-gray-500">${formatDate(item.date_absent)}${typeText}${item.students?.classes ? ` • Grade ${item.students.classes.grade_level}${item.students.classes.strand ? ' - ' + item.students.classes.strand : ''}` : ''}</span></div>
                 <div class="flex items-center gap-2">
                     ${item.status === 'Pending' ? `<button onclick="editExcuse(${item.id})" class="text-blue-500 hover:text-blue-700 text-xs font-medium">Edit</button>` : ''}
                     <span class="px-2 py-1 rounded-full text-xs font-bold bg-${item.status === 'Approved' ? 'green' : item.status === 'Rejected' ? 'red' : 'yellow'}-100 text-${item.status === 'Approved' ? 'green' : item.status === 'Rejected' ? 'red' : 'yellow'}-700 whitespace-nowrap">${item.status}</span>
@@ -198,7 +207,7 @@ function renderHistory(filter = 'all') {
             ${item.image_proof_url ? `<a href="${item.image_proof_url}" target="_blank" class="text-xs text-blue-500 mt-2 inline-block">View Proof</a>` : ''}
             ${item.teacher_remarks ? `<p class="text-xs text-gray-400 mt-2 line-clamp-2">Teacher: ${escapeHtml(item.teacher_remarks)}</p>` : ''}
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function setupExcuseRealtime() {
@@ -241,6 +250,16 @@ function editExcuse(id) {
     document.getElementById('edit-absence-date').value = excuse.date_absent;
     document.getElementById('edit-absence-date').max = getLocalDateString();
     document.getElementById('edit-excuse-reason').value = excuse.reason || '';
+    
+    // Set the absence type
+    const absenceType = excuse.period || excuse.absence_type || 'whole_day';
+    const typeSelect = document.getElementById('edit-absence-type');
+    if (typeSelect) {
+        typeSelect.value = absenceType === 'half_day_morning' ? 'morning' : 
+                         absenceType === 'half_day_afternoon' ? 'afternoon' : 
+                         absenceType;
+    }
+    
     document.getElementById('edit-excuse-modal').classList.remove('hidden');
 }
 
@@ -253,13 +272,19 @@ async function saveEditExcuse() {
     if (!editingExcuseId) return;
     const date = document.getElementById('edit-absence-date').value;
     const reason = document.getElementById('edit-excuse-reason').value.trim();
+    const absenceType = document.getElementById('edit-absence-type')?.value || 'whole_day';
     if (!date) return alert('Select date');
     if (reason.length < 10) return alert('Reason must be at least 10 characters');
     
     try {
         const { error } = await supabase
             .from('excuse_letters')
-            .update({ date_absent: date, reason: reason })
+            .update({ 
+                date_absent: date, 
+                reason: reason,
+                absence_type: absenceType === 'whole_day' ? 'whole_day' : (absenceType === 'morning' ? 'half_day_morning' : 'half_day_afternoon'),
+                period: absenceType
+            })
             .eq('id', editingExcuseId);
         if (error) throw error;
         closeEditModal();
@@ -279,6 +304,24 @@ function escapeHtml(str) {
     });
 }
 
+// Update absence type when radio button is selected
+function updateAbsenceType(type) {
+    selectedAbsenceType = type;
+    
+    // Update visual styling for the selected radio
+    const radios = document.querySelectorAll('input[name="absence-type"]');
+    radios.forEach((radio, index) => {
+        const label = radio.closest('label');
+        if (radio.value === type) {
+            label.classList.remove('border-gray-200');
+            label.classList.add('border-green-500', 'bg-green-50');
+        } else {
+            label.classList.remove('border-green-500', 'bg-green-50');
+            label.classList.add('border-gray-200');
+        }
+    });
+}
+
 window.selectChildForExcuse = selectChildForExcuse;
 window.handleFileSelect = handleFileSelect;
 window.removeFile = removeFile;
@@ -289,3 +332,4 @@ window.resetForm = resetForm;
 window.editExcuse = editExcuse;
 window.closeEditModal = closeEditModal;
 window.saveEditExcuse = saveEditExcuse;
+window.updateAbsenceType = updateAbsenceType;

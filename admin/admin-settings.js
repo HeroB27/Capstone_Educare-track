@@ -17,12 +17,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (theme.accentColor) {
         updateAccentColorButtons(theme.accentColor);
     }
+    
+    // Load school year settings
+    await loadSchoolYearSettings();
 });
 
 function switchTab(event, tabId) {
     if (event && event.preventDefault) event.preventDefault();
     
-    const tabs = ['my-account', 'theme'];
+    const tabs = ['my-account', 'theme', 'school-year'];
     tabs.forEach(t => {
         const section = document.getElementById(`section-${t}`);
         const btn = document.getElementById(`btn-${t}`);
@@ -458,3 +461,111 @@ window.submitPasswordChange = submitPasswordChange;
 window.resolvePasswordRequest = resolvePasswordRequest;
 window.deleteAllResolved = deleteAllResolved;
 window.loadPasswordResets = loadPasswordResets;
+
+// ===========================================
+// SCHOOL YEAR CONFIGURATION
+// ===========================================
+
+async function loadSchoolYearSettings() {
+    const startInput = document.getElementById('school-year-start');
+    const endInput = document.getElementById('school-year-end');
+    const statusDiv = document.getElementById('school-year-status');
+    
+    if (!startInput || !endInput) return;
+    
+    try {
+        const startDate = await getSchoolYearStart();
+        const endDate = await getSchoolYearEnd();
+        
+        startInput.value = startDate;
+        endInput.value = endDate;
+        
+        if (statusDiv) {
+            statusDiv.classList.add('hidden');
+        }
+        
+        console.log('[SchoolYear] Loaded:', startDate, 'to', endDate);
+    } catch (e) {
+        console.error('[SchoolYear] Error loading settings:', e);
+        if (statusDiv) {
+            statusDiv.classList.remove('hidden');
+            statusDiv.className = 'p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm';
+            statusDiv.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 inline mr-2"></i> Error loading settings: ${e.message}`;
+            if (window.lucide) lucide.createIcons();
+        }
+    }
+}
+
+async function saveSchoolYearSettings() {
+    const startInput = document.getElementById('school-year-start');
+    const endInput = document.getElementById('school-year-end');
+    const saveBtn = document.getElementById('save-school-year-btn');
+    const statusDiv = document.getElementById('school-year-status');
+    
+    if (!startInput || !endInput) {
+        showNotification('Form fields not found', 'error');
+        return;
+    }
+    
+    const startDate = startInput.value;
+    const endDate = endInput.value;
+    
+    if (!startDate || !endDate) {
+        showNotification('Please select both start and end dates', 'error');
+        return;
+    }
+    
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Saving...';
+    }
+    
+    try {
+        const startObj = new Date(startDate);
+        const endObj = new Date(endDate);
+        
+        if (isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
+            throw new Error('Invalid date format');
+        }
+        
+        if (endObj <= startObj) {
+            throw new Error('End date must be after start date');
+        }
+        
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        if (startObj < twoYearsAgo) {
+            console.warn('[SchoolYear] Warning: Start date is more than 2 years in the past');
+        }
+        
+        await setSchoolYearDates(startDate, endDate);
+        
+        showNotification('School year dates saved successfully!', 'success');
+        
+        if (statusDiv) {
+            statusDiv.classList.remove('hidden');
+            statusDiv.className = 'p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm';
+            statusDiv.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 inline mr-2"></i> Saved: ${startDate} to ${endDate}`;
+            if (window.lucide) lucide.createIcons();
+        }
+        
+    } catch (e) {
+        console.error('[SchoolYear] Error saving:', e);
+        showNotification(e.message || 'Failed to save school year dates', 'error');
+        
+        if (statusDiv) {
+            statusDiv.classList.remove('hidden');
+            statusDiv.className = 'p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm';
+            statusDiv.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 inline mr-2"></i> ${e.message}`;
+            if (window.lucide) lucide.createIcons();
+        }
+    }
+    
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Save School Year Dates';
+    }
+}
+
+window.loadSchoolYearSettings = loadSchoolYearSettings;
+window.saveSchoolYearSettings = saveSchoolYearSettings;
