@@ -225,72 +225,21 @@ async function checkSuspensionStatus(dateStr) {
     }
 }
 
-// ==================== HALF-DAY RECOMPUTATION ====================
-// Recompute morning/afternoon half status for a student on a specific date
-async function recomputeHalfDayStatus(studentId, date) {
-    const { data: student } = await supabase
-        .from('students')
-        .select('class_id')
-        .eq('id', studentId)
-        .single();
-    if (!student) return;
+// ==================== COMPATIBILITY RE-EXPORTS ====================
+// These functions now delegate to AttendanceHelpers to avoid duplication
+// Backward compatibility: code that loads attendance-utils.js will still work
 
-    const { data: subjects } = await supabase
-        .from('subject_loads')
-        .select('id, schedule_time_start')
-        .eq('class_id', student.class_id);
-
-    const { data: logs } = await supabase
-        .from('attendance_logs')
-        .select('subject_load_id, status')
-        .eq('student_id', studentId)
-        .eq('log_date', date)
-        .not('subject_load_id', 'is', null);
-
-    let morningAbsent = false;
-    let afternoonAbsent = false;
-    for (const subj of subjects) {
-        const hour = subj.schedule_time_start ? parseInt(subj.schedule_time_start.split(':')[0]) : 12;
-        const log = logs.find(l => l.subject_load_id === subj.id);
-        const status = log ? log.status : 'Absent';
-        // Both Absent and Late count as not present for half-day
-        const isPresent = (status === 'On Time' || status === 'Late');
-        if (!isPresent) {
-            if (hour < 12) {
-                morningAbsent = true;
-            } else {
-                afternoonAbsent = true;
-            }
-        }
-    }
-
-    const morningStatus = morningAbsent ? 'Absent' : 'Present';
-    const afternoonStatus = afternoonAbsent ? 'Absent' : 'Present';
-    const { error } = await supabase
-        .from('attendance_daily_summary')
-        .upsert({
-            student_id: studentId,
-            date: date,
-            morning_status: morningStatus,
-            afternoon_status: afternoonStatus,
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'student_id, date' });
-    if (error) console.error('recomputeHalfDayStatus error:', error);
+// Re-export half-day recompute from helpers to eliminate duplicate implementation
+if (typeof window.AttendanceHelpers !== 'undefined') {
+    window.recomputeHalfDayStatus = window.AttendanceHelpers.recomputeHalfDayStatus;
+    window.recomputeHalfDayBatch = window.AttendanceHelpers.recomputeHalfDayBatch;
+} else {
+    // Should not happen in normal operation, but prevent crashes
+    console.warn('[AttendanceUtils] AttendanceHelpers not loaded yet - some functions may be unavailable');
 }
 
-// Batch recompute for many students/dates (used after bulk saves)
-async function recomputeHalfDayBatch(updates) {
-    for (const u of updates) {
-        await recomputeHalfDayStatus(u.studentId, u.date);
-    }
-}
-
-// Global exports
+// Global exports (legacy - these remain for backward compatibility)
 window.checkAttendanceAllowed = checkAttendanceAllowed;
 window.checkStudentAttendanceAllowed = checkStudentAttendanceAllowed;
 window.getAttendanceStatus = getAttendanceStatus;
 window.checkSuspensionStatus = checkSuspensionStatus;
-window.recomputeHalfDayStatus = recomputeHalfDayStatus;
-window.recomputeHalfDayBatch = recomputeHalfDayBatch;
-window.recomputeHalfDayStatus = recomputeHalfDayStatus;
-window.recomputeHalfDayBatch = recomputeHalfDayBatch;

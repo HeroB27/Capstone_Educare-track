@@ -4,6 +4,38 @@
 // Set to true to enable debug logging for all modules
 window.DEBUG = false;
 
+// ==========================================
+// ATTENDANCE STATUS CONSTANTS
+// ==========================================
+// Centralized canonical attendance status values to ensure consistency
+// across all modules (gate scanner, teacher, reporting, CSV exports).
+const ATTENDANCE_STATUS = {
+    // Morning/Session Status
+    PRESENT: 'Present',
+    ON_TIME: 'On Time',
+    LATE: 'Late',
+    ABSENT: 'Absent',
+    EXCUSED: 'Excused',
+    EXCUSED_ABSENT: 'Excused Absent', // For homeroom UI when whole day excused
+    
+    // Exit Status (gate scan departure)
+    NORMAL_EXIT: 'Normal Exit',
+    EARLY_EXIT: 'Early Exit',
+    LATE_EXIT: 'Late Exit',
+    
+    // Special Cases
+    RE_ENTRY: 'Re-entry',
+    LATE_RE_ENTRY: 'Late Re-entry',
+    MEDICAL_EXIT: 'Medical Exit',
+    EARLY_EXIT_AUTHORIZED: 'Early Exit (Authorised)', // British spelling matches existing data
+    
+    // System
+    NA: 'N/A' // Not applicable (half-day not held)
+};
+
+// Export to window for global access
+window.ATTENDANCE_STATUS = ATTENDANCE_STATUS;
+
 // 1. Session Checker
 // Call this at the top of every dashboard's specific core.js
 function checkSession(requiredRole) {

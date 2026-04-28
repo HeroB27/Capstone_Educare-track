@@ -1,10 +1,11 @@
 // ============================================================================
-// GUARD MODULE - Complete Core (including Phase 4)
+// GUARD MODULE - Optimized Core (Matching Teacher Scanner)
 // ============================================================================
 // Features: Hybrid scanner (Camera + USB HID), Tap Direction Logic,
-// Status Calculation, Real-time Notifications, Partial Absence,
-// Pattern Detection, Admin Alerts
+// Status Calculation, Real-time Notifications
 // ============================================================================
+
+const USE_NEW_ATTENDANCE_LOGIC = true;
 
 var currentUser = checkSession('guards');
 
@@ -17,10 +18,14 @@ let canvas = null;
 let canvasContext = null;
 let animationFrameId = null;
 let lastScanTime = 0;
-const ANTI_DUPLICATE_THRESHOLD = 30000; // 30 seconds
+const ANTI_DUPLICATE_THRESHOLD = 5000; // 5 seconds - optimized for faster scanning
 const SCAN_REGEX = /^EDU-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4,6}$/i;
 const scanCooldowns = new Map();
 let lastToastTime = 0;
+let manualAttendanceMode = false; // FIXED: Handle manual attendance during scanner downtime
+// Cache for performance - reduce database calls
+let gateStatusCache = { status: null, timestamp: 0 };
+const GATE_STATUS_CACHE_TTL = 30000; // 30 seconds cache for gate status
 
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -32,6 +37,76 @@ if (typeof window.getLateThreshold !== 'function') {
 }
 if (typeof window.getDismissalTime !== 'function') {
     window.getDismissalTime = function(gradeLevel) { return '15:00'; };
+}
+
+// Attendance status constants (from general-core.js)
+const STATUS = window.ATTENDANCE_STATUS || {
+    PRESENT: 'Present', ON_TIME: 'Present', LATE: 'Late', ABSENT: 'Absent',
+    EXCUSED: 'Excused', EXCUSED_ABSENT: 'Excused Absent',
+    NORMAL_EXIT: 'Normal Exit', EARLY_EXIT: 'Early Exit', LATE_EXIT: 'Late Exit',
+    RE_ENTRY: 'Re-entry', LATE_RE_ENTRY: 'Late Re-entry',
+    MEDICAL_EXIT: 'Medical Exit', EARLY_EXIT_AUTH: 'Early Exit (Authorized)',
+    NA: 'N/A'
+};
+
+// ==========================================
+// PERFORMANCE: Cached gate status (reduce DB calls)
+// ==========================================
+async function getCachedGateStatus() {
+    const now = Date.now();
+    if (gateStatusCache.status && (now - gateStatusCache.timestamp) < GATE_STATUS_CACHE_TTL) {
+        return gateStatusCache.status;
+    }
+    try {
+        gateStatusCache.status = await window.evaluateGateStatus();
+        gateStatusCache.timestamp = now;
+    } catch (e) {
+        gateStatusCache.status = { active: true, allowEntry: true, message: 'Gate Open' };
+    }
+    return gateStatusCache.status;
+}
+
+function clearGateStatusCache() {
+    gateStatusCache = { status: null, timestamp: 0 };
+}
+
+// ============================================================================
+// MANUAL ATTENDANCE MODE (handle teacher manual entry during scanner downtime)
+// ============================================================================
+function toggleManualAttendanceMode() {
+    manualAttendanceMode = !manualAttendanceMode;
+    const indicator = document.getElementById('manual-mode-indicator');
+    if (indicator) {
+        if (manualAttendanceMode) {
+            indicator.classList.remove('hidden');
+            indicator.innerHTML = '<span class="bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold">MANUAL ENTRY MODE</span>';
+        } else {
+            indicator.classList.add('hidden');
+        }
+    }
+    showToast(manualAttendanceMode ? 'Manual Entry Mode: ON (next scans = EXIT)' : 'Manual Entry Mode: OFF', 'success');
+}
+
+// Initialize manual mode indicator on page load
+function initManualModeIndicator() {
+    const scannerHeader = document.querySelector('.scan-header') || document.querySelector('.header') || document.querySelector('.bg-gray-800');
+    if (scannerHeader && !document.getElementById('manual-mode-indicator')) {
+        const indicator = document.createElement('div');
+        indicator.id = 'manual-mode-indicator';
+        indicator.className = 'hidden';
+        scannerHeader.appendChild(indicator);
+    }
+    // Add toggle button to scanner UI if not exists
+    const toggleBtn = document.getElementById('manual-mode-toggle');
+    if (!toggleBtn && document.querySelector('.scan-controls') || document.querySelector('.controls')) {
+        const container = document.querySelector('.scan-controls') || document.querySelector('.controls');
+        const btn = document.createElement('button');
+        btn.id = 'manual-mode-toggle';
+        btn.className = 'bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg text-sm font-semibold';
+        btn.innerText = 'Toggle Manual Entry';
+        btn.onclick = toggleManualAttendanceMode;
+        container.appendChild(btn);
+    }
 }
 
 // ============================================================================
@@ -212,125 +287,23 @@ function isLateExit(scanTime, dismissalTime) {
     return (sH * 60 + sM) > (dH * 60 + dM) + 30;
 }
 
-// ============================================================================
-// PHASE 4: PARTIAL ABSENCE, PATTERN DETECTION, ADMIN ALERTS
-// ============================================================================
-async function sendPartialAbsenceNotification(studentId, absenceType) {
-    const student = await getStudentById(studentId);
-    if (!student?.parent_id) return;
-    const message = absenceType === 'Morning Absent'
-        ? `Your child ${student.full_name} was marked as absent this morning. Please submit an excuse letter.`
-        : `Your child ${student.full_name} did not return this afternoon. Please submit an excuse letter.`;
-    await supabase.from('notifications').insert({
-        recipient_id: student.parent_id,
-        recipient_role: 'parent',
-        title: absenceType === 'Morning Absent' ? 'Morning Absence Notice' : 'Afternoon Absence Notice',
-        message, type: 'absence_reminder'
-    });
-}
 
-async function checkPartialAbsence(studentId, direction, status) {
-    try {
-        const today = getLocalISOString();
-        const currentHour = new Date().getHours();
-        const { data: logs } = await supabase
-            .from('attendance_logs')
-            .select('*')
-            .eq('student_id', studentId)
-            .eq('log_date', today);
-        if (!logs || logs.length === 0) return;
-        const mainLog = logs.find(log => log.time_in !== null);
-        if (!mainLog) return;
-
-        if (direction === 'ENTRY' && currentHour >= 12) {
-            const hasMorningRecord = logs.some(log => new Date(log.time_in).getHours() < 12);
-            if (!hasMorningRecord && !mainLog.morning_absent) {
-                await supabase.from('attendance_logs')
-                    .update({ morning_absent: true, remarks: 'Morning absent – excuse letter required' })
-                    .eq('id', mainLog.id);
-                await sendPartialAbsenceNotification(studentId, 'Morning Absent');
-            }
-        }
-        if (direction === 'EXIT' && currentHour < 12) {
-            const hasAfternoonReturn = logs.some(log => log.time_out && new Date(log.time_out).getHours() >= 12);
-            if (!hasAfternoonReturn && !mainLog.afternoon_absent) {
-                await supabase.from('attendance_logs')
-                    .update({ afternoon_absent: true, remarks: (mainLog.remarks || '') + '; Afternoon absent – excuse letter required' })
-                    .eq('id', mainLog.id);
-                await sendPartialAbsenceNotification(studentId, 'Afternoon Absent');
-            }
-        }
-    } catch (error) { console.error('checkPartialAbsence error:', error); }
-}
-
-async function createAttendancePattern(studentId, patternType, description, severity) {
-    const today = getLocalISOString();
-    const { data: existing } = await supabase
-        .from('attendance_patterns')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('pattern_type', patternType)
-        .gte('created_at', today);
-    if (existing?.length) return;
-    await supabase.from('attendance_patterns').insert({ student_id: studentId, pattern_type: patternType, description, severity });
-}
-
-async function detectAttendancePatterns(student, direction, status) {
-    const studentId = student.id;
-    const { data: recentLogs } = await supabase
-        .from('attendance_logs')
-        .select('*')
-        .eq('student_id', studentId)
-        .gte('time_in', new Date(Date.now() - 10 * 60 * 1000).toISOString())
-        .order('time_in', { ascending: false });
-    if (recentLogs?.length >= 3) {
-        await createAttendancePattern(studentId, 'rapid_scans', `${student.full_name} scanned multiple times rapidly`, 'medium');
-    }
-    if (direction === 'EXIT' && recentLogs?.[0]?.time_in) {
-        const entry = new Date(recentLogs[0].time_in).getTime();
-        if (Date.now() - entry < 5 * 60 * 1000) {
-            await createAttendancePattern(studentId, 'immediate_exit', `${student.full_name} left immediately after entering`, 'high');
-        }
-    }
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: lateLogs } = await supabase.from('attendance_logs').select('*').eq('student_id', studentId).eq('status', 'Late').gte('time_in', weekAgo);
-    if (lateLogs?.length >= 3) {
-        await createAttendancePattern(studentId, 'frequent_late', `${student.full_name} was late ${lateLogs.length} times this week`, 'medium');
-    }
-    const { data: earlyExitLogs } = await supabase.from('attendance_logs').select('*').eq('student_id', studentId).eq('status', 'Early Exit').gte('time_in', weekAgo);
-    if (earlyExitLogs?.length >= 3) {
-        await createAttendancePattern(studentId, 'frequent_early_exit', `${student.full_name} left early ${earlyExitLogs.length} times this week`, 'medium');
-    }
-}
-
-async function createAdminAlert(student, direction, status) {
-    const { data: recentPatterns } = await supabase
-        .from('attendance_patterns')
-        .select('*')
-        .eq('student_id', student.id)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .in('severity', ['high', 'medium']);
-    if (!recentPatterns?.length) return;
-    const hasHigh = recentPatterns.some(p => p.severity === 'high');
-    const mediumCount = recentPatterns.filter(p => p.severity === 'medium').length;
-    if (hasHigh || mediumCount >= 2) {
-        const grade = student.classes?.grade_level || 'Unknown';
-        await supabase.from('admin_alerts').insert({
-            alert_type: 'attendance_pattern',
-            title: 'Student Attendance Alert',
-            message: `${student.full_name} (${grade}) has multiple attendance irregularities. Please review.`,
-            severity: hasHigh ? 'high' : 'medium',
-            metadata: { student_id: student.id, student_name: student.full_name, patterns: recentPatterns.map(p => p.pattern_type) }
-        });
-    }
-}
 
 // ============================================================================
 // SCANNER INITIALIZATION (Camera + USB)
 // ============================================================================
 function setupUsbScanner() {
-    const hiddenInput = document.getElementById('usb-scanner-input');
-    if (!hiddenInput) return;
+    let hiddenInput = document.getElementById('usb-scanner-input');
+    if (!hiddenInput) {
+        hiddenInput = document.createElement('input');
+        hiddenInput.type = 'text';
+        hiddenInput.id = 'usb-scanner-input';
+        hiddenInput.style.position = 'fixed';
+        hiddenInput.style.top = '-100px';
+        hiddenInput.style.left = '-100px';
+        hiddenInput.style.opacity = '0';
+        document.body.appendChild(hiddenInput);
+    }
     function keepFocus() { hiddenInput.focus(); }
     hiddenInput.addEventListener('input', (e) => {
         let val = e.target.value.trim();
@@ -488,20 +461,43 @@ function initializeScanner() {
 // ============================================================================
 // MAIN SCAN PROCESSING (the core logic)
 // ============================================================================
+
+// Show scanning loading indicator
+function showScanningLoading() {
+    const statusIndicator = document.getElementById('status-indicator');
+    if (statusIndicator) {
+        statusIndicator.innerHTML = `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">Scanning...</span>`;
+    }
+}
+
+// Hide scanning loading indicator
+function hideScanningLoading() {
+    const statusIndicator = document.getElementById('status-indicator');
+    if (statusIndicator) {
+        statusIndicator.innerHTML = '';
+    }
+}
+
 async function onScanSuccess(decodedText) {
     const now = Date.now();
     if (scanCooldowns.has(decodedText) && (now - scanCooldowns.get(decodedText)) < ANTI_DUPLICATE_THRESHOLD) {
-        showToast('Duplicate scan – please wait', 'warning');
+        showToast('Duplicate scan detected', 'warning');
         return;
     }
     scanCooldowns.set(decodedText, now);
     if (!SCAN_REGEX.test(decodedText)) { showToast('Invalid QR format', 'error'); return; }
-    await handleScan(decodedText);
+    showScanningLoading();
+    try {
+        await handleScan(decodedText);
+    } finally {
+        // Loading will be hidden when scan result is displayed
+    }
 }
 
 async function handleScan(studentIdText) {
     try {
-        const gateStatus = await window.evaluateGateStatus();
+        // OPTIMIZED: Use cached gate status instead of fetching every time
+        const gateStatus = await getCachedGateStatus();
         const statusIndicator = document.getElementById('status-indicator');
         if (statusIndicator) {
             if (!gateStatus.allowEntry) statusIndicator.innerHTML = `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse">${gateStatus.message}</span>`;
@@ -510,6 +506,8 @@ async function handleScan(studentIdText) {
         if (!gateStatus.active) { showToast(gateStatus.message, 'error'); return; }
 
         const today = getLocalISOString();
+        
+        // OPTIMIZED: Fetch student and last log in parallel
         const student = await getStudentById(studentIdText);
         if (!student) { showToast('Student not found', 'error'); return; }
         if (student.status !== 'Enrolled') { showToast(`Student account is ${student.status}`, 'error'); return; }
@@ -522,8 +520,21 @@ async function handleScan(studentIdText) {
             return;
         }
         
+        // ADDED: Check if today is within school year - 2026-04-20
+        const schoolYearCheck = await window.isTodayWithinSchoolYear();
+        if (!schoolYearCheck.valid) {
+            showToast(`Gate Closed: ${schoolYearCheck.message}`, 'error');
+            return;
+        }
+        
+        // OPTIMIZED: Parallel checks for suspensions and holidays
+        const [suspensionCheck, holidayCheck, lastLog] = await Promise.all([
+            checkSuspension(gradeLevel),
+            checkIsHoliday(today, gradeLevel),
+            getLastLogToday(student.id)
+        ]);
+        
         // SECOND: Check suspensions table for school suspensions
-        const suspensionCheck = await checkSuspension(gradeLevel);
         if (suspensionCheck.isSuspended && suspensionCheck.type === 'weekend') {
             showToast(suspensionCheck.message, 'error');
             return;
@@ -539,7 +550,6 @@ async function handleScan(studentIdText) {
         }
         
         // THIRD: Check holidays table for holidays/suspensions
-        const holidayCheck = await checkIsHoliday(today, gradeLevel);
         if (holidayCheck.isHoliday && holidayCheck.isSuspended) {
             const hour = new Date().getHours();
             // For half-day suspensions, check if scan time is within suspended period
@@ -550,16 +560,51 @@ async function handleScan(studentIdText) {
             }
         }
 
-        const lastLog = await getLastLogToday(student.id);
-        let direction = !lastLog || (lastLog.time_in && lastLog.time_out) ? 'ENTRY' : 'EXIT';
+        // FIXED: Handle manual attendance during scanner downtime
+        // If Manual Entry Mode is ON: treat missing log as already entered (so scan = EXIT)
+        let direction;
+        if (manualAttendanceMode) {
+            // Manual mode: always treat as EXIT (teacher already logged entry manually)
+            direction = 'EXIT';
+        } else {
+            // Normal mode: use standard logic
+            direction = !lastLog || (lastLog.time_in && lastLog.time_out) ? 'ENTRY' : 'EXIT';
+        }
+        
+        // FIXED: Detect re-entry (student already exited and is entering again)
+        const isReEntry = lastLog && lastLog.time_in && lastLog.time_out;
+        
         if (!gateStatus.allowEntry && direction === 'ENTRY') { showToast(`ENTRY DENIED: ${gateStatus.message}`, 'error'); return; }
-        if (lastLog?.status === 'Excused' && direction === 'ENTRY') { showToast(`${student.full_name} already excused today`, 'warning'); return; }
+        if (lastLog?.status === STATUS.EXCUSED && direction === 'ENTRY') { showToast(`${student.full_name} already excused today`, 'warning'); return; }
+        
+        // UPDATED: Commented out hardcoded 9 AM check - now rely on isEarlyExit() comparison with dismissal time
+        // const currentHour = new Date().getHours();
+        // if (direction === 'EXIT' && currentHour < 9) {
+        //     showToast('Exit scans disabled during morning entry hours (before 9:00 AM)', 'error');
+        //     return;
+        // }
 
         const nowDate = new Date();
         const scanTime = nowDate.toTimeString().slice(0,5);
-        const lateThreshold = await window.getLateThreshold(gradeLevel);
-        const dismissalTime = await window.getDismissalTime(gradeLevel);
+        // OPTIMIZED: Get thresholds in parallel (both are independent)
+        const [lateThreshold, dismissalTime] = await Promise.all([
+            window.getLateThreshold(gradeLevel),
+            window.getDismissalTime(gradeLevel)
+        ]);
         let statusInfo = calculateStatus(scanTime, direction, gradeLevel, lateThreshold, dismissalTime);
+        
+        // FIXED: Override status for re-entry (student already exited and is entering again)
+        if (isReEntry && direction === 'ENTRY') {
+            if (statusInfo.status === 'On Time') {
+                statusInfo.status = 'Re-entry';
+                statusInfo.backgroundColor = 'bg-purple-600';
+                statusInfo.message = 'Re-entry after previous exit';
+            } else if (statusInfo.status === 'Late') {
+                statusInfo.status = 'Late Re-entry';
+                statusInfo.backgroundColor = 'bg-orange-500';
+                statusInfo.message = 'Late Re-entry after previous exit';
+            }
+        }
 
         let isMedicalExit = false;
         if (direction === 'EXIT') {
@@ -568,24 +613,28 @@ async function handleScan(studentIdText) {
                 statusInfo.status = 'Medical Exit';
                 statusInfo.backgroundColor = 'bg-blue-600';
                 statusInfo.message = 'Authorized Medical Exit';
+            } else if (USE_NEW_ATTENDANCE_LOGIC) {
+                const guardPassAuth = await checkGuardPassAuthorization(student.id, scanTime);
+                if (guardPassAuth) {
+                    statusInfo.status = guardPassAuth.status;
+                    statusInfo.backgroundColor = 'bg-teal-600';
+                    statusInfo.message = guardPassAuth.message;
+                }
             }
         }
 
         await saveAttendanceLog(student.id, direction, statusInfo.status);
         await createNotification(student.id, direction, statusInfo.status);
-        if (['Late','Early Exit','Late Exit'].includes(statusInfo.status)) {
+        if ([STATUS.LATE, STATUS.EARLY_EXIT, STATUS.LATE_EXIT].includes(statusInfo.status)) {
             await notifyTeacher(student, direction, statusInfo.status);
         }
-
-        await checkPartialAbsence(student.id, direction, statusInfo.status);
-        await detectAttendancePatterns(student, direction, statusInfo.status);
-        await createAdminAlert(student, direction, statusInfo.status);
 
         displayScanResult(student, direction, statusInfo, scanTime);
         addToRecentScans(student, direction, statusInfo, scanTime);
         playBeepSound();
     } catch (err) {
         console.error('Scan error:', err);
+        hideScanningLoading(); // Clear loading on error
         showToast(err.message || 'Error processing scan', 'error');
     }
 }
@@ -631,8 +680,37 @@ async function saveAttendanceLog(studentId, direction, status) {
     const today = getLocalISOString();
     const now = new Date().toISOString();
     if (direction === 'ENTRY') {
+        // Check if log already exists for today - fetch time fields
+        const { data: existing } = await supabase
+            .from('attendance_logs')
+            .select('id, time_in, time_out')
+            .eq('student_id', studentId)
+            .eq('log_date', today)
+            .limit(1);
+        if (existing?.length) {
+            // FIXED: Handle re-entry (student already completed entry+exit)
+            if (existing[0].time_in && existing[0].time_out) {
+                // Create new record for re-entry
+                const { error } = await supabase.from('attendance_logs').insert({ student_id: studentId, log_date: today, time_in: now, status });
+                if (error && error.code !== '23505') throw error;
+            } else if (!existing[0].time_in) {
+                // Only has time_out, missing time_in - update it
+                await supabase.from('attendance_logs').update({ time_in: now, status }).eq('id', existing[0].id);
+            }
+            // Sync daily summary after update/insert
+            if (USE_NEW_ATTENDANCE_LOGIC && typeof AttendanceHelpers !== 'undefined' && typeof AttendanceHelpers.syncStudentDailySummary === 'function') {
+                try { await AttendanceHelpers.syncStudentDailySummary(studentId, today); } catch (e) {}
+            }
+            return;
+        }
         const { error } = await supabase.from('attendance_logs').insert({ student_id: studentId, log_date: today, time_in: now, status });
-        if (error) throw error;
+        if (error && error.code !== '23505') { // Ignore duplicate key error
+            throw error;
+        }
+        // Sync daily summary after insert
+        if (USE_NEW_ATTENDANCE_LOGIC && typeof AttendanceHelpers !== 'undefined' && typeof AttendanceHelpers.syncStudentDailySummary === 'function') {
+            try { await AttendanceHelpers.syncStudentDailySummary(studentId, today); } catch (e) {}
+        }
     } else {
         const { data: existing } = await supabase
             .from('attendance_logs')
@@ -644,30 +722,100 @@ async function saveAttendanceLog(studentId, direction, status) {
             .limit(1);
         if (existing?.length) {
             await supabase.from('attendance_logs').update({ time_out: now, status }).eq('id', existing[0].id);
+            // Sync daily summary after update
+            if (USE_NEW_ATTENDANCE_LOGIC && typeof AttendanceHelpers !== 'undefined' && typeof AttendanceHelpers.syncStudentDailySummary === 'function') {
+                try { await AttendanceHelpers.syncStudentDailySummary(studentId, today); } catch (e) {}
+            }
         } else {
-            await supabase.from('attendance_logs').insert({ student_id: studentId, log_date: today, time_in: now, time_out: now, status });
+            // Check if there's already a complete record (both time_in and time_out)
+            const { data: completed } = await supabase
+                .from('attendance_logs')
+                .select('id')
+                .eq('student_id', studentId)
+                .eq('log_date', today)
+                .not('time_out', 'is', null)
+                .limit(1);
+            if (completed?.length) {
+                // Already exited - update time_out
+                await supabase.from('attendance_logs').update({ time_out: now, status }).eq('id', completed[0].id);
+                // Sync daily summary after update
+                if (USE_NEW_ATTENDANCE_LOGIC && typeof AttendanceHelpers !== 'undefined' && typeof AttendanceHelpers.syncStudentDailySummary === 'function') {
+                    try { await AttendanceHelpers.syncStudentDailySummary(studentId, today); } catch (e) {}
+                }
+            } else {
+                // Insert new exit record
+                const { error } = await supabase.from('attendance_logs').insert({ student_id: studentId, log_date: today, time_in: now, time_out: now, status });
+                if (error && error.code !== '23505') {
+                    throw error;
+                }
+                // Sync daily summary after insert
+                if (USE_NEW_ATTENDANCE_LOGIC && typeof AttendanceHelpers !== 'undefined' && typeof AttendanceHelpers.syncStudentDailySummary === 'function') {
+                    try { await AttendanceHelpers.syncStudentDailySummary(studentId, today); } catch (e) {}
+                }
+            }
         }
     }
 }
 
+/**
+ * Create notifications for gate scan with deduplication.
+ * Sends two types: base arrival/departure, plus detailed alert for Late/Early Exit.
+ */
 async function createNotification(studentId, direction, status) {
     const student = await getStudentById(studentId);
     if (!student?.parent_id) return;
+    
     const time = new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12: true });
     const action = direction === 'ENTRY' ? 'entered' : 'exited';
-    const message = `Your child, ${student.full_name}, ${action} at ${time} (${status})`;
-    await supabase.from('notifications').insert({
-        recipient_id: student.parent_id,
-        recipient_role: 'parent',
-        title: direction === 'ENTRY' ? 'Arrival Alert' : 'Departure Alert',
-        message, type: direction === 'ENTRY' ? 'gate_entry' : 'gate_exit'
-    });
-    if (['Late','Early Exit','Late Exit'].includes(status)) {
-        let title = status === 'Late' ? 'Late Arrival Notice' : (status === 'Early Exit' ? 'Early Dismissal Notice' : 'Late Exit Notice');
+    const baseMessage = `Your child, ${student.full_name}, ${action} at ${time} (${status})`;
+    
+    // Notification 1: Arrival/Departure alert
+    const baseTitle = direction === 'ENTRY' ? 'Arrival Alert' : 'Departure Alert';
+    const baseType = direction === 'ENTRY' ? 'gate_entry' : 'gate_exit';
+    
+    const { data: existingBase } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('recipient_id', student.parent_id)
+        .eq('type', baseType)
+        .eq('title', baseTitle)
+        .maybeSingle();
+    
+    if (!existingBase) {
         await supabase.from('notifications').insert({
-            recipient_id: student.parent_id, recipient_role: 'parent',
-            title, message: `Your child ${student.full_name} ${status === 'Late' ? 'arrived late' : 'left early'} at ${time}.`, type: 'attendance_alert'
+            recipient_id: student.parent_id,
+            recipient_role: 'parent',
+            title: baseTitle,
+            message: baseMessage,
+            type: baseType,
+            created_at: new Date().toISOString()
         });
+    }
+    
+    // Notification 2: Detailed attendance alert for statuses requiring attention
+    if (['Late', 'Early Exit', 'Late Exit'].includes(status)) {
+        let title = status === 'Late' ? 'Late Arrival Notice' : (status === 'Early Exit' ? 'Early Dismissal Notice' : 'Late Exit Notice');
+        const detailMessage = `Your child ${student.full_name} ${status === 'Late' ? 'arrived late' : 'left early'} at ${time}.`;
+        const alertType = 'attendance_alert';
+        
+        const { data: existingAlert } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('recipient_id', student.parent_id)
+            .eq('type', alertType)
+            .eq('title', title)
+            .maybeSingle();
+        
+        if (!existingAlert) {
+            await supabase.from('notifications').insert({
+                recipient_id: student.parent_id,
+                recipient_role: 'parent',
+                title,
+                message: detailMessage,
+                type: alertType,
+                created_at: new Date().toISOString()
+            });
+        }
     }
 }
 
@@ -680,12 +828,32 @@ async function notifyTeacher(student, direction, status) {
     const grade = student.classes?.grade_level || 'Unknown';
     const section = student.classes?.department || '';
     let title = '', message = '';
-    if (status === 'Late') { title = 'Late Arrival Alert'; message = `${student.full_name} (${grade} - ${section}) arrived LATE at ${time}`; }
-    else if (status === 'Early Exit') { title = 'Early Exit Alert'; message = `${student.full_name} (${grade} - ${section}) left EARLY at ${time}`; }
-    else if (status === 'Late Exit') { title = 'Late Exit Alert'; message = `${student.full_name} (${grade} - ${section}) left LATE at ${time}`; }
+    if (status === STATUS.LATE) { title = 'Late Arrival Alert'; message = `${student.full_name} (${grade} - ${section}) arrived LATE at ${time}`; }
+    else if (status === STATUS.EARLY_EXIT) { title = 'Early Exit Alert'; message = `${student.full_name} (${grade} - ${section}) left EARLY at ${time}`; }
+    else if (status === STATUS.LATE_EXIT) { title = 'Late Exit Alert'; message = `${student.full_name} (${grade} - ${section}) left LATE at ${time}`; }
     if (title) {
-        await supabase.from('notifications').insert({ recipient_id: classData.adviser_id, recipient_role: 'teacher', title, message, type: 'attendance_alert' });
+        // Use centralized notification if available
+        if (typeof window.createNotification === 'function') {
+            await window.createNotification(classData.adviser_id, 'teacher', title, message, 'attendance_alert');
+        } else {
+            // Fallback with inline dedup
+            const { data: existing } = await supabase.from('notifications')
+                .select('id')
+                .eq('recipient_id', classData.adviser_id)
+                .eq('type', 'attendance_alert')
+                .eq('title', title)
+                .maybeSingle();
+            if (!existing) {
+                await supabase.from('notifications').insert({
+                    recipient_id: classData.adviser_id,
+                    recipient_role: 'teacher',
+                    title, message, type: 'attendance_alert',
+                    created_at: new Date().toISOString()
+                });
+            }
+        }
     }
+}
 }
 
 async function checkClinicStatus(studentId) {
@@ -700,28 +868,30 @@ async function checkClinicStatus(studentId) {
 }
 
 function calculateStatus(scanTime, direction, gradeLevel, lateThreshold, dismissalTime) {
-    const result = { status: 'Normal', backgroundColor: 'bg-green-600', message: '' };
+    const result = { status: '', backgroundColor: 'bg-green-600', message: '' };
     if (direction === 'ENTRY') {
         if (isLate(scanTime, lateThreshold)) {
-            result.status = 'Late';
+            result.status = STATUS.LATE;
             result.backgroundColor = 'bg-yellow-500';
-            result.message = `Late Arrival (Threshold: ${lateThreshold})`;
-        } else { result.status = 'On Time'; result.message = 'On Time'; }
+            result.message = `Late Arrival (Threshold: ${formatTime12(lateThreshold)})`;
+        } else { result.status = STATUS.ON_TIME; result.message = 'On Time'; }
     } else {
         if (isEarlyExit(scanTime, dismissalTime)) {
-            result.status = 'Early Exit';
+            result.status = STATUS.EARLY_EXIT;
             result.backgroundColor = 'bg-red-600';
-            result.message = `Early Exit (Dismissal: ${dismissalTime})`;
+            result.message = `Early Exit (Dismissal: ${formatTime12(dismissalTime)})`;
         } else if (isLateExit(scanTime, dismissalTime)) {
-            result.status = 'Late Exit';
+            result.status = STATUS.LATE_EXIT;
             result.backgroundColor = 'bg-yellow-500';
-            result.message = `Late Exit (>${dismissalTime}+30min)`;
-        } else { result.status = 'Normal Exit'; result.message = 'Normal Dismissal'; }
+            result.message = `Late Exit (>${formatTime12(dismissalTime)}+30min)`;
+        } else { result.status = STATUS.NORMAL_EXIT; result.message = 'Normal Dismissal'; }
     }
     return result;
 }
 
 function displayScanResult(student, direction, statusInfo, scanTime) {
+    // Clear scanning loading indicator
+    hideScanningLoading();
     const resultCard = document.getElementById('scan-result');
     const placeholder = document.getElementById('scan-placeholder');
     if (!resultCard) return;
@@ -758,6 +928,16 @@ function formatTime(time24) {
     return `${h12}:${m.toString().padStart(2,'0')} ${period}`;
 }
 
+// FIXED: Helper function to format time in 12-hour format
+function formatTime12(timeStr) {
+    if (!timeStr) return '';
+    const [hours, minutes] = timeStr.split(':');
+    const h = parseInt(hours);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const displayHours = h % 12 || 12;
+    return `${displayHours}:${minutes} ${ampm}`;
+}
+
 function playBeepSound() {
     try {
         const audio = new Audio('https://www.soundjay.com/button/beep-07.wav');
@@ -767,6 +947,61 @@ function playBeepSound() {
 }
 
 // ============================================================================
+// GUARD PASS AUTHORIZATION HELPERS
+// ============================================================================
+async function checkGuardPassAuthorization(studentId, scanTime) {
+    const { data: guardPass } = await supabase
+        .from('guard_passes')
+        .select('id, purpose, teacher_id, time_out, status')
+        .eq('student_id', studentId)
+        .eq('status', 'Active')
+        .lte('time_out', scanTime)
+        .order('time_out', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    
+    if (guardPass) {
+        await supabase
+            .from('guard_passes')
+            .update({ 
+                status: 'Used',
+                used_at: new Date().toISOString()
+            })
+            .eq('id', guardPass.id);
+        
+        console.log('[GuardCore] Authorised early exit for student ' + studentId + ' via guard pass');
+        
+        return {
+            status: 'Early Exit (Authorised)',
+            message: 'Authorised early exit: ' + guardPass.purpose
+        };
+    }
+    
+    const { data: clinicVisit } = await supabase
+        .from('clinic_visits')
+        .select('id, reason, status')
+        .eq('student_id', studentId)
+        .eq('status', 'Sent Home')
+        .order('time_out', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    
+    if (clinicVisit) {
+        console.log('[GuardCore] Authorised medical exit for student ' + studentId);
+        
+        return {
+            status: 'Early Exit (Medical)',
+            message: 'Medical: Sent home from clinic'
+        };
+    }
+    
+    return null;
+}
+
+// Global exports
+window.checkGuardPassAuthorization = checkGuardPassAuthorization;
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -774,6 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('guard-name').innerText = currentUser.full_name;
     }
     initializeScanner();
+    initManualModeIndicator();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -799,3 +1035,6 @@ window.submitManualEntry = function() {
     window.closeManualEntry();
     onScanSuccess(id);
 };
+
+// Expose manual attendance mode toggle
+window.toggleManualAttendanceMode = toggleManualAttendanceMode;

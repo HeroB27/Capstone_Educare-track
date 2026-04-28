@@ -150,7 +150,7 @@ async function loadActivePasses() {
         if (error) throw error;
 
         if (!passes || passes.length === 0) {
-            container.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">No active guard passes today.</td></tr>`;
+            container.innerHTML = `<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">No active guard passes today.</td></tr>`;
             if (countEl) countEl.textContent = '0 passes';
             return;
         }
@@ -178,6 +178,7 @@ async function loadActivePasses() {
 
         if (countEl) countEl.textContent = `${passes.length} pass${passes.length !== 1 ? 'es' : ''}`;
 
+        // FIXED: Added click-to-approve functionality - click on row to approve
         let html = '';
         passes.forEach(pass => {
             const student = studentMap[pass.student_id];
@@ -189,7 +190,7 @@ async function loadActivePasses() {
             const purpose = pass.purpose || 'General';
             
             html += `
-                <tr class="hover:bg-gray-50 transition-colors">
+                <tr class="hover:bg-green-50 transition-colors cursor-pointer" onclick="approvePassByClick(${pass.id}, '${escapeHtml(studentName).replace(/'/g, "\\'")}')" title="Click to approve exit">
                     <td class="px-6 py-4">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -205,6 +206,11 @@ async function loadActivePasses() {
                     <td class="px-6 py-4">
                         <span class="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">Active</span>
                     </td>
+                    <td class="px-6 py-4">
+                        <button onclick="event.stopPropagation(); approvePassByClick(${pass.id}, '${escapeHtml(studentName).replace(/'/g, "\\'")}')" class="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700">
+                            Approve
+                        </button>
+                    </td>
                 </tr>
             `;
         });
@@ -213,7 +219,27 @@ async function loadActivePasses() {
     } catch (err) {
         console.error('Error loading active passes:', err);
         if (countEl) countEl.textContent = 'Error';
-        container.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Error loading passes.</td></tr>';
+        container.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-gray-500">Error loading passes.</td></tr>';
+    }
+}
+
+// FIXED: New function to approve pass by clicking row or button
+async function approvePassByClick(passId, studentName) {
+    if (!confirm(`Confirm that ${studentName} is leaving the premises?`)) return;
+    
+    try {
+        const { error } = await supabase
+            .from('guard_passes')
+            .update({ status: 'Used' })
+            .eq('id', passId);
+
+        if (error) throw error;
+
+        showToast(`Pass approved for ${studentName}. Student may exit.`, 'success');
+        await loadActivePasses();
+    } catch (err) {
+        console.error('Error approving pass:', err);
+        showToast('Failed to approve pass', 'error');
     }
 }
 

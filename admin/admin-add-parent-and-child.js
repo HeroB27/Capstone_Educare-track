@@ -4,11 +4,13 @@
 // ============================================================================
 
 let currentStep = 1;
-const totalSteps = 6;
+const totalSteps = 5;
 let studentForms = [];
 let studentsData = [];
+let studentsPhotos = {}; // Store photo data URLs by form ID
 let currentChildIndex = 0;
 let currentParentId = null;
+let studentsSavedToDB = false; // Track if students have been saved to prevent duplicate insert
 let currentEditingParentId = null;
 let currentEditingStudentId = null;
 
@@ -147,7 +149,8 @@ function renderParentStudentTable(parents, students, classes) {
             console.warn('Skipping parent record with missing ID:', parent);
             return;
         }
-        const parentStudents = students.filter(s => s.parent_id === parent.id);
+        const parentIdStr = String(parent.id);
+        const parentStudents = students.filter(s => String(s.parent_id) === parentIdStr);
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-gray-50 transition-colors';
         const studentNames = parentStudents.length > 0
@@ -202,12 +205,24 @@ function parentPrevPage() {
 
 // ==================== EDIT PARENT MODAL (WITH STUDENT MANAGEMENT) ====================
 async function openEditParentModal(parentId) {
-    if (!parentId || parentId === 'null' || parentId === 'undefined') {
-        console.error('Invalid parent ID:', parentId);
+    console.log('openEditParentModal called with:', parentId, typeof parentId);
+    
+    // Handle various invalid values
+    if (parentId === null || parentId === undefined) {
+        console.error('Invalid parent ID (null/undefined):', parentId);
         showNotification('Error: Parent ID missing. Refresh the page.', 'error');
         return;
     }
-    currentEditingParentId = parentId;
+    
+    // Convert to string and check for empty/invalid
+    const parentIdStr = String(parentId);
+    if (parentIdStr === 'null' || parentIdStr === 'undefined' || parentIdStr === 'NaN' || parentIdStr.trim() === '') {
+        console.error('Invalid parent ID:', parentId);
+        showNotification('Error: Parent ID invalid. Refresh the page.', 'error');
+        return;
+    }
+    
+    currentEditingParentId = parentIdStr;
     try {
         const { data: parent, error: parentErr } = await supabase
             .from('parents')
@@ -491,24 +506,42 @@ async function saveStudentChanges() {
         };
         
         if (photoFile) {
+            // DEBUG: Log file info
+            console.log('Photo file selected:', photoFile.name, photoFile.size, photoFile.type);
+            
             const ext = photoFile.name.split('.').pop() || 'jpg';
             const fileName = `student_${studentId}_${Date.now()}.${ext}`;
-            const { error: uploadErr } = await supabase.storage
-                .from('student-photos')
-                .upload(fileName, photoFile, {
-                    cacheControl: '3600',
-                    upsert: true
-                });
             
-            if (uploadErr) {
-                console.error('Upload error:', uploadErr);
-                showNotification('Photo upload failed: ' + uploadErr.message, 'error');
-            } else {
-                const { data: urlData } = supabase.storage
+            // Check file size (5MB limit)
+            if (photoFile.size > 5 * 1024 * 1024) {
+                showNotification('File too large. Maximum size is 5MB.', 'error');
+                return;
+            }
+            
+            try {
+                const { data: uploadData, error: uploadErr } = await supabase.storage
                     .from('student-photos')
-                    .getPublicUrl(fileName);
-                updateData.profile_photo_url = urlData.publicUrl;
-                showNotification('Photo uploaded successfully', 'success');
+                    .upload(fileName, photoFile, {
+                        cacheControl: '3600',
+                        upsert: true
+                    });
+                
+                console.log('Upload response:', uploadData, uploadErr);
+                
+                if (uploadErr) {
+                    console.error('Upload error details:', uploadErr);
+                    showNotification('Photo upload failed: ' + uploadErr.message, 'error');
+                } else {
+                    const { data: urlData } = supabase.storage
+                        .from('student-photos')
+                        .getPublicUrl(fileName);
+                    updateData.profile_photo_url = urlData.publicUrl;
+                    console.log('Photo URL:', urlData.publicUrl);
+                    showNotification('Photo uploaded successfully', 'success');
+                }
+            } catch (uploadEx) {
+                console.error('Upload exception:', uploadEx);
+                showNotification('Photo upload failed: ' + uploadEx.message, 'error');
             }
         }
         
@@ -822,6 +855,8 @@ function resetWizard() {
     document.getElementById('p-pass').value = '';
     studentForms = [];
     studentsData = [];
+    studentsPhotos = {}; // Clear stored photo data URLs
+    studentsSavedToDB = false; // Reset flag
     document.getElementById('student-form-container').innerHTML = '';
     addStudentForm();
     currentStep = 1;
@@ -853,19 +888,41 @@ function updateWizardUI() {
 }
 
 async function nextStep() {
-    if (currentStep === 4) captureStudentData();
-    if (!validateStep(currentStep)) return;
-    if (currentStep === 3) await saveParentToDB();
-    if (currentStep === 5) await saveStudentsToDB();
-    if (currentStep === totalSteps) {
-        await completeEnrollment();
-        return;
+    logDebug('nextStep() called', { currentStep, studentsDataLength: studentsData.length, studentsSavedToDB });
+    try {
+        if (currentStep === 4) {
+            captureStudentData();
+            logDebug('After captureStudentData', { studentsDataLength: studentsData.length });
+        }
+        if (!validateStep(currentStep)) return;
+        if (currentStep === 3) {
+            await saveParentToDB();
+            logDebug('Parent saved to DB', { currentParentId });
+        }
+        if (currentStep === 4) {
+            if (studentsSavedToDB) {
+                logDebug('Students already saved, skipping modal');
+                currentStep = 5;
+                prepareIDPreview();
+                updateWizardUI();
+                return;
+            }
+            logDebug('Showing confirmation modal');
+            showConfirmStep4Modal();
+            return;
+        }
+        if (currentStep === totalSteps) {
+            await completeEnrollment();
+            return;
+        }
+        currentStep++;
+        if (currentStep === 3) renderParentSummary();
+        else if (currentStep === 5) prepareIDPreview();
+        updateWizardUI();
+    } catch (err) {
+        logDebug('ERROR in nextStep', err.message);
+        throw err;
     }
-    currentStep++;
-    if (currentStep === 3) renderParentSummary();
-    else if (currentStep === 5) renderStudentSummaries();
-    else if (currentStep === 6) prepareIDPreview();
-    updateWizardUI();
 }
 
 function prevStep() {
@@ -952,18 +1009,148 @@ function addStudentForm() {
             <select id="${formId}-gender" class="s-gender border-2 border-transparent rounded-xl px-4 py-3 font-bold bg-white focus:border-violet-300 outline-none transition-all shadow-sm"><option>Male</option><option>Female</option></select>
             <input type="date" id="${formId}-dob" class="s-dob border-2 border-transparent rounded-xl px-4 py-3 font-bold text-gray-500 bg-white focus:border-violet-300 outline-none transition-all shadow-sm">
             <select id="${formId}-class" class="s-class col-span-2 border-2 border-transparent rounded-xl px-4 py-3 font-bold bg-white focus:border-violet-300 outline-none transition-all shadow-sm">${globalClassOptions}</select>
+            <div class="col-span-2">
+                <label class="block text-xs font-bold text-gray-500 mb-2">Profile Photo</label>
+                <div class="flex gap-3">
+                    <input type="file" id="${formId}-photo" accept="image/*" class="text-xs text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-violet-100 file:text-violet-700 file:cursor-pointer">
+                    <button type="button" onclick="captureWebcam('${formId}')" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-200"><i data-lucide="camera" class="w-3 h-3 inline mr-1"></i> Camera</button>
+                </div>
+                <div id="${formId}-photo-preview" class="mt-2 hidden">
+                    <img src="" class="w-16 h-16 rounded-lg object-cover border border-gray-200">
+                    <button type="button" onclick="clearPhoto('${formId}')" class="ml-2 text-red-500 text-xs">Clear</button>
+                </div>
+            </div>
         </div>
     `;
     container.appendChild(formDiv);
     studentForms.push(formId);
     const inputs = formDiv.querySelectorAll('input, select');
     inputs.forEach(input => input.addEventListener('change', captureStudentData));
+    
+    // Photo change handler
+    const photoInput = document.getElementById(`${formId}-photo`);
+    if (photoInput) {
+        photoInput.addEventListener('change', (e) => handlePhotoSelect(e, formId));
+    }
+    
     if (window.lucide) lucide.createIcons();
+}
+
+// Handle photo file selection
+function handlePhotoSelect(e, formId) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const dataUrl = ev.target.result;
+            
+            // Store the data URL directly (this is what we'll use for ID preview)
+            studentsPhotos[formId] = dataUrl;
+            
+            // Show preview in the form
+            const previewContainer = document.getElementById(`${formId}-photo-preview`);
+            const previewImg = previewContainer?.querySelector('img');
+            if (previewImg) {
+                previewImg.src = dataUrl;
+                previewContainer.classList.remove('hidden');
+            }
+            
+            console.log('DEBUG handlePhotoSelect: Stored photo data URL for formId:', formId);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Capture photo from webcam
+async function captureWebcam(formId) {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        // Create modal for webcam capture
+        const modalHtml = `
+            <div id="webcamModal" class="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl p-4 max-w-sm w-full">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-black text-sm">Capture Photo</h3>
+                        <button onclick="closeWebcamModal()" class="text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                    <video id="webcamVideo" autoplay playsinline class="w-full rounded-xl bg-black"></video>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="takeSnapshot('${formId}')" class="flex-1 py-2 bg-violet-600 text-white rounded-xl font-bold text-sm">Capture</button>
+                        <button onclick="closeWebcamModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold text-sm">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        if (window.lucide) lucide.createIcons();
+        
+        const video = document.getElementById('webcamVideo');
+        video.srcObject = stream;
+        window.webcamStream = stream;
+    } catch (err) {
+        console.error('Webcam error:', err);
+        showNotification('Camera access denied. Please allow camera permissions.', 'error');
+    }
+}
+
+function takeSnapshot(formId) {
+    const video = document.getElementById('webcamVideo');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    
+    const dataUrl = canvas.toDataURL('image/jpeg');
+    
+    // Store data URL directly for ID preview persistence
+    studentsPhotos[formId] = dataUrl;
+    
+    // Show preview
+    const previewContainer = document.getElementById(`${formId}-photo-preview`);
+    const previewImg = previewContainer?.querySelector('img');
+    if (previewImg) {
+        previewImg.src = dataUrl;
+        previewContainer.classList.remove('hidden');
+    }
+    
+    showNotification('Photo captured!', 'success');
+    
+    closeWebcamModal();
+}
+
+function closeWebcamModal() {
+    const modal = document.getElementById('webcamModal');
+    if (modal) modal.remove();
+    if (window.webcamStream) {
+        window.webcamStream.getTracks().forEach(track => track.stop());
+        window.webcamStream = null;
+    }
+}
+
+function clearPhoto(formId) {
+    // Delete by formId
+    delete studentsPhotos[formId];
+    
+    const previewContainer = document.getElementById(`${formId}-photo-preview`);
+    if (previewContainer) {
+        previewContainer.classList.add('hidden');
+        previewContainer.querySelector('img').src = '';
+    }
+    const photoInput = document.getElementById(`${formId}-photo`);
+    if (photoInput) photoInput.value = '';
 }
 
 function removeStudentForm(btn) {
     const formDiv = btn.closest('.student-form');
     if (!confirm('Remove this student?')) return;
+    const formId = formDiv.querySelector('input[id$="-name"]')?.id.replace('-name', '');
+    
+    if (formId) {
+        delete studentsPhotos[formId];
+    }
+    
     const formIndex = parseInt(formDiv.dataset.index);
     if (formIndex >= 0 && formIndex < studentForms.length) {
         studentForms.splice(formIndex, 1);
@@ -971,6 +1158,7 @@ function removeStudentForm(btn) {
     }
     formDiv.remove();
     studentForms = [];
+    studentsPhotos = {}; // Clear all stored photo data URLs
     const forms = document.querySelectorAll('.student-form');
     forms.forEach((form, i) => {
         form.dataset.index = i;
@@ -993,14 +1181,20 @@ function captureStudentData() {
         const gender = document.getElementById(`${formId}-gender`)?.value || '';
         const dob = document.getElementById(`${formId}-dob`)?.value || null;
         const classId = document.getElementById(`${formId}-class`)?.value || '';
+        
+        // Get photo by formId
+        const photoDataUrl = studentsPhotos[formId] || null;
+        
         if (name || lrn) {
             studentsData.push({
                 index,
+                formId,
                 full_name: name,
                 lrn,
                 gender,
                 birthdate: dob,
                 class_id: classId,
+                photoDataUrl: photoDataUrl
             });
         }
     });
@@ -1038,10 +1232,42 @@ async function updateStudentSummaryView() {
             if (cls.department) className += ` - ${cls.department}`;
         }
     }
+    
+    // FIXED: Include student photo in the summary view
+    let photoHtml = '';
+    const photoDataUrl = student.photoDataUrl || null;
+    if (photoDataUrl && photoDataUrl.startsWith('data:')) {
+        photoHtml = `<div class="flex justify-center mb-4"><img src="${photoDataUrl}" class="w-24 h-24 rounded-full object-cover border-4 border-violet-200 shadow-lg"></div>`;
+    } else {
+        photoHtml = `<div class="flex justify-center mb-4"><div class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-3xl font-bold text-gray-400 border-4 border-gray-300">${student.full_name?.charAt(0) || '?'}</div></div>`;
+    }
+    
     const container = document.getElementById('s-summary-container');
     if (container) {
-        container.innerHTML = `<div class="p-6 bg-violet-50 rounded-2xl"><div class="grid grid-cols-2 gap-4"><div><span class="text-gray-400">Name:</span> ${escapeHtml(student.full_name)}</div><div><span class="text-gray-400">LRN:</span> ${escapeHtml(student.lrn)}</div><div><span class="text-gray-400">Gender:</span> ${escapeHtml(student.gender)}</div><div><span class="text-gray-400">Class:</span> ${escapeHtml(className)}</div></div></div>`;
+        container.innerHTML = `
+            <div class="p-6 bg-violet-50 rounded-2xl">
+                ${photoHtml}
+                <div class="grid grid-cols-2 gap-4">
+                    <div><span class="text-gray-400">Name:</span> ${escapeHtml(student.full_name)}</div>
+                    <div><span class="text-gray-400">LRN:</span> ${escapeHtml(student.lrn)}</div>
+                    <div><span class="text-gray-400">Gender:</span> ${escapeHtml(student.gender)}</div>
+                    <div><span class="text-gray-400">Class:</span> ${escapeHtml(className)}</div>
+                </div>
+            </div>
+            <div class="text-center mt-4">
+                <button onclick="goToStep6()" class="px-6 py-2 bg-violet-600 text-white rounded-xl font-bold text-sm hover:bg-violet-700">
+                    Continue to ID Preview
+                </button>
+            </div>
+        `;
     }
+}
+
+// FIXED: Function to navigate to step 6 from step 5
+function goToStep6() {
+    currentStep = 6;
+    prepareIDPreview();
+    updateWizardUI();
 }
 
 function prepareIDPreview() {
@@ -1059,53 +1285,104 @@ function prepareIDPreview() {
     }
 }
 
-async function updateIDPreview() {
-    const selector = document.getElementById('id-preview-student-select');
-    if (!selector) return;
-    const index = parseInt(selector.value) || 0;
-    const student = studentsData[index];
-    if (!student) return;
+function showConfirmStep4Modal() {
+    document.getElementById('confirmStep4Modal').classList.remove('hidden');
+}
+
+async function confirmStep4() {
+    document.getElementById('confirmStep4Modal').classList.add('hidden');
+    logDebug('confirmStep4() called', { studentsSavedToDB });
+    try {
+        if (!studentsSavedToDB) {
+            await saveStudentsToDB();
+            studentsSavedToDB = true;
+            logDebug('Students saved to DB');
+        }
+        currentStep = 5;
+        prepareIDPreview();
+        updateWizardUI();
+    } catch (err) {
+        logDebug('ERROR in confirmStep4', err.message);
+        showNotification('Error saving students', 'error');
+    }
+}
+
+function cancelStep4Confirm() {
+    document.getElementById('confirmStep4Modal').classList.add('hidden');
+}
+
+function prepareIDPreview() {
+    captureStudentData();
+    const grid = document.getElementById('id-cards-grid');
+    if (!grid) return;
+
+    logDebug('prepareIDPreview()', { studentsDataLength: studentsData.length });
+
+    grid.innerHTML = '';
+
+    if (studentsData.length === 0) {
+        grid.innerHTML = '<p class="text-gray-400 text-sm col-span-full text-center">No student data available.</p>';
+        return;
+    }
+
+    const year = new Date().getFullYear();
     const parentPhone = document.getElementById('p-phone').value;
     const parentName = document.getElementById('p-name').value;
     const parentAddress = document.getElementById('p-address').value;
-    const year = new Date().getFullYear();
-    const studentID = generateOfficialID('EDU', year, student.lrn);
-    let classLabel = 'N/A';
-    if (student.class_id) {
-        const { data: cls } = await supabase.from('classes').select('grade_level, department').eq('id', student.class_id).single();
-        if (cls) {
-            classLabel = cls.grade_level;
-            if (cls.department) classLabel += ` - ${cls.department}`;
+
+    studentsData.forEach((student, idx) => {
+        const studentID = generateOfficialID('EDU', year, student.lrn);
+        let classLabel = 'N/A';
+        if (student.class_id) {
+            const cls = cachedClasses.find(c => c.id == student.class_id);
+            if (cls) {
+                classLabel = cls.grade_level + (cls.department ? ` - ${cls.department}` : '');
+            }
         }
-    }
-    const container = document.getElementById('id-preview-container');
-    if (!container) return;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${studentID}`;
-    const primaryColor = '#4c1d95';
-    const secondaryColor = '#8b5cf6';
-    container.innerHTML = `
-        <div class="flex gap-4 justify-center flex-wrap">
+
+        const formId = student.formId;
+        const photoDataUrl = student.photoDataUrl || (formId ? studentsPhotos[formId] : null);
+        let photoHtml;
+        if (photoDataUrl && photoDataUrl.startsWith('data:')) {
+            photoHtml = `<img src="${photoDataUrl}" class="w-full h-full object-cover rounded-lg" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full bg-gray-200 flex items-center justify-center text-2xl font-black text-gray-400\\'>${escapeHtml(student.full_name?.charAt(0) || '?')}</div>'">`;
+        } else {
+            photoHtml = `<div class="w-full h-full bg-gray-200 flex items-center justify-center text-2xl font-black text-gray-400">${student.full_name?.charAt(0) || '?'}</div>`;
+        }
+
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${studentID}`;
+
+        const cardHtml = `
             <div class="w-[2in] h-[3in] bg-white shadow-2xl rounded-xl overflow-hidden border border-gray-200 flex flex-col font-sans">
-                <div style="background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor})" class="h-12 p-2 flex items-center gap-2">
+                <div style="background: linear-gradient(135deg, #4c1d95, #8b5cf6)" class="h-12 p-2 flex items-center gap-2">
                     <div class="w-6 h-6 bg-white rounded-full flex items-center justify-center"><i data-lucide="graduation-cap" class="w-4 h-4 text-violet-900"></i></div>
                     <div class="text-white overflow-hidden"><h4 class="text-[7px] font-black uppercase">EduCare Colleges Inc</h4><p class="text-[5px] opacity-80">Purok 4 Irisan Baguio City</p></div>
                 </div>
                 <div class="flex-1 flex flex-col items-center pt-4 px-3 text-center">
-                    <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden"><div class="w-full h-full bg-gray-200 flex items-center justify-center text-2xl font-black text-gray-400">${student.full_name?.charAt(0) || '?'}</div></div>
+                    <div class="w-20 h-20 bg-gray-100 border-2 border-violet-100 p-1 rounded-xl mb-2 overflow-hidden">${photoHtml}</div>
                     <h2 class="text-[9px] font-black text-gray-900 uppercase">${escapeHtml(student.full_name)}</h2>
-                    <div class="w-full text-left mt-4 space-y-2 border-t pt-3"><div><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-medium">${escapeHtml(parentAddress || 'N/A')}</p></div><div><p class="text-[5px] text-gray-400 font-bold uppercase">Class</p><p class="text-[6px] font-bold text-violet-700">${escapeHtml(classLabel)}</p></div></div>
+                    <div class="w-full text-left mt-4 space-y-2 border-t pt-3">
+                        <div><p class="text-[5px] text-gray-400 font-bold uppercase">Address</p><p class="text-[6px] font-medium">${escapeHtml(parentAddress || 'N/A')}</p></div>
+                        <div><p class="text-[5px] text-gray-400 font-bold uppercase">Class</p><p class="text-[6px] font-bold text-violet-700">${escapeHtml(classLabel)}</p></div>
+                    </div>
                 </div>
-                <div style="background: ${primaryColor}" class="h-1.5 w-full mt-auto"></div>
+                <div style="background: #4c1d95" class="h-1.5 w-full mt-auto"></div>
             </div>
             <div class="w-[2in] h-[3in] bg-white shadow-2xl rounded-xl overflow-hidden border border-gray-200 flex flex-col font-sans">
                 <div class="p-4 flex flex-col items-center justify-center flex-1 text-center">
-                    <img src="${qrUrl}" class="w-16 h-16 border p-1 rounded-lg mb-2 shadow-sm"><p class="text-[8px] font-mono font-bold text-gray-900 mb-6">${escapeHtml(studentID)}</p>
-                    <div class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-4 text-left"><p class="text-[5px] text-gray-400 font-bold uppercase">Guardian / Contact</p><p class="text-[7px] font-black text-gray-800">${escapeHtml(parentName)}</p><p class="text-[7px] font-bold text-violet-700">${escapeHtml(parentPhone)}</p></div>
+                    <img src="${qrUrl}" class="w-16 h-16 border p-1 rounded-lg mb-2 shadow-sm">
+                    <p class="text-[8px] font-mono font-bold text-gray-900 mb-6">${escapeHtml(studentID)}</p>
+                    <div class="w-full bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-4 text-left">
+                        <p class="text-[5px] text-gray-400 font-bold uppercase">Guardian / Contact</p>
+                        <p class="text-[7px] font-black text-gray-800">${escapeHtml(parentName)}</p>
+                        <p class="text-[7px] font-bold text-violet-700">${escapeHtml(parentPhone)}</p>
+                    </div>
                 </div>
-                <div style="background: ${primaryColor}" class="h-1.5 w-full mt-auto"></div>
+                <div style="background: #4c1d95" class="h-1.5 w-full mt-auto"></div>
             </div>
-        </div>
-    `;
+        `;
+        grid.insertAdjacentHTML('beforeend', cardHtml);
+    });
+
     if (window.lucide) lucide.createIcons();
 }
 
@@ -1180,6 +1457,105 @@ function downloadIDCard() {
     printIDCard(); // Reuse print logic, or implement JPEG download if needed
 }
 
+function printAllIDCards() {
+    const grid = document.getElementById('id-cards-grid');
+    if (!grid?.innerHTML?.trim()) {
+        showNotification('No ID cards to print', 'error');
+        return;
+    }
+    const cards = grid.querySelectorAll('[class*="w-\\[2in\\]"]');
+    if (cards.length === 0) {
+        showNotification('No ID cards to print', 'error');
+        return;
+    }
+    logDebug('printAllIDCards()', { cardCount: cards.length });
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('Please allow pop-ups to print', 'error');
+        return;
+    }
+    const cardsHtml = Array.from(cards).map(card => card.outerHTML).join('<div class="id-page-break"></div>');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Student ID Cards</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                [class*="w-\\[2in\\]"] { width: 2in !important; }
+                [class*="h-\\[3in\\]"] { height: 3in !important; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 0.5in; }
+                .id-page-break { page-break-after: always; height: 0; }
+            </style>
+        </head>
+        <body>
+            ${cardsHtml}
+            <script>
+                window.onload = () => { setTimeout(() => { window.print(); setTimeout(() => window.close(), 500); }, 200); };
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+// ==================== DEBUG UTILITIES ====================
+let debugPanelVisible = false;
+const debugLogs = [];
+
+function logDebug(message, data = null) {
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+    let entry = `[${timestamp}] ${message}`;
+    if (data !== null) {
+        entry += ` | ${typeof data === 'object' ? JSON.stringify(data, null, 2) : data}`;
+    }
+    debugLogs.push(entry);
+    if (debugPanelVisible) {
+        const output = document.getElementById('debug-output');
+        if (output) output.textContent = debugLogs.join('\n');
+    }
+}
+
+function clearDebugLog() {
+    debugLogs.length = 0;
+    const output = document.getElementById('debug-output');
+    if (output) output.textContent = '';
+}
+
+function toggleDebugPanel() {
+    const panel = document.getElementById('debug-panel');
+    if (!panel) return;
+    debugPanelVisible = !debugPanelVisible;
+    panel.classList.toggle('hidden', !debugPanelVisible);
+    if (debugPanelVisible) {
+        const output = document.getElementById('debug-output');
+        if (output) output.textContent = debugLogs.join('\n');
+    }
+}
+
+function shouldShowDebug() {
+    return window.location.search.includes('debug=1') || window.location.hostname === 'localhost';
+}
+
+function initDebugConsole() {
+    if (shouldShowDebug()) {
+        debugPanelVisible = true;
+        const panel = document.getElementById('debug-panel');
+        if (panel) panel.classList.remove('hidden');
+        logDebug('Debug console initialized');
+        logDebug('Environment:', window.location.hostname);
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+            e.preventDefault();
+            toggleDebugPanel();
+        }
+    });
+}
+
 async function saveParentToDB() {
     const name = document.getElementById('p-name').value.trim();
     const address = document.getElementById('p-address').value.trim();
@@ -1200,12 +1576,71 @@ async function saveParentToDB() {
 async function saveStudentsToDB() {
     captureStudentData();
     const year = new Date().getFullYear();
-    const studentsToInsert = studentsData.map(student => ({ parent_id: currentParentId, full_name: student.full_name, lrn: student.lrn, gender: student.gender, birthdate: student.birthdate, class_id: student.class_id, student_id_text: generateOfficialID('EDU', year, student.lrn), qr_code_data: generateOfficialID('EDU', year, student.lrn), status: 'Enrolled' }));
+    
+    console.log('DEBUG: studentsData length:', studentsData.length);
+    
+    // Prepare student data for insertion
+    const studentsToInsert = studentsData.map(student => ({ 
+        parent_id: currentParentId, 
+        full_name: student.full_name, 
+        lrn: student.lrn, 
+        gender: student.gender, 
+        birthdate: student.birthdate, 
+        class_id: student.class_id, 
+        student_id_text: generateOfficialID('EDU', year, student.lrn), 
+        qr_code_data: generateOfficialID('EDU', year, student.lrn), 
+        status: 'Enrolled' 
+    }));
+    
     try {
-        const { data, error } = await supabase.from('students').insert(studentsToInsert).select();
-        if (error) throw error;
-        return data;
-    } catch (err) { console.error('Error saving students:', err); alert('Error saving students. Please try again.'); throw err; }
+        // Insert all students
+        const { data: insertedStudents, error } = await supabase.from('students').insert(studentsToInsert).select();
+        
+        if (error) {
+            console.error('Insert error:', error);
+            throw error;
+        }
+        
+        console.log('Inserted students:', insertedStudents.length);
+        
+        // Upload photos for each student
+        for (let i = 0; i < insertedStudents.length; i++) {
+            const inserted = insertedStudents[i];
+            const student = studentsData[i];
+            
+            if (!student) continue;
+            
+            // Get photo data URL
+            const photoDataUrl = student.formId ? studentsPhotos[student.formId] : null;
+            
+            if (photoDataUrl && typeof photoDataUrl === 'string' && photoDataUrl.startsWith('data:')) {
+                try {
+                    // Convert data URL to blob
+                    const response = await fetch(photoDataUrl);
+                    const blob = await response.blob();
+                    
+                    const fileName = `student_${inserted.id}_${Date.now()}.jpg`;
+                    
+                    const { error: uploadErr } = await supabase.storage
+                        .from('student-photos')
+                        .upload(fileName, blob, { cacheControl: '3600', upsert: true });
+                    
+                    if (!uploadErr) {
+                        const { data: urlData } = supabase.storage.from('student-photos').getPublicUrl(fileName);
+                        await supabase.from('students').update({ profile_photo_url: urlData.publicUrl }).eq('id', inserted.id);
+                    }
+                } catch (err) {
+                    console.error('Photo upload error:', err);
+                }
+            }
+        }
+        
+        return insertedStudents;
+    } catch (err) { 
+        console.error('Error saving students:', err); 
+        alert('Error saving students. Please try again.'); 
+        throw err; 
+    }
 }
 
 async function completeEnrollment() {
@@ -1224,6 +1659,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadParentsAndStudents();
     addStudentForm();
     updateWizardUI();
+    initDebugConsole();
 });
 
 // ==================== GLOBAL WINDOW ATTACHMENTS ====================
@@ -1235,6 +1671,7 @@ window.addStudentForm = addStudentForm;
 window.removeStudentForm = removeStudentForm;
 window.updateStudentSummaryView = updateStudentSummaryView;
 window.updateIDPreview = updateIDPreview;
+window.goToStep6 = goToStep6;
 window.openEditParentModal = openEditParentModal;
 window.closeEditParentModal = closeEditParentModal;
 window.saveParentChanges = saveParentChanges;
@@ -1251,8 +1688,21 @@ window.closeAddStudentModal = closeAddStudentModal;
 window.saveNewStudentToParent = saveNewStudentToParent;
 window.printIDCard = printIDCard;
 window.downloadIDCard = downloadIDCard;
+window.printAllIDCards = printAllIDCards;
+window.showConfirmStep4Modal = showConfirmStep4Modal;
+window.confirmStep4 = confirmStep4;
+window.cancelStep4Confirm = cancelStep4Confirm;
+window.prepareIDPreview = prepareIDPreview;
+window.logDebug = logDebug;
+window.clearDebugLog = clearDebugLog;
+window.toggleDebugPanel = toggleDebugPanel;
 window.logout = () => { if (confirm('Logout?')) window.location.href = '../index.html'; };
 window.filterParentsStudents = filterParentsStudents;
 window.parentNextPage = parentNextPage;
 window.parentPrevPage = parentPrevPage;
 window.getClassLabel = getClassLabel;
+window.captureWebcam = captureWebcam;
+window.takeSnapshot = takeSnapshot;
+window.closeWebcamModal = closeWebcamModal;
+window.clearPhoto = clearPhoto;
+window.handlePhotoSelect = handlePhotoSelect;

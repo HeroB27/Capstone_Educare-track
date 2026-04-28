@@ -1,6 +1,8 @@
 // admin/admin-data-analytics.js – Uses school-year-core.js for dynamic dates
 // UPDATED: Now uses admin-configurable school year dates
 
+const USE_SUMMARY_ANALYTICS = true; // Feature flag for gradual rollout - now using attendance_daily_summary as source of truth
+
 let trendChart, pieChart, barChart, classChart;
 let analyticsData = {};
 let isLoadingAnalytics = false;
@@ -8,6 +10,7 @@ let currentSelectedClassId = null;
 let dynamicSchoolYearStart = null;
 let dynamicSchoolYearEnd = null;
 let dynamicQuarters = null;
+let currentWeekMonth = '';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Verify supabase client
@@ -120,18 +123,18 @@ async function loadAnalyticsData(event) {
 
     console.log(`[Analytics] Loading: ${dateStart} → ${dateEnd}, class: ${classFilter || 'All'}`);
 
-    try {
-        // Quick count check
+     try {
+        // Quick count check - use summary table as source of truth
         const { count, error: countErr } = await supabase
-            .from('attendance_logs')
+            .from('attendance_daily_summary')
             .select('*', { count: 'exact', head: true })
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd);
+            .gte('date', dateStart)
+            .lte('date', dateEnd);
         if (countErr) throw countErr;
-        console.log(`[Analytics] Total logs in range: ${count}`);
+        console.log(`[Analytics] Total summary records in range: ${count}`);
 
         if (count === 0) {
-            showNotification(`No attendance records found between ${dateStart} and ${dateEnd}.`, 'warning');
+            showNotification(`No attendance summary records found between ${dateStart} and ${dateEnd}.`, 'warning');
             if (btn) resetButton(btn);
             if (loadingModal) loadingModal.style.display = 'none';
             isLoadingAnalytics = false;
@@ -204,201 +207,367 @@ async function loadAnalyticsData(event) {
 
 // ========== DATA FETCHING FUNCTIONS ==========
 
-async function fetchAttendanceTrend(dateStart, dateEnd, classId = null, groupBy = 'month', weekMonthFilter = '') {
-    try {
-        let studentIds = null;
-        if (classId) {
-            const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
-            studentIds = students?.map(s => s.id).filter(id => id != null) || [];
-            if (studentIds.length === 0) return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
-        }
-
-        // If week filter with specific month, adjust date range
-        let effectiveDateStart = dateStart;
-        let effectiveDateEnd = dateEnd;
-        if (groupBy === 'week' && weekMonthFilter) {
-            // Filter to just the selected month
-            effectiveDateStart = `${weekMonthFilter}-01`;
-            // Get last day of month
-            const [year, month] = weekMonthFilter.split('-');
-            const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-            effectiveDateEnd = `${weekMonthFilter}-${String(lastDay).padStart(2, '0')}`;
-            console.log(`[Trend] Week filter: ${effectiveDateStart} to ${effectiveDateEnd}`);
-        }
-
-        // Fetch ALL logs with pagination
-        let allLogs = [];
-        let from = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-
-        while (hasMore) {
-            let baseQuery = supabase
-                .from('attendance_logs')
-                .select('student_id, log_date, status, morning_absent, afternoon_absent')
-                .gte('log_date', dateStart)
-                .lte('log_date', dateEnd)
-                .not('student_id', 'is', null)
-                .range(from, from + pageSize - 1);
-            
-            if (studentIds?.length) baseQuery = baseQuery.in('student_id', studentIds);
-            
-            const { data: logs, error } = await baseQuery;
-            if (error) throw error;
-            if (!logs || logs.length === 0) break;
-            
-            allLogs = allLogs.concat(logs);
-            from += pageSize;
-            hasMore = logs.length === pageSize;
-        }
-
-        if (allLogs.length === 0) return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
-
-        let excusesQuery = supabase
-            .from('excuse_letters')
-            .select('student_id, date_absent')
-            .eq('status', 'Approved')
-            .gte('date_absent', effectiveDateStart)
-            .lte('date_absent', effectiveDateEnd);
-        if (studentIds?.length) excusesQuery = excusesQuery.in('student_id', studentIds);
-        const { data: excuses } = await excusesQuery;
-        const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
-
-        if (groupBy === 'month') {
-            // Group by month (all months in range)
-            const monthGroups = {};
-            // School year month mapping (Aug=8, Sep=9, Oct=10, Nov=11, Dec=12, Jan=1, Feb=2, Mar=3, Apr=4)
-            const schoolYearMonthMap = { '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec', '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr' };
-            
-            allLogs.forEach(log => {
-                const logDate = new Date(log.log_date);
-                const monthKey = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2, '0')}`;
-                if (!monthGroups[monthKey]) {
-                    monthGroups[monthKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
-                }
-                
-                const morningAbsent = log.morning_absent || false;
-                const afternoonAbsent = log.afternoon_absent || false;
-                const isFullDayAbsent = morningAbsent && afternoonAbsent;
-                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
-                
-                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
-                if (isExcused) {
-                    monthGroups[monthKey].Excused++;
-                } else if (isHalfDay) {
-                    monthGroups[monthKey].HalfDay++;
-                    monthGroups[monthKey].Present += 0.5;
-                } else if (isFullDayAbsent) {
-                    monthGroups[monthKey].Absent++;
-                } else if (log.status === 'Present' || log.status === 'On Time') {
-                    monthGroups[monthKey].Present++;
-                } else if (log.status === 'Late') {
-                    monthGroups[monthKey].Late++;
-                } else if (log.status === 'Absent') {
-                    monthGroups[monthKey].Absent++;
-                }
-            });
-
-            // Sort months chronologically (accounting for school year Aug-Apr)
-            const sortedMonths = Object.keys(monthGroups).sort((a, b) => {
-                const [yearA, monthA] = a.split('-');
-                const [yearB, monthB] = b.split('-');
-                // Convert to sortable value (year * 100 + month order for school year)
-                const orderA = (yearA === '2026' ? 100 : 0) + parseInt(monthA);
-                const orderB = (yearB === '2026' ? 100 : 0) + parseInt(monthB);
-                return orderA - orderB;
-            });
-            
-            const monthLabels = sortedMonths.map(m => {
-                const [year, month] = m.split('-');
-                return schoolYearMonthMap[month] || `${month}`;
-            });
-
-            return {
-                labels: monthLabels,
-                present: sortedMonths.map(m => monthGroups[m].Present),
-                late: sortedMonths.map(m => monthGroups[m].Late),
-                absent: sortedMonths.map(m => monthGroups[m].Absent),
-                excused: sortedMonths.map(m => monthGroups[m].Excused),
-                halfday: sortedMonths.map(m => monthGroups[m].HalfDay)
-            };
-        } else if (groupBy === 'week') {
-            // Group by week within the selected month
-            const weekGroups = {};
-            const weekLabelsMap = {};
-            
-            // Get selected month from weekMonthFilter (e.g., "2025-08")
-            const selectedMonth = weekMonthFilter || '';
-            const [selectedYear, selectedMonthNum] = selectedMonth.split('-');
-            
-            allLogs.forEach(log => {
-                const logDate = new Date(log.log_date);
-                const logMonth = String(logDate.getMonth() + 1).padStart(2, '0');
-                const logYear = String(logDate.getFullYear());
-                
-                // Only include logs from selected month
-                if (logMonth !== selectedMonthNum || logYear !== selectedYear) return;
-                
-                // Calculate week number (1st-4th or 5th week of month)
-                const day = logDate.getDate();
-                const weekNum = Math.ceil(day / 7);
-                const weekKey = `Week ${weekNum}`;
-                
-                if (!weekGroups[weekKey]) {
-                    weekGroups[weekKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
-                    // Also store the day range for display
-                    const startDay = (weekNum - 1) * 7 + 1;
-                    const endDay = Math.min(weekNum * 7, new Date(parseInt(selectedYear), parseInt(selectedMonthNum), 0).getDate());
-                    weekLabelsMap[weekKey] = `${startDay}-${endDay}`;
-                }
-                
-                const morningAbsent = log.morning_absent || false;
-                const afternoonAbsent = log.afternoon_absent || false;
-                const isFullDayAbsent = morningAbsent && afternoonAbsent;
-                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
-                
-                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
-                if (isExcused) {
-                    weekGroups[weekKey].Excused++;
-                } else if (isHalfDay) {
-                    weekGroups[weekKey].HalfDay++;
-                    weekGroups[weekKey].Present += 0.5;
-                } else if (isFullDayAbsent) {
-                    weekGroups[weekKey].Absent++;
-                } else if (log.status === 'Present' || log.status === 'On Time') {
-                    weekGroups[weekKey].Present++;
-                } else if (log.status === 'Late') {
-                    weekGroups[weekKey].Late++;
-                } else if (log.status === 'Absent') {
-                    weekGroups[weekKey].Absent++;
-                }
-            });
-
-            // Sort weeks in order (Week 1, Week 2, etc.)
-            const sortedWeeks = Object.keys(weekGroups).sort((a, b) => {
-                const numA = parseInt(a.replace('Week ', ''));
-                const numB = parseInt(b.replace('Week ', ''));
-                return numA - numB;
-            });
-            
-            const weekLabels = sortedWeeks.map(w => `${w} (${weekLabelsMap[w]})`);
-
-            return {
-                labels: weekLabels,
-                present: sortedWeeks.map(w => weekGroups[w].Present),
-                late: sortedWeeks.map(w => weekGroups[w].Late),
-                absent: sortedWeeks.map(w => weekGroups[w].Absent),
-                excused: sortedWeeks.map(w => weekGroups[w].Excused),
-                halfday: sortedWeeks.map(w => weekGroups[w].HalfDay)
-            };
-        }
-    } catch (err) {
-        console.error('fetchAttendanceTrend error:', err);
-        return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
-    }
+function emptyTrend() {
+  return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
 }
 
+async function fetchAttendanceTrend(dateStart, dateEnd, classId = null, groupBy = 'month', weekMonthFilter = '') {
+  if (USE_SUMMARY_ANALYTICS) {
+    // NEW: Use attendance_daily_summary as source of truth
+    let query = supabase
+      .from('attendance_daily_summary')
+      .select(`
+        student_id,
+        date,
+        morning_status,
+        afternoon_status,
+        students!inner (class_id)
+      `)
+      .gte('date', dateStart)
+      .lte('date', dateEnd);
+
+    if (classId) {
+      query = query.eq('students.class_id', classId);
+    }
+
+    const { data: rows } = await query;
+    if (!rows?.length) return emptyTrend();
+
+    // Get grade levels to exclude Kinder afternoon
+    const studentIds = [...new Set(rows.map(r => r.student_id))];
+    const { data: students } = await supabase
+      .from('students')
+      .select('id, class_id')
+      .in('id', studentIds);
+    const { data: classes } = await supabase
+      .from('classes')
+      .select('id, grade_level');
+    const gradeMap = {};
+    classes?.forEach(c => gradeMap[c.id] = c.grade_level);
+    const studentGradeMap = {};
+    students?.forEach(s => {
+      const grade = gradeMap[s.class_id];
+      studentGradeMap[s.id] = grade;
+    });
+
+    // Group by month or week
+    const groups = {};
+    for (const row of rows) {
+      const dateObj = new Date(row.date);
+      let key;
+      if (groupBy === 'month') {
+        key = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
+      } else {
+        key = getWeekKey(dateObj, weekMonthFilter);
+        if (!key) continue;
+      }
+      if (!groups[key]) groups[key] = { present:0, late:0, absent:0, excused:0, halfday:0 };
+
+      const grade = studentGradeMap[row.student_id];
+      const isKinder = grade === 'Kinder';
+
+      // Morning
+      const m = row.morning_status;
+      if (m === 'Present') groups[key].present++;
+      else if (m === 'Late') { groups[key].late++; groups[key].present++; }
+      else if (m === 'Excused') { groups[key].excused++; groups[key].present++; }
+      else if (m === 'Absent') groups[key].absent++;
+
+      // Afternoon (skip Kinder)
+      if (!isKinder && row.afternoon_status) {
+        const a = row.afternoon_status;
+        if (a === 'Present') groups[key].present++;
+        else if (a === 'Late') { groups[key].late++; groups[key].present++; }
+        else if (a === 'Excused') { groups[key].excused++; groups[key].present++; }
+        else if (a === 'Absent') groups[key].absent++;
+      }
+    }
+
+    if (groupBy === 'month') {
+      const sortedMonths = Object.keys(groups).sort((a, b) => {
+        const [yearA, monthA] = a.split('-');
+        const [yearB, monthB] = b.split('-');
+        const orderA = (yearA === '2026' ? 100 : 0) + parseInt(monthA);
+        const orderB = (yearB === '2026' ? 100 : 0) + parseInt(monthB);
+        return orderA - orderB;
+      });
+
+      const schoolYearMonthMap = { '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec', '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr' };
+      const monthLabels = sortedMonths.map(m => {
+        const [year, month] = m.split('-');
+        return schoolYearMonthMap[month] || `${month}`;
+      });
+
+      return {
+        labels: monthLabels,
+        present: sortedMonths.map(m => groups[m].present),
+        late: sortedMonths.map(m => groups[m].late),
+        absent: sortedMonths.map(m => groups[m].absent),
+        excused: sortedMonths.map(m => groups[m].excused),
+        halfday: sortedMonths.map(m => groups[m].halfday)
+      };
+    } else if (groupBy === 'week') {
+      const selectedMonth = weekMonthFilter || '';
+      const [selectedYear, selectedMonthNum] = selectedMonth.split('-');
+
+      const weekGroups = {};
+      const weekLabelsMap = {};
+      Object.keys(groups).forEach(key => {
+        const [year, month] = key.split('-');
+        if (month === selectedMonthNum && year === selectedYear) {
+          const date = new Date(key + '-01');
+          const day = date.getDate();
+          const weekNum = Math.ceil(day / 7);
+          const weekKey = `Week ${weekNum}`;
+          if (!weekGroups[weekKey]) {
+            weekGroups[weekKey] = { present:0, late:0, absent:0, excused:0, halfday:0 };
+            const startDay = (weekNum - 1) * 7 + 1;
+            const endDay = Math.min(weekNum * 7, new Date(parseInt(selectedYear), parseInt(selectedMonthNum), 0).getDate());
+            weekLabelsMap[weekKey] = `${startDay}-${endDay}`;
+          }
+          weekGroups[weekKey].present += groups[key].present;
+          weekGroups[weekKey].late += groups[key].late;
+          weekGroups[weekKey].absent += groups[key].absent;
+          weekGroups[weekKey].excused += groups[key].excused;
+          weekGroups[weekKey].halfday += groups[key].halfday;
+        }
+      });
+
+      const sortedWeeks = Object.keys(weekGroups).sort((a, b) => {
+        const numA = parseInt(a.replace('Week ', ''));
+        const numB = parseInt(b.replace('Week ', ''));
+        return numA - numB;
+      });
+
+      const weekLabels = sortedWeeks.map(w => `${w} (${weekLabelsMap[w]})`);
+
+      return {
+        labels: weekLabels,
+        present: sortedWeeks.map(w => weekGroups[w].present),
+        late: sortedWeeks.map(w => weekGroups[w].late),
+        absent: sortedWeeks.map(w => weekGroups[w].absent),
+        excused: sortedWeeks.map(w => weekGroups[w].excused),
+        halfday: sortedWeeks.map(w => weekGroups[w].halfday)
+      };
+    }
+
+    return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
+  } else {
+    // LEGACY: Use attendance_logs (fallback)
+    let allLogs = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      let baseQuery = supabase
+        .from('attendance_logs')
+        .select('student_id, log_date, status, morning_absent, afternoon_absent')
+        .gte('log_date', dateStart)
+        .lte('log_date', dateEnd)
+        .not('student_id', 'is', null)
+        .range(from, from + pageSize - 1);
+      
+      if (classId) {
+        const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
+        const studentIds = students?.map(s => s.id).filter(id => id != null) || [];
+        if (studentIds.length) baseQuery = baseQuery.in('student_id', studentIds);
+      }
+      
+      const { data: logs } = await baseQuery;
+      if (!logs || logs.length === 0) break;
+      
+      allLogs = allLogs.concat(logs);
+      from += pageSize;
+      hasMore = logs.length === pageSize;
+    }
+
+    if (allLogs.length === 0) return emptyTrend();
+
+    const { data: excuses } = await supabase
+      .from('excuse_letters')
+      .select('student_id, date_absent')
+      .eq('status', 'Approved')
+      .gte('date_absent', dateStart)
+      .lte('date_absent', dateEnd);
+    
+    const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
+
+    const schoolYearMonthMap = { '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec', '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr' };
+
+    if (groupBy === 'month') {
+      const monthGroups = {};
+      
+      allLogs.forEach(log => {
+        const logDate = new Date(log.log_date);
+        const monthKey = `${logDate.getFullYear()}-${String(logDate.getMonth() + 1).padStart(2,'0')}`;
+        if (!monthGroups[monthKey]) {
+          monthGroups[monthKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
+        }
+        
+        const morningAbsent = log.morning_absent || false;
+        const afternoonAbsent = log.afternoon_absent || false;
+        const isFullDayAbsent = morningAbsent && afternoonAbsent;
+        const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+        
+        const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+        if (isExcused) {
+          monthGroups[monthKey].Excused++;
+        } else if (isHalfDay) {
+          monthGroups[monthKey].HalfDay++;
+          monthGroups[monthKey].Present += 0.5;
+        } else if (isFullDayAbsent) {
+          monthGroups[monthKey].Absent++;
+        } else if (log.status === 'Present' || log.status === 'On Time') {
+          monthGroups[monthKey].Present++;
+        } else if (log.status === 'Late') {
+          monthGroups[monthKey].Late++;
+        } else if (log.status === 'Absent') {
+          monthGroups[monthKey].Absent++;
+        }
+      });
+
+      const sortedMonths = Object.keys(monthGroups).sort((a, b) => {
+        const [yearA, monthA] = a.split('-');
+        const [yearB, monthB] = b.split('-');
+        const orderA = (yearA === '2026' ? 100 : 0) + parseInt(monthA);
+        const orderB = (yearB === '2026' ? 100 : 0) + parseInt(monthB);
+        return orderA - orderB;
+      });
+      
+      const monthLabels = sortedMonths.map(m => {
+        const [, month] = m.split('-');
+        return schoolYearMonthMap[month] || month;
+      });
+
+      return {
+        labels: monthLabels,
+        present: sortedMonths.map(m => monthGroups[m].Present),
+        late: sortedMonths.map(m => monthGroups[m].Late),
+        absent: sortedMonths.map(m => monthGroups[m].Absent),
+        excused: sortedMonths.map(m => monthGroups[m].Excused),
+        halfday: sortedMonths.map(m => monthGroups[m].HalfDay)
+      };
+    } else if (groupBy === 'week') {
+      const weekGroups = {};
+      const weekLabelsMap = {};
+      
+      const selectedMonth = currentWeekMonth || '';
+      const [selectedYear, selectedMonthNum] = selectedMonth.split('-');
+      
+      allLogs.forEach(log => {
+        const logDate = new Date(log.log_date);
+        const logMonth = String(logDate.getMonth() + 1).padStart(2, '0');
+        const logYear = String(logDate.getFullYear());
+        
+        if (logMonth !== selectedMonthNum || logYear !== selectedYear) return;
+        
+        const day = logDate.getDate();
+        const weekNum = Math.ceil(day / 7);
+        const weekKey = `Week ${weekNum}`;
+        
+        if (!weekGroups[weekKey]) {
+          weekGroups[weekKey] = { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
+          const startDay = (weekNum - 1) * 7 + 1;
+          const endDay = Math.min(weekNum * 7, new Date(parseInt(selectedYear), parseInt(selectedMonthNum), 0).getDate());
+          weekLabelsMap[weekKey] = `${startDay}-${endDay}`;
+        }
+        
+        const morningAbsent = log.morning_absent || false;
+        const afternoonAbsent = log.afternoon_absent || false;
+        const isFullDayAbsent = morningAbsent && afternoonAbsent;
+        const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+        
+        const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+        if (isExcused) {
+          weekGroups[weekKey].Excused++;
+        } else if (isHalfDay) {
+          weekGroups[weekKey].HalfDay++;
+          weekGroups[weekKey].Present += 0.5;
+        } else if (isFullDayAbsent) {
+          weekGroups[weekKey].Absent++;
+        } else if (log.status === 'Present' || log.status === 'On Time') {
+          weekGroups[weekKey].Present++;
+        } else if (log.status === 'Late') {
+          weekGroups[weekKey].Late++;
+        } else if (log.status === 'Absent') {
+          weekGroups[weekKey].Absent++;
+        }
+      });
+      
+      const sortedWeeks = Object.keys(weekGroups).sort((a, b) => {
+        const numA = parseInt(a.replace('Week ', ''));
+        const numB = parseInt(b.replace('Week ', ''));
+        return numA - numB;
+      });
+      
+      const weekLabels = sortedWeeks.map(w => `${w} (${weekLabelsMap[w]})`);
+      
+      return {
+        labels: weekLabels,
+        present: sortedWeeks.map(w => weekGroups[w].Present),
+        late: sortedWeeks.map(w => weekGroups[w].Late),
+        absent: sortedWeeks.map(w => weekGroups[w].Absent),
+        excused: sortedWeeks.map(w => weekGroups[w].Excused),
+        halfday: sortedWeeks.map(w => weekGroups[w].HalfDay)
+      };
+    }
+    
+    return { labels: [], present: [], late: [], absent: [], excused: [], halfday: [] };
+  }
+}
+
+
+  return counts;
+}
+
+function addStatus(counts, status) {
+  if (status === 'Present') counts.Present++;
+  else if (status === 'Late') { counts.Late++; counts.Present++; }
+  else if (status === 'Excused') { counts.Excused++; counts.Present++; }
+  else if (status === 'Absent') counts.Absent++;
+  // HalfDay is not stored in summary – derived from separate half‑day flag; we can omit or compute from logs if needed.
+}
+
+// Legacy fallback for backward compatibility
 async function fetchStatusDistribution(dateStart, dateEnd, classId = null) {
+  if (USE_SUMMARY_ANALYTICS) {
+    // NEW: Use attendance_daily_summary
+    let query = supabase
+      .from('attendance_daily_summary')
+      .select(`
+        morning_status,
+        afternoon_status,
+        students!inner (class_id)
+      `)
+      .gte('date', dateStart)
+      .lte('date', dateEnd);
+    if (classId) query = query.eq('students.class_id', classId);
+    const { data: rows } = await query;
+    if (!rows?.length) return { Present:0, Late:0, Absent:0, Excused:0, HalfDay:0 };
+
+    // Get grade info to skip Kinder afternoon
+    const studentIds = [...new Set(rows.map(r => r.student_id))];
+    const { data: students } = await supabase.from('students').select('id, class_id').in('id', studentIds);
+    const { data: classes } = await supabase.from('classes').select('id, grade_level');
+    const gradeMap = Object.fromEntries(classes?.map(c => [c.id, c.grade_level]) || []);
+    const studentGrade = Object.fromEntries(students?.map(s => [s.id, gradeMap[s.class_id]]) || []);
+
+    const counts = { Present:0, Late:0, Absent:0, Excused:0, HalfDay:0 };
+    for (const row of rows) {
+      const isKinder = studentGrade[row.student_id] === 'Kinder';
+      // Morning
+      addStatus(counts, row.morning_status);
+      // Afternoon (skip Kinder)
+      if (!isKinder && row.afternoon_status) addStatus(counts, row.afternoon_status);
+    }
+    return counts;
+  } else {
+    return fetchStatusDistributionLegacy(dateStart, dateEnd, classId);
+  }
+}
+
+async function fetchStatusDistributionLegacy(dateStart, dateEnd, classId = null) {
     try {
         let studentIds = null;
         if (classId) {
@@ -406,6 +575,14 @@ async function fetchStatusDistribution(dateStart, dateEnd, classId = null) {
             studentIds = students?.map(s => s.id).filter(id => id != null) || [];
             if (studentIds.length === 0) return { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
         }
+
+        // Get grade level for Kinder check
+        let gradeLevel = null;
+        if (classId) {
+            const { data: classData } = await supabase.from('classes').select('grade_level').eq('id', classId).single();
+            gradeLevel = classData?.grade_level;
+        }
+        const isKinder = isKinderGrade(gradeLevel);
 
         // Fetch ALL logs with pagination
         let allLogs = [];
@@ -452,19 +629,31 @@ async function fetchStatusDistribution(dateStart, dateEnd, classId = null) {
             const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
             
             const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
-            if (isExcused) counts.Excused++;
+            
+            if (isExcused) {
+                counts.Excused++;
+                counts.Present++; // AM
+                if (!isKinder) counts.Present++; // PM
+            }
             else if (isHalfDay) {
                 counts.HalfDay++;
                 counts.Present += 0.5;
             }
             else if (isFullDayAbsent) counts.Absent++;
-            else if (log.status === 'Present' || log.status === 'On Time') counts.Present++;
-            else if (log.status === 'Late') counts.Late++;
+            else if (log.status === 'Present' || log.status === 'On Time') {
+                counts.Present++;
+                if (!isKinder) counts.Present++;
+            }
+            else if (log.status === 'Late') {
+                counts.Late++;
+                counts.Present++;
+                if (!isKinder) counts.Present++;
+            }
             else if (log.status === 'Absent') counts.Absent++;
         });
         return counts;
     } catch (err) {
-        console.error('fetchStatusDistribution error:', err);
+        console.error('fetchStatusDistributionLegacy error:', err);
         return { Present: 0, Late: 0, Absent: 0, Excused: 0, HalfDay: 0 };
     }
 }
@@ -511,45 +700,52 @@ async function fetchHolidays(dateStart, dateEnd) {
     }
 }
 
-async function fetchClassPerformance(dateStart, dateEnd, classId = null) {
+ async function fetchClassPerformance(dateStart, dateEnd, classId = null) {
     try {
         let classesQuery = supabase.from('classes').select('id, grade_level, strand').order('grade_level');
         if (classId) classesQuery = classesQuery.eq('id', classId);
         const { data: classes } = await classesQuery;
         if (!classes?.length) return { labels: [], data: [] };
 
-        // Build student class map with number keys
-        const { data: students } = await supabase.from('students').select('id, class_id');
-        const studentClassMap = {};
-        students?.forEach(s => {
-            if (s.class_id) studentClassMap[s.id] = Number(s.class_id);
-        });
+        // Get class IDs for filtering summary
+        const classIds = classes.map(c => c.id);
 
-        // Fetch all logs (no limit) - similar to class attendance table
-        let allLogs = [];
-        let from = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-
-        let baseQuery = supabase
-            .from('attendance_logs')
-            .select('student_id, log_date, status, morning_absent, afternoon_absent')
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd)
-            .not('student_id', 'is', null);
-
-        while (hasMore) {
-            const { data: logs, error } = await baseQuery
-                .range(from, from + pageSize - 1);
-            
-            if (error) throw error;
-            if (!logs || logs.length === 0) break;
-            
-            allLogs = allLogs.concat(logs);
-            from += pageSize;
-            hasMore = logs.length === pageSize;
+        // Fetch from attendance_daily_summary (source of truth)
+        let query = supabase
+            .from('attendance_daily_summary')
+            .select(`
+                student_id,
+                date,
+                morning_status,
+                afternoon_status,
+                students!inner (class_id)
+            `)
+            .in('students.class_id', classIds)
+            .gte('date', dateStart)
+            .lte('date', dateEnd);
+        
+        const { data: summaries, error } = await query;
+        if (error) throw error;
+        if (!summaries?.length) {
+            // No summary data - return 0 for all classes
+            const gradeSortOrder = { 'Grade 1': 1, 'Grade 2': 2, 'Grade 3': 3, 'Grade 4': 4, 'Grade 5': 5, 'Grade 6': 6, 'Grade 7': 7, 'Grade 8': 8, 'Grade 9': 9, 'Grade 10': 10, 'Grade 11': 11, 'Grade 12': 12, 'Kinder': 0 };
+            const rates = classes.map(c => ({
+                label: [c.grade_level, c.strand].filter(Boolean).join(' '),
+                rate: 0,
+                grade: gradeSortOrder[c.grade_level] || 99
+            })).sort((a, b) => a.grade - b.grade);
+            return { labels: rates.map(r => r.label), data: rates.map(r => r.rate) };
         }
 
+        // Get student class mapping
+        const studentClassMap = {};
+        summaries.forEach(s => {
+            if (s.students?.class_id) {
+                studentClassMap[s.student_id] = s.students.class_id;
+            }
+        });
+
+        // Get excused letters for the period
         const { data: excuses } = await supabase
             .from('excuse_letters')
             .select('student_id, date_absent')
@@ -560,23 +756,34 @@ async function fetchClassPerformance(dateStart, dateEnd, classId = null) {
 
         const classStats = {};
         classes.forEach(c => { 
-            classStats[c.id] = { total: 0, present: 0, name: c.grade_level }; 
+            classStats[c.id] = { total: 0, present: 0, name: c.grade_level, strand: c.strand }; 
         });
 
-        allLogs.forEach(log => {
-            const cid = studentClassMap[log.student_id];
+        summaries.forEach(summary => {
+            const cid = studentClassMap[summary.student_id];
             if (cid && classStats[cid]) {
-                const morningAbsent = log.morning_absent === true;
-                const afternoonAbsent = log.afternoon_absent === true;
-                const isFullDayAbsent = morningAbsent && afternoonAbsent;
-                const isHalfDay = (morningAbsent !== afternoonAbsent && !isFullDayAbsent) || log.status === 'Half Day';
+                const isKinder = classStats[cid].name === 'Kinder';
+                const isExcused = excusedSet.has(`${summary.student_id}-${summary.date}`);
                 
+                // Morning period
+                const morningPresent = ['Present', 'Late', 'Excused'].includes(summary.morning_status);
                 classStats[cid].total++;
-                const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
-                if (isExcused) classStats[cid].present++;
-                else if (isHalfDay) classStats[cid].present += 0.5;
-                else if (log.status === 'Present' || log.status === 'On Time') classStats[cid].present++;
-                else if (log.status === 'Late') classStats[cid].present++;
+                if (isExcused) {
+                    classStats[cid].present++;
+                } else if (morningPresent) {
+                    classStats[cid].present++;
+                }
+                
+                // Afternoon period (skip for Kinder)
+                if (!isKinder && summary.afternoon_status) {
+                    classStats[cid].total++;
+                    const afternoonPresent = ['Present', 'Late', 'Excused'].includes(summary.afternoon_status);
+                    if (isExcused) {
+                        classStats[cid].present++;
+                    } else if (afternoonPresent) {
+                        classStats[cid].present++;
+                    }
+                }
             }
         });
 
@@ -585,7 +792,7 @@ async function fetchClassPerformance(dateStart, dateEnd, classId = null) {
         
         const rates = Object.entries(classStats)
             .map(([id, s]) => ({
-                label: [s.name, classes.find(c => c.id == id)?.strand].filter(Boolean).join(' '),
+                label: [s.name, s.strand].filter(Boolean).join(' '),
                 rate: s.total > 0 ? Math.round((s.present / s.total) * 100) : 0,
                 grade: gradeSortOrder[s.name] || 99
             }))
@@ -599,105 +806,155 @@ async function fetchClassPerformance(dateStart, dateEnd, classId = null) {
 }
 
 async function fetchCriticalAbsences(dateStart, dateEnd, classId = null) {
+  if (USE_SUMMARY_ANALYTICS) {
+    // NEW: Use DepEd 20% rule with AttendanceHelpers on summary-derived counts
+    let studentQuery = supabase.from('students').select('id, full_name, student_id_text, class_id').eq('status', 'Enrolled');
+    if (classId) studentQuery = studentQuery.eq('class_id', classId);
+    const { data: students } = await studentQuery;
+    if (!students?.length) return [];
+
+    const schoolYearStart = await getSchoolYearStart();
+    const schoolYearEnd = await getSchoolYearEnd();
+
+    const criticalList = [];
+    for (const student of students) {
+      const { data: classInfo } = await supabase.from('classes').select('grade_level').eq('id', student.class_id).single();
+      const gradeLevel = classInfo?.grade_level;
+
+      const totalDays = await AttendanceHelpers.getTotalSchoolDays(schoolYearStart, schoolYearEnd, gradeLevel);
+      const unexcusedDays = await AttendanceHelpers.countUnexcusedAbsentDays(student.id, schoolYearStart, schoolYearEnd);
+      const absenceRate = (unexcusedDays / totalDays) * 100;
+
+      if (absenceRate >= 20) {
+        criticalList.push({
+          name: student.full_name,
+          id: student.student_id_text,
+          absent: Math.floor(unexcusedDays),
+          halfday: Math.round((unexcusedDays % 1) * 2),
+          adjustedAbsence: unexcusedDays,
+          rate: absenceRate
+        });
+      }
+    }
+    return criticalList.sort((a,b) => b.adjustedAbsence - a.adjustedAbsence).slice(0, 20);
+  } else {
+    return fetchCriticalAbsencesLegacy(dateStart, dateEnd, classId);
+  }
+}
+
+async function fetchCriticalAbsencesLegacy(dateStart, dateEnd, classId = null) {
+  try {
+    let studentQuery = supabase.from('students').select('id, full_name, student_id_text, class_id').eq('status', 'Enrolled');
+    if (classId) studentQuery = studentQuery.eq('class_id', classId);
+    const { data: students } = await studentQuery;
+    if (!students?.length) return [];
+
+    let logsQuery = supabase
+      .from('attendance_logs')
+      .select('student_id, log_date, status, morning_absent, afternoon_absent')
+      .gte('log_date', dateStart)
+      .lte('log_date', dateEnd)
+      .not('student_id', 'is', null);
+    if (classId) {
+      const studentIds = students.map(s => s.id).filter(id => id != null);
+      if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
+    }
+    const { data: logs } = await logsQuery;
+
+    const { data: excuses } = await supabase
+      .from('excuse_letters')
+      .select('student_id, date_absent')
+      .eq('status', 'Approved')
+      .gte('date_absent', dateStart)
+      .lte('date_absent', dateEnd);
+    const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
+
+    const absenceCount = {};
+    students.forEach(s => { absenceCount[s.id] = { name: s.full_name, id: s.student_id_text, absent: 0, halfday: 0 }; });
+
+    logs?.forEach(log => {
+      if (!log.student_id || !absenceCount[log.student_id]) return;
+      const morningAbsent = log.morning_absent || false;
+      const afternoonAbsent = log.afternoon_absent || false;
+      const isFullDayAbsent = morningAbsent && afternoonAbsent;
+      const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
+
+      const key = `${log.student_id}-${log.log_date}`;
+      if (excusedSet.has(key)) return;
+
+      if (isFullDayAbsent) {
+        absenceCount[log.student_id].absent++;
+      } else if (isHalfDay) {
+        absenceCount[log.student_id].halfday++;
+      } else if (log.status === 'Absent') {
+        absenceCount[log.student_id].absent++;
+      }
+    });
+
+    const result = Object.values(absenceCount).map(s => ({
+      ...s,
+      adjustedAbsence: s.absent + (s.halfday * 0.5)
+    })).filter(s => s.adjustedAbsence > 10).sort((a, b) => b.adjustedAbsence - a.adjustedAbsence).slice(0, 10);
+
+    return result;
+  } catch (err) {
+    console.error('fetchCriticalAbsencesLegacy error:', err);
+    return [];
+  }
+}
+
+ async function fetchFrequentLate(dateStart, dateEnd, classId = null) {
     try {
-        let studentsQuery = supabase.from('students').select('id, full_name, student_id_text, class_id');
-        if (classId) studentsQuery = studentsQuery.eq('class_id', classId);
-        const { data: students } = await studentsQuery;
+        // Get student IDs (filter by class if provided)
+        let studentQuery = supabase.from('students').select('id').eq('status', 'Enrolled');
+        if (classId) studentQuery = studentQuery.eq('class_id', classId);
+        const { data: students } = await studentQuery;
         if (!students?.length) return [];
+        const studentIds = students.map(s => s.id);
 
-        const { data: excuses } = await supabase
-            .from('excuse_letters')
-            .select('student_id, date_absent')
-            .eq('status', 'Approved')
-            .gte('date_absent', dateStart)
-            .lte('date_absent', dateEnd);
-        const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
-
-        let logsQuery = supabase
-            .from('attendance_logs')
-            .select('student_id, log_date, status, morning_absent, afternoon_absent')
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd)
-            .not('student_id', 'is', null);
-        if (classId) {
-            const studentIds = students.map(s => s.id).filter(id => id != null);
-            if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
-        }
-        const { data: logs } = await logsQuery;
-
-        const absenceCount = {};
-        students.forEach(s => { absenceCount[s.id] = { name: s.full_name, id: s.student_id_text, absent: 0, halfday: 0 }; });
+        // Fetch from attendance_daily_summary - count mornings marked as 'Late'
+        const { data: summaries, error } = await supabase
+            .from('attendance_daily_summary')
+            .select('student_id, morning_status')
+            .in('student_id', studentIds)
+            .gte('date', dateStart)
+            .lte('date', dateEnd)
+            .eq('morning_status', 'Late');
         
-        logs?.forEach(log => {
-            if (!log.student_id || !absenceCount[log.student_id]) return;
-            const morningAbsent = log.morning_absent || false;
-            const afternoonAbsent = log.afternoon_absent || false;
-            const isFullDayAbsent = morningAbsent && afternoonAbsent;
-            const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
+        if (error) throw error;
+        if (!summaries?.length) return [];
 
-            if (isExcused(`${log.student_id}-${log.log_date}`)) return;
-            
-            if (isFullDayAbsent) {
-                absenceCount[log.student_id].absent++;
-            } else if (isHalfDay) {
-                absenceCount[log.student_id].halfday++;
-            } else if (log.status === 'Absent') {
-                absenceCount[log.student_id].absent++;
+        const lateCounts = {};
+        summaries.forEach(log => {
+            if (log.student_id) {
+                lateCounts[log.student_id] = (lateCounts[log.student_id] || 0) + 1;
             }
         });
 
-        function isExcused(key) { return excusedSet.has(key); }
-
-        // Calculate adjusted absences (half-day = 0.5)
-        const result = Object.values(absenceCount).map(s => ({
-            ...s,
-            adjustedAbsence: s.absent + (s.halfday * 0.5)
-        })).filter(s => s.adjustedAbsence > 10).sort((a, b) => b.adjustedAbsence - a.adjustedAbsence).slice(0, 10);
+        const lateStudentIds = Object.keys(lateCounts).map(Number).filter(id => !isNaN(id) && id > 0);
+        if (!lateStudentIds.length) return [];
         
-        return result;
-    } catch (err) {
-        console.error('fetchCriticalAbsences error:', err);
-        return [];
-    }
-}
-
-async function fetchFrequentLate(dateStart, dateEnd, classId = null) {
-    try {
-        let logsQuery = supabase
-            .from('attendance_logs')
-            .select('student_id')
-            .eq('status', 'Late')
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd)
-            .not('student_id', 'is', null);
-        if (classId) {
-            const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
-            const studentIds = students?.map(s => s.id).filter(id => id != null) || [];
-            if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
-            else return [];
-        }
-        const { data: logs } = await logsQuery;
-        if (!logs?.length) return [];
-
-        const lateCounts = {};
-        logs.forEach(log => { if (log.student_id) lateCounts[log.student_id] = (lateCounts[log.student_id] || 0) + 1; });
-
-        const studentIds = Object.keys(lateCounts).map(Number).filter(id => !isNaN(id) && id > 0);
-        if (!studentIds.length) return [];
-        const { data: students } = await supabase.from('students').select('id, full_name, student_id_text').in('id', studentIds);
-        const studentMap = Object.fromEntries(students?.map(s => [s.id, s]) || []);
-        return Object.entries(lateCounts).map(([id, count]) => ({
-            name: studentMap[Number(id)]?.full_name || 'Unknown',
-            id: studentMap[Number(id)]?.student_id_text || '',
-            count
-        })).sort((a, b) => b.count - a.count).slice(0, 10);
+        const { data: studentDetails } = await supabase
+            .from('students')
+            .select('id, full_name, student_id_text')
+            .in('id', lateStudentIds);
+        const studentMap = Object.fromEntries(studentDetails?.map(s => [s.id, s]) || []);
+        
+        return Object.entries(lateCounts)
+            .map(([id, count]) => ({
+                name: studentMap[Number(id)]?.full_name || 'Unknown',
+                id: studentMap[Number(id)]?.student_id_text || '',
+                count
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
     } catch (err) {
         console.error('fetchFrequentLate error:', err);
         return [];
     }
 }
 
-async function fetchPredictiveRisk(dateStart, dateEnd, classId = null) {
+ async function fetchPredictiveRisk(dateStart, dateEnd, classId = null) {
     try {
         let studentsQuery = supabase.from('students').select('id, full_name, student_id_text');
         if (classId) studentsQuery = studentsQuery.eq('class_id', classId);
@@ -712,35 +969,69 @@ async function fetchPredictiveRisk(dateStart, dateEnd, classId = null) {
             .lte('date_absent', dateEnd);
         const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
 
-        let logsQuery = supabase
-            .from('attendance_logs')
-            .select('student_id, status, log_date, morning_absent, afternoon_absent')
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd)
-            .not('student_id', 'is', null);
-        if (classId) {
-            const studentIds = students.map(s => s.id).filter(id => id != null);
-            if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
-        }
-        const { data: logs } = await logsQuery;
+        // Get class info for Kinder check
+        const classIds = students.map(s => s.class_id).filter(id => id != null);
+        const { data: classes } = await supabase.from('classes').select('id, grade_level').in('id', classIds);
+        const classGradeMap = Object.fromEntries(classes?.map(c => [c.id, c.grade_level]) || []);
+
+        // Fetch from attendance_daily_summary
+        const { data: summaries, error } = await supabase
+            .from('attendance_daily_summary')
+            .select('student_id, date, morning_status, afternoon_status, students!inner (class_id)')
+            .in('student_id', students.map(s => s.id))
+            .gte('date', dateStart)
+            .lte('date', dateEnd);
+        
+        if (error) throw error;
 
         const stats = {};
         students.forEach(s => { stats[s.id] = { name: s.full_name, id: s.student_id_text, total: 0, absent: 0, late: 0, halfday: 0 }; });
-        logs?.forEach(log => {
-            if (!log.student_id || !stats[log.student_id]) return;
-            const s = stats[log.student_id];
-            const morningAbsent = log.morning_absent || false;
-            const afternoonAbsent = log.afternoon_absent || false;
-            const isFullDayAbsent = morningAbsent && afternoonAbsent;
-            const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
+        
+        summaries?.forEach(summary => {
+            if (!summary.student_id || !stats[summary.student_id]) return;
+            const s = stats[summary.student_id];
+            const isKinder = classGradeMap[summary.students?.class_id] === 'Kinder';
+            const isExcused = excusedSet.has(`${summary.student_id}-${summary.date}`);
+
+            // Morning period
+            const morningStatus = summary.morning_status || 'Absent';
+            const isMorningLate = morningStatus === 'Late';
+            const isMorningAbsent = !['Present', 'Late', 'Excused'].includes(morningStatus);
             
-            s.total++;
-            const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+            s.total++; // Count morning period
+            if (isExcused) {
+                // Excused - count as present, don't count as absence/late
+            } else {
+                if (isMorningLate) s.late++;
+                else if (isMorningAbsent) s.absent++;
+            }
+
+            // Afternoon period (skip for Kinder)
+            if (!isKinder && summary.afternoon_status) {
+                s.total++; // Count afternoon period
+                const afternoonStatus = summary.afternoon_status;
+                const isAfternoonLate = afternoonStatus === 'Late';
+                const isAfternoonAbsent = !['Present', 'Late', 'Excused'].includes(afternoonStatus);
+                
+                if (isExcused) {
+                    // Excused - count as present
+                } else {
+                    if (isAfternoonLate) s.late++;
+                    else if (isAfternoonAbsent) s.absent++;
+                }
+            }
+            
+            // Half-day detection: one session absent, one present (not excused)
             if (!isExcused) {
-                if (isHalfDay) s.halfday++;
-                else if (isFullDayAbsent) s.absent++;
-                else if (log.status === 'Absent') s.absent++;
-                else if (log.status === 'Late') s.late++;
+                const morningAbsent = !['Present', 'Late', 'Excused'].includes(summary.morning_status);
+                const afternoonAbsent = isKinder ? false : !['Present', 'Late', 'Excused'].includes(summary.afternoon_status || '');
+                if (morningAbsent !== afternoonAbsent && !isKinder && summary.afternoon_status) {
+                    // Convert: one full absence becomes half-day (adjust counts)
+                    if (s.absent > 0) {
+                        s.absent--;
+                        s.halfday++;
+                    }
+                }
             }
         });
 
@@ -766,6 +1057,45 @@ async function fetchPredictiveRisk(dateStart, dateEnd, classId = null) {
 }
 
 async function fetchAverageAttendanceRate(dateStart, dateEnd, classId = null) {
+  if (USE_SUMMARY_ANALYTICS) {
+    let query = supabase
+      .from('attendance_daily_summary')
+      .select(`
+        morning_status,
+        afternoon_status,
+        students!inner (class_id)
+      `)
+      .gte('date', dateStart)
+      .lte('date', dateEnd);
+    if (classId) query = query.eq('students.class_id', classId);
+    const { data: rows } = await query;
+    if (!rows?.length) return 0;
+
+    const studentIds = [...new Set(rows.map(r => r.student_id))];
+    const { data: students } = await supabase.from('students').select('id, class_id').in('id', studentIds);
+    const { data: classes } = await supabase.from('classes').select('id, grade_level');
+    const gradeMap = Object.fromEntries(classes?.map(c => [c.id, c.grade_level]) || []);
+    const studentGrade = Object.fromEntries(students?.map(s => [s.id, gradeMap[s.class_id]]) || []);
+
+    let presentCount = 0;
+    let totalCount = 0;
+    for (const row of rows) {
+      const isKinder = studentGrade[row.student_id] === 'Kinder';
+      totalCount++;
+      if (['Present','Late','Excused'].includes(row.morning_status)) presentCount++;
+      if (!isKinder && row.afternoon_status) {
+        totalCount++;
+        if (['Present','Late','Excused'].includes(row.afternoon_status)) presentCount++;
+      }
+    }
+    return totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+  } else {
+    return fetchAverageAttendanceRateLegacy(dateStart, dateEnd, classId);
+  }
+}
+
+// Legacy fallback
+async function fetchAverageAttendanceRateLegacy(dateStart, dateEnd, classId = null) {
     try {
         let logsQuery = supabase
             .from('attendance_logs')
@@ -773,37 +1103,89 @@ async function fetchAverageAttendanceRate(dateStart, dateEnd, classId = null) {
             .gte('log_date', dateStart)
             .lte('log_date', dateEnd)
             .not('student_id', 'is', null);
+            
+        let gradeLevel = null;
         if (classId) {
             const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
             const studentIds = students?.map(s => s.id).filter(id => id != null) || [];
             if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
             else return 0;
+            
+            // Get grade level
+            const { data: classData } = await supabase.from('classes').select('grade_level').eq('id', classId).single();
+            gradeLevel = classData?.grade_level;
         }
+        const isKinder = isKinderGrade(gradeLevel);
+        
         const { data: logs } = await logsQuery;
         if (!logs?.length) return 0;
         
+        // Get excused for this period
+        let studentIds = null;
+        if (classId) {
+            const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
+            studentIds = students?.map(s => s.id).filter(id => id != null) || [];
+        }
+        
+        const excusesQuery = supabase
+            .from('excuse_letters')
+            .select('student_id, date_absent')
+            .eq('status', 'Approved')
+            .gte('date_absent', dateStart)
+            .lte('date_absent', dateEnd);
+        const { data: excuses } = studentIds?.length 
+            ? await excusesQuery.in('student_id', studentIds)
+            : await excusesQuery;
+        
+        // We need log_date to check excused - fetch it
+        let logsWithDate = null;
+        if (classId) {
+            const { data: students } = await supabase.from('students').select('id').eq('class_id', classId);
+            const sIds = students?.map(s => s.id).filter(id => id != null) || [];
+            if (sIds.length) {
+                const { data: l } = await supabase
+                    .from('attendance_logs')
+                    .select('student_id, log_date, status, morning_absent, afternoon_absent')
+                    .gte('log_date', dateStart)
+                    .lte('log_date', dateEnd)
+                    .in('student_id', sIds);
+                logsWithDate = l;
+            }
+        }
+        
+        const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
+        
         let present = 0;
-        logs.forEach(log => {
+        const effectiveLogs = logsWithDate || logs;
+        
+        effectiveLogs.forEach(log => {
             const morningAbsent = log.morning_absent || false;
             const afternoonAbsent = log.afternoon_absent || false;
             const isFullDayAbsent = morningAbsent && afternoonAbsent;
             const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
             
-            if (isHalfDay) present += 0.5;
-            else if (isFullDayAbsent) {} // absent
-            else if (log.status === 'Present') present++;
-            else if (log.status === 'Late') present++;
-            else if (log.status === 'Excused') present++;
+            const isExcused = log.log_date && excusedSet.has(`${log.student_id}-${log.log_date}`);
+            
+            if (isExcused) {
+                present++; // AM
+                if (!isKinder) present++; // PM - counts as present
+            }
+            else if (isHalfDay) present += 0.5;
+            else if (!isFullDayAbsent && (log.status === 'Present' || log.status === 'Late')) {
+                present++; // AM
+                if (!isKinder) present++; // PM
+            }
         });
         
-        return Math.round((present / logs.length) * 100);
+        const halfSessions = isKinder ? 1 : 2;
+        return Math.round((present / (logs.length * halfSessions)) * 100);
     } catch (err) {
-        console.error('fetchAverageAttendanceRate error:', err);
+        console.error('fetchAverageAttendanceRateLegacy error:', err);
         return 0;
     }
 }
 
-async function fetchCombinedLatesAbsences(dateStart, dateEnd, classId = null) {
+ async function fetchCombinedLatesAbsences(dateStart, dateEnd, classId = null) {
     try {
         let studentsQuery = supabase.from('students').select('id, full_name, student_id_text, class_id');
         if (classId) studentsQuery = studentsQuery.eq('class_id', classId);
@@ -818,39 +1200,64 @@ async function fetchCombinedLatesAbsences(dateStart, dateEnd, classId = null) {
             .lte('date_absent', dateEnd);
         const excusedSet = new Set(excuses?.map(e => `${e.student_id}-${e.date_absent}`) || []);
 
-        let logsQuery = supabase
-            .from('attendance_logs')
-            .select('student_id, status, log_date, morning_absent, afternoon_absent')
-            .gte('log_date', dateStart)
-            .lte('log_date', dateEnd)
-            .not('student_id', 'is', null);
-        if (classId) {
-            const studentIds = students.map(s => s.id).filter(id => id != null);
-            if (studentIds.length) logsQuery = logsQuery.in('student_id', studentIds);
-        }
-        const { data: logs } = await logsQuery;
-        if (!logs?.length) return [];
+        // Get class info for Kinder check
+        const classIds = students.map(s => s.class_id).filter(id => id != null);
+        const { data: classes } = await supabase.from('classes').select('id, grade_level').in('id', classIds);
+        const classGradeMap = Object.fromEntries(classes?.map(c => [c.id, c.grade_level]) || []);
+
+        // Fetch from attendance_daily_summary
+        const { data: summaries, error } = await supabase
+            .from('attendance_daily_summary')
+            .select('student_id, date, morning_status, afternoon_status, students!inner (class_id)')
+            .in('student_id', students.map(s => s.id))
+            .gte('date', dateStart)
+            .lte('date', dateEnd);
+        
+        if (error) throw error;
+        if (!summaries?.length) return [];
 
         const stats = {};
         students.forEach(s => { stats[s.id] = { name: s.full_name, student_id_text: s.student_id_text, lates: 0, absences: 0, halfday: 0 }; });
-        logs.forEach(log => {
-            if (!log.student_id || !stats[log.student_id]) return;
-            const morningAbsent = log.morning_absent || false;
-            const afternoonAbsent = log.afternoon_absent || false;
-            const isFullDayAbsent = morningAbsent && afternoonAbsent;
-            const isHalfDay = morningAbsent !== afternoonAbsent && !isFullDayAbsent;
-            
-            const isExcused = excusedSet.has(`${log.student_id}-${log.log_date}`);
+        
+        summaries.forEach(summary => {
+            if (!summary.student_id || !stats[summary.student_id]) return;
+            const isKinder = classGradeMap[summary.students?.class_id] === 'Kinder';
+            const isExcused = excusedSet.has(`${summary.student_id}-${summary.date}`);
             if (isExcused) return;
+
+            const morningStatus = summary.morning_status || 'Absent';
+            const afternoonStatus = summary.afternoon_status;
             
-            if (isHalfDay) {
-                stats[log.student_id].halfday++;
-            } else if (log.status === 'Late') {
-                stats[log.student_id].lates++;
-            } else if (isFullDayAbsent || log.status === 'Absent') {
-                stats[log.student_id].absences++;
+            // Morning period
+            if (morningStatus === 'Late') {
+                stats[summary.student_id].lates++;
+            } else if (!['Present', 'Late', 'Excused'].includes(morningStatus)) {
+                stats[summary.student_id].absences++;
+            }
+
+            // Afternoon period (skip for Kinder)
+            if (!isKinder && afternoonStatus) {
+                if (afternoonStatus === 'Late') {
+                    stats[summary.student_id].lates++;
+                } else if (!['Present', 'Late', 'Excused'].includes(afternoonStatus)) {
+                    stats[summary.student_id].absences++;
+                }
+            }
+
+            // Half-day detection: one session absent, one present (not excused)
+            if (!isKinder && afternoonStatus) {
+                const morningAbsent = !['Present', 'Late', 'Excused'].includes(morningStatus);
+                const afternoonAbsent = !['Present', 'Late', 'Excused'].includes(afternoonStatus);
+                if (morningAbsent !== afternoonAbsent) {
+                    // Adjust: convert one full absence to half-day
+                    if (stats[summary.student_id].absences > 0) {
+                        stats[summary.student_id].absences--;
+                        stats[summary.student_id].halfday++;
+                    }
+                }
             }
         });
+        
         return Object.values(stats)
             .map(s => ({ ...s, total: s.lates + s.absences + s.halfday }))
             .filter(s => s.total > 0)
@@ -1749,7 +2156,6 @@ async function exportIndividualClassCSV() {
 }
 
 let currentTrendGrouping = 'month';
-let currentWeekMonth = '';
 
 async function switchTrendGrouping(grouping) {
     currentTrendGrouping = grouping;

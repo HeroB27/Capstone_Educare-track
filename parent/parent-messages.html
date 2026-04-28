@@ -217,11 +217,11 @@
             const now = new Date().toISOString();
             let messages = [];
 
-            // 1. Fetch admin announcements targeting parents or students
+            // 1. Fetch admin announcements targeting parents only
             const { data: announcements, error: annErr } = await supabaseClient
                 .from('announcements')
                 .select('id, title, content, created_at, type, priority, target_parents, target_students, posted_by_admin_id, admins(full_name), image_url')
-                .or('target_parents.eq.true,target_students.eq.true')
+                .eq('target_parents', true)
                 .order('created_at', { ascending: false })
                 .limit(30);
             

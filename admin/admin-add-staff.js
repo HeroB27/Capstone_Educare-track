@@ -232,6 +232,7 @@ async function editStaff(id, view) {
         
         let extraFields = '';
         if (view === 'teachers') {
+            const isGatekeeper = staff.is_gatekeeper === true;
             extraFields = `
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -254,6 +255,16 @@ async function editStaff(id, view) {
                             <option value="Values Education" ${staff.department === 'Values Education' ? 'selected' : ''}>Values</option>
                         </select>
                     </div>
+                </div>
+                <div class="mt-4 p-4 bg-gradient-to-r from-violet-50 to-indigo-50 rounded-xl border border-violet-100">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="edit-s-gatekeeper" ${isGatekeeper ? 'checked' : ''} class="w-5 h-5 rounded text-violet-600 focus:ring-violet-500">
+                        <div class="flex-1">
+                            <span class="font-bold text-gray-800">Gatekeeper Access</span>
+                            <p class="text-xs text-gray-500">Allow teacher to scan student IDs at the gate</p>
+                        </div>
+                        <span class="px-2 py-1 rounded-full text-xs font-bold ${isGatekeeper ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${isGatekeeper ? 'Enabled' : 'Disabled'}</span>
+                    </label>
                 </div>
             `;
         } else if (view === 'clinic_staff') {
@@ -343,6 +354,12 @@ async function saveStaffEdit() {
         if (view === 'teachers') {
             updateData.email = document.getElementById('edit-s-email').value.trim();
             updateData.department = document.getElementById('edit-s-dept').value;
+            
+            // Handle gatekeeper toggle - UPDATED: 2026-04-20
+            const gatekeeperCheckbox = document.getElementById('edit-s-gatekeeper');
+            if (gatekeeperCheckbox) {
+                updateData.is_gatekeeper = gatekeeperCheckbox.checked;
+            }
         } else if (view === 'clinic_staff') {
             updateData.role_title = document.getElementById('edit-s-role-title').value.trim();
         }
@@ -628,6 +645,11 @@ async function saveStaffToDB() {
         staffData.email = document.getElementById('s-email').value.trim();
         staffData.department = document.getElementById('s-department').value;
         staffData.teacher_id_text = staffID;
+        // Handle gatekeeper access - ADDED: 2026-04-20
+        const gatekeeperCheckbox = document.getElementById('s-gatekeeper');
+        if (gatekeeperCheckbox && gatekeeperCheckbox.checked) {
+            staffData.is_gatekeeper = true;
+        }
     } else if (role === 'guards') {
         staffData.guard_id_text = staffID;
     } else if (role === 'clinic_staff') {

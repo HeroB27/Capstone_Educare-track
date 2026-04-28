@@ -2,26 +2,17 @@
 // Provides global access to admin-configurable school year dates
 // Uses existing 'settings' table for persistence
 
-const DEFAULT_START_MONTH = 7;  // August (0-indexed)
-const DEFAULT_START_DAY = 11;
-const DEFAULT_END_MONTH = 3;    // April (0-indexed)
-const DEFAULT_END_DAY = 28;
+// DEFAULT SCHOOL YEAR DATES: 2025-2026 (Aug 11, 2025 - Apr 28, 2026)
+// UPDATED: 2026-04-20 - User confirmed default dates
+const DEFAULT_SCHOOL_YEAR_START = '2025-08-11';
+const DEFAULT_SCHOOL_YEAR_END = '2026-04-28';
 
 function getDefaultSchoolYearStart() {
-    const year = new Date().getFullYear();
-    const startMonth = 7;
-    if (new Date().getMonth() < startMonth) {
-        return `${year - 1}-08-11`;
-    }
-    return `${year}-08-11`;
+    return DEFAULT_SCHOOL_YEAR_START;
 }
 
 function getDefaultSchoolYearEnd() {
-    const year = new Date().getFullYear();
-    if (new Date().getMonth() >= 7) {
-        return `${year + 1}-04-28`;
-    }
-    return `${year}-04-28`;
+    return DEFAULT_SCHOOL_YEAR_END;
 }
 
 let cachedSchoolYearStart = null;
@@ -214,6 +205,72 @@ async function getSchoolYearLabel() {
     return `${startYear}-${endYear}`;
 }
 
+// ============================================================================
+// SCHOOL YEAR DATE VALIDATION - ADDED: 2026-04-20
+// Validates if dates are within configured school year
+// ============================================================================
+
+/**
+ * Check if a date is within the configured school year
+ * @param {string|Date} date - Date to check (YYYY-MM-DD or Date object)
+ * @returns {Promise<{valid: boolean, message: string}>}
+ */
+async function isDateWithinSchoolYear(date) {
+    try {
+        const schoolYearStart = await getSchoolYearStart();
+        const schoolYearEnd = await getSchoolYearEnd();
+        
+        let dateStr;
+        if (date instanceof Date) {
+            dateStr = date.toISOString().split('T')[0];
+        } else {
+            dateStr = date;
+        }
+        
+        if (dateStr < schoolYearStart) {
+            return { 
+                valid: false, 
+                message: `Date ${dateStr} is before school year start (${schoolYearStart})` 
+            };
+        }
+        
+        if (dateStr > schoolYearEnd) {
+            return { 
+                valid: false, 
+                message: `Date ${dateStr} is after school year end (${schoolYearEnd})` 
+            };
+        }
+        
+        return { valid: true, message: 'Date is within school year' };
+    } catch (err) {
+        console.error('[SchoolYear] Error validating date:', err);
+        // Allow by default if validation fails
+        return { valid: true, message: 'Validation failed, allowing' };
+    }
+}
+
+/**
+ * Check if today is within school year
+ * @returns {Promise<{valid: boolean, message: string}>}
+ */
+async function isTodayWithinSchoolYear() {
+    const today = new Date().toISOString().split('T')[0];
+    return isDateWithinSchoolYear(today);
+}
+
+/**
+ * Get school year validation error for display
+ * @returns {Promise<string|null>} Error message or null if valid
+ */
+async function getSchoolYearValidationError() {
+    const check = await isTodayWithinSchoolYear();
+    return check.valid ? null : check.message;
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
 window.getSchoolYearStart = getSchoolYearStart;
 window.getSchoolYearEnd = getSchoolYearEnd;
 window.getQuarters = getQuarters;
@@ -224,3 +281,6 @@ window.getSchoolYearMonthOptions = getSchoolYearMonthOptions;
 window.calculateQuarter = calculateQuarter;
 window.invalidateSchoolYearCache = invalidateSchoolYearCache;
 window.getSchoolYearLabel = getSchoolYearLabel;
+window.isDateWithinSchoolYear = isDateWithinSchoolYear;
+window.isTodayWithinSchoolYear = isTodayWithinSchoolYear;
+window.getSchoolYearValidationError = getSchoolYearValidationError;

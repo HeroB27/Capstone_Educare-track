@@ -11,7 +11,7 @@ async function loadAnnouncements() {
     const { data, error } = await supabase
         .from('announcements')
         .select('*, admins(full_name), teachers(full_name)')
-        .or('target_parents.eq.true, target_students.eq.true')
+        .eq('target_parents', true)
         .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
         .order('created_at', { ascending: false })
         .limit(30);

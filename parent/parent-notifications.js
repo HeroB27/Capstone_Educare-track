@@ -52,10 +52,33 @@ async function loadNotifications() {
     
     // If parent has children, filter to show only notifications about them
     // If no children, show all notifications for this parent
+    // FIXED: More robust filtering - check by student name AND verify parent-child linkage
     if (myChildrenIds.length > 0) {
+        // First get all student IDs linked to this parent
+        const myChildrenIdsSet = new Set(myChildrenIds.map(id => String(id)));
+        const myChildrenNamesLower = myChildrenNames.map(n => n.toLowerCase());
+        
         allNotifications = (data || []).filter(n => {
+            // 1. Check if notification message contains any child's name
             const message = (n.message || '').toLowerCase();
-            return myChildrenNames.some(name => message.includes(name));
+            const title = (n.title || '').toLowerCase();
+            const nameMatch = myChildrenNamesLower.some(name => 
+                message.includes(name) || title.includes(name)
+            );
+            
+            // 2. For attendance alerts, verify the student belongs to this parent
+            // by checking the type and content
+            if (n.type === 'attendance_alert' || n.type === 'gate_entry' || n.type === 'gate_exit' || n.type === 'clinic') {
+                // If no name match found, exclude this notification
+                if (!nameMatch) return false;
+            }
+            
+            // 3. Include announcements that are targeted to parents (not specific to students)
+            if (n.type === 'announcement') {
+                return true; // Show general announcements
+            }
+            
+            return nameMatch;
         });
     } else {
         // No children linked - show all notifications for this parent

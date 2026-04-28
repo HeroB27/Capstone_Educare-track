@@ -1,0 +1,295 @@
+<!-- Batch Job Scheduler for Attendance System -->
+<!-- Include this in your admin panel -->
+
+<div class="p-6 max-w-4xl mx-auto">
+    <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Attendance Batch Jobs</h2>
+                <p class="text-gray-500 mt-1">Schedule and run nightly attendance processing tasks</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700" id="schedulerStatus">
+                    Idle
+                </span>
+            </div>
+        </div>
+
+        <!-- Daily Summary Batch Job -->
+        <div class="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">Daily Summary Sync</h3>
+                        <p class="text-sm text-gray-500">Creates/updates attendance_daily_summary for yesterday</p>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-500 mr-2">Schedule:</span>
+                    <span class="px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-bold">Daily 00:05</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="runDailySummaryBatch()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Run Now
+                </button>
+                <button onclick="runDailySummaryBatchForDate()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-bold transition-colors">
+                    Run for Specific Date
+                </button>
+                <span class="text-xs text-gray-400" id="dailySummaryLastRun">Never run</span>
+            </div>
+            <div class="mt-3" id="dailySummaryOutput"></div>
+        </div>
+
+        <!-- Critical Absence Check -->
+        <div class="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">Critical Absence Check</h3>
+                        <p class="text-sm text-gray-500">Identifies students with ≥20% unexcused absences (DepEd 20% rule)</p>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-500 mr-2">Schedule:</span>
+                    <span class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold">Daily 01:00</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="runCriticalAbsenceCheck()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    Run Check
+                </button>
+                <button onclick="runCriticalAbsenceDryRun()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-bold transition-colors">
+                    Dry Run
+                </button>
+                <span class="text-xs text-gray-400" id="criticalAbsenceLastRun">Never run</span>
+            </div>
+            <div class="mt-3" id="criticalAbsenceOutput"></div>
+        </div>
+
+        <!-- System Logs -->
+        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold text-gray-800">Batch Job Logs</h3>
+                <button onclick="clearBatchLogs()" class="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+            </div>
+            <div id="batchJobLogs" class="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-xs max-h-48 overflow-y-auto">
+                <div class="text-gray-500">No batch job activity yet...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for specific date -->
+<div id="datePickerModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Select Date</h3>
+        <input type="date" id="batchJobDate" class="w-full p-2 border rounded mb-4">
+        <div class="flex justify-end gap-2">
+            <button onclick="closeDatePicker()" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+            <button onclick="confirmDateRun()" class="px-4 py-2 bg-blue-600 text-white rounded">Run</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let pendingDateRun = null;
+
+function logBatchJob(message, type = 'info') {
+    const logs = document.getElementById('batchJobLogs');
+    const time = new Date().toLocaleTimeString();
+    const colors = {
+        info: 'text-blue-400',
+        success: 'text-green-400',
+        warning: 'text-yellow-400', 
+        error: 'text-red-400'
+    };
+    const color = colors[type] || colors.info;
+    
+    if (logs.children.length === 1 && logs.children[0].classList.contains('text-gray-500')) {
+        logs.innerHTML = '';
+    }
+    
+    logs.innerHTML += `<div class="${color}">[${time}] ${message}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+}
+
+async function runDailySummaryBatch() {
+    logBatchJob('Starting daily summary batch job...', 'info');
+    setStatus('running');
+    
+    try {
+        if (typeof runDailySync === 'function') {
+            await runDailySync();
+            logBatchJob('Daily summary sync completed', 'success');
+        } else if (typeof syncDailySummaryForDate === 'function') {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const dateStr = yesterday.toISOString().split('T')[0];
+            await syncDailySummaryForDate(dateStr);
+            logBatchJob(`Daily summary sync completed for ${dateStr}`, 'success');
+        } else {
+            throw new Error('No batch function available');
+        }
+        document.getElementById('dailySummaryLastRun').textContent = 'Just now';
+    } catch (err) {
+        logBatchJob('Error: ' + err.message, 'error');
+        console.error(err);
+    }
+    
+    setStatus('idle');
+}
+
+function runDailySummaryBatchForDate() {
+    document.getElementById('batchJobDate').value = new Date().toISOString().split('T')[0];
+    pendingDateRun = 'daily';
+    document.getElementById('datePickerModal').classList.remove('hidden');
+}
+
+async function runCriticalAbsenceCheck() {
+    logBatchJob('Starting critical absence check...', 'info');
+    setStatus('running');
+    
+    try {
+        const result = await runCriticalAbsenceCheckInternal();
+        if (result) {
+            logBatchJob(`Found ${result.length} students with critical absences`, 'warning');
+        }
+        document.getElementById('criticalAbsenceLastRun').textContent = 'Just now';
+    } catch (err) {
+        logBatchJob('Error: ' + err.message, 'error');
+        console.error(err);
+    }
+    
+    setStatus('idle');
+}
+
+async function runCriticalAbsenceDryRun() {
+    logBatchJob('Starting critical absence dry run...', 'info');
+    
+    try {
+        const result = await checkCriticalAbsencesDryRun();
+        logBatchJob(`Dry run: ${result.length} students would be flagged`, 'warning');
+        
+        const output = document.getElementById('criticalAbsenceOutput');
+        output.innerHTML = `
+            <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mt-2">
+                <p class="text-yellow-700 text-sm font-bold">Dry Run Result</p>
+                <p class="text-yellow-600 text-sm">${result.length} students have >20% unexcused absences</p>
+                ${result.slice(0, 5).map(s => 
+                    `<div class="text-xs text-yellow-600 mt-1">• ${s.studentName} (${s.studentLRN}): ${(s.unexcusedPercentage * 100).toFixed(1)}%</div>`
+                ).join('')}
+                ${result.length > 5 ? `<div class="text-xs text-yellow-500 mt-1">... and ${result.length - 5} more</div>` : ''}
+            </div>
+        `;
+    } catch (err) {
+        logBatchJob('Error: ' + err.message, 'error');
+        console.error(err);
+    }
+}
+
+async function runDailySummaryBatchForDateConfirmed(dateStr) {
+    logBatchJob(`Starting daily summary sync for ${dateStr}...`, 'info');
+    setStatus('running');
+    
+    try {
+        if (typeof syncDailySummaryForDate === 'function') {
+            await syncDailySummaryForDate(dateStr);
+            logBatchJob(`Daily summary sync completed for ${dateStr}`, 'success');
+        }
+    } catch (err) {
+        logBatchJob('Error: ' + err.message, 'error');
+        console.error(err);
+    }
+    
+    setStatus('idle');
+}
+
+function confirmDateRun() {
+    const dateStr = document.getElementById('batchJobDate').value;
+    closeDatePicker();
+    
+    if (pendingDateRun === 'daily') {
+        runDailySummaryBatchForDateConfirmed(dateStr);
+    }
+    pendingDateRun = null;
+}
+
+function closeDatePicker() {
+    document.getElementById('datePickerModal').classList.add('hidden');
+    pendingDateRun = null;
+}
+
+function setStatus(status) {
+    const el = document.getElementById('schedulerStatus');
+    if (status === 'running') {
+        el.className = 'px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700';
+        el.textContent = 'Running...';
+    } else {
+        el.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700';
+        el.textContent = 'Idle';
+    }
+}
+
+function clearBatchLogs() {
+    document.getElementById('batchJobLogs').innerHTML = '<div class="text-gray-500">No batch job activity yet...</div>';
+}
+
+// Cron-style scheduler simulation (for demo purposes)
+// In production, use actual cron jobs or task scheduler
+function setupAutoScheduler() {
+    console.log('[Batch Scheduler] Setting up automated runs...');
+    
+    // Check every minute if it's time to run a batch job
+    setInterval(() => {
+        const now = new Date();
+        const mins = now.getMinutes();
+        const hours = now.getHours();
+        
+        // Daily summary at 00:05
+        if (hours === 0 && mins === 5) {
+            console.log('[Batch Scheduler] Triggering daily summary sync...');
+            runDailySummaryBatch();
+        }
+        
+        // Critical absence check at 01:00
+        if (hours === 1 && mins === 0) {
+            console.log('[Batch Scheduler] Triggering critical absence check...');
+            runCriticalAbsenceCheck();
+        }
+    }, 60000); // Check every minute
+}
+
+// Auto-initialize
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        // setupAutoScheduler(); // Uncomment to enable auto-scheduling
+    });
+}
+</script>
+
+<style>
+#datePickerModal {
+    transition: opacity 0.2s, visibility 0.2s;
+}
+#datePickerModal.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+</style>

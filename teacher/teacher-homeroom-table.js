@@ -380,6 +380,13 @@ function getNextPeriodStatus(current) {
 }
 
 async function saveAllPending() {
+    // ADDED: Check if any date is within school year - 2026-04-20
+    const schoolYearCheck = await window.isTodayWithinSchoolYear();
+    if (!schoolYearCheck.valid) {
+        showToast(`Cannot save: ${schoolYearCheck.message}`, 'error');
+        return;
+    }
+    
     const upserts = [];
     const updates = [];
     

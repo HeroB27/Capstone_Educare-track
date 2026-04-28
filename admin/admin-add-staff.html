@@ -58,9 +58,6 @@
                 <i data-lucide="calendar" class="w-5 h-5"></i> School Calendar
             </a>
             <div class="pt-4 border-t border-white/10 mt-4">
-                <a href="admin-idmanagement.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
-                    <i data-lucide="id-card" class="w-5 h-5"></i> ID Management
-                </a>
                 <a href="admin-idtemplate.html" class="flex items-center gap-3 px-4 py-3 text-violet-200 hover:bg-white/5 rounded-xl transition-all font-bold">
                     <i data-lucide="palette" class="w-5 h-5"></i> ID Template
                 </a>
@@ -204,6 +201,16 @@
                                 <option value="Physical Education">Physical Education</option>
                                 <option value="Values Education">Values Education</option>
                             </select>
+                            <!-- Gatekeeper Access Toggle - ADDED: 2026-04-20 -->
+                            <div class="p-4 bg-gradient-to-r from-violet-50 to-indigo-50 rounded-2xl border border-violet-100">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" id="s-gatekeeper" class="w-5 h-5 rounded text-violet-600 focus:ring-violet-500">
+                                    <div class="flex-1">
+                                        <span class="font-bold text-gray-800">Enable Gatekeeper Access</span>
+                                        <p class="text-xs text-gray-500">Allow teacher to scan student IDs at the gate</p>
+                                    </div>
+                                </label>
+                            </div>
                         </div>
                         
                         <!-- Clinic-specific fields -->

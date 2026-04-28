@@ -229,12 +229,12 @@ async function loadNotificationsPreview() {
     
     let notifications = [];
     
-    // 1. Fetch admin announcements
+    // 1. Fetch admin announcements targeting parents only
     const now = new Date().toISOString();
     const { data: announcements } = await supabase
         .from('announcements')
         .select('id, title, content, created_at, priority, target_parents, target_students, posted_by_admin_id, admins(full_name), image_url')
-        .or('target_parents.eq.true,target_students.eq.true')
+        .eq('target_parents', true)
         .order('created_at', { ascending: false })
         .limit(3);
     
